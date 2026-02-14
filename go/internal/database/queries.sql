@@ -1,0 +1,195 @@
+-- ============================================================================
+-- EthScanner Distributed - SQL Queries (sqlc)
+-- ============================================================================
+-- Database: SQLite (Pure Go - modernc.org/sqlite)
+-- Generated Code Target: Go (internal/database package)
+-- Date: February 14, 2026
+--
+-- This file contains all SQL queries used by the Master API and Workers.
+-- Code is generated using sqlc (https://sqlc.dev)
+-- ============================================================================
+
+-- ============================================================================
+-- Jobs Management Queries
+-- ============================================================================
+
+-- name: FindAvailableBatch :one
+-- Find an available batch (pending or expired lease)
+SELECT * FROM jobs
+WHERE status = 'pending' 
+   OR (status = 'processing' AND expires_at < datetime('now', 'utc'))
+ORDER BY created_at ASC
+LIMIT 1;
+
+-- name: GetNextNonceRange :one
+-- Get the next available nonce range for a specific prefix
+SELECT MAX(nonce_end) as last_nonce_end
+FROM jobs
+WHERE prefix_28 = ?
+AND status IN ('processing', 'completed');
+
+-- name: CreateBatch :one
+-- Create a new batch (job) for a worker
+INSERT INTO jobs (
+    prefix_28, 
+    nonce_start, 
+    nonce_end,
+    current_nonce,
+    status, 
+    worker_id,
+    worker_type,
+    expires_at,
+    requested_batch_size
+)
+VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
+RETURNING *;
+
+-- name: LeaseBatch :exec
+-- Lease an existing batch to a worker
+UPDATE jobs
+SET 
+    status = 'processing',
+    worker_id = ?,
+    worker_type = ?,
+    expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
+WHERE id = ?;
+
+-- name: UpdateCheckpoint :exec
+-- Update job progress checkpoint
+UPDATE jobs
+SET 
+    current_nonce = ?,
+    keys_scanned = ?,
+    last_checkpoint_at = datetime('now', 'utc')
+WHERE id = ? AND worker_id = ? AND status = 'processing';
+
+-- name: CompleteBatch :exec
+-- Mark a batch as completed
+UPDATE jobs
+SET 
+    status = 'completed',
+    completed_at = datetime('now', 'utc'),
+    keys_scanned = ?,
+    current_nonce = nonce_end
+WHERE id = ? AND worker_id = ?;
+
+-- name: GetJobByID :one
+-- Get a specific job by ID
+SELECT * FROM jobs
+WHERE id = ?;
+
+-- name: GetJobsByWorker :many
+-- Get all jobs assigned to a specific worker
+SELECT * FROM jobs
+WHERE worker_id = ?
+ORDER BY created_at DESC;
+
+-- name: GetJobsByStatus :many
+-- Get jobs by status
+SELECT * FROM jobs
+WHERE status = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- ============================================================================
+-- Results Management Queries
+-- ============================================================================
+
+-- name: InsertResult :one
+-- Insert a new result (found key)
+INSERT INTO results (private_key, address, worker_id, job_id, nonce_found)
+VALUES (?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetResultByPrivateKey :one
+-- Find a result by private key
+SELECT * FROM results
+WHERE private_key = ?;
+
+-- name: GetResultsByAddress :many
+-- Find results by Ethereum address
+SELECT * FROM results
+WHERE address = ?
+ORDER BY found_at DESC;
+
+-- name: GetAllResults :many
+-- Get all results (limited)
+SELECT * FROM results
+ORDER BY found_at DESC
+LIMIT ?;
+
+-- ============================================================================
+-- Workers Management Queries
+-- ============================================================================
+
+-- name: UpsertWorker :exec
+-- Insert or update worker heartbeat
+INSERT INTO workers (id, worker_type, last_seen, metadata)
+VALUES (?, ?, datetime('now', 'utc'), ?)
+ON CONFLICT(id) DO UPDATE SET
+    last_seen = datetime('now', 'utc'),
+    metadata = excluded.metadata;
+
+-- name: UpdateWorkerKeyCount :exec
+-- Update worker's total key count
+UPDATE workers
+SET total_keys_scanned = total_keys_scanned + ?
+WHERE id = ?;
+
+-- name: GetWorkerByID :one
+-- Get worker information by ID
+SELECT * FROM workers
+WHERE id = ?;
+
+-- name: GetActiveWorkers :many
+-- Get workers active in the last N minutes
+SELECT * FROM workers
+WHERE last_seen > datetime('now', '-' || ? || ' minutes')
+ORDER BY last_seen DESC;
+
+-- name: GetWorkersByType :many
+-- Get all workers of a specific type
+SELECT * FROM workers
+WHERE worker_type = ?
+ORDER BY last_seen DESC;
+
+-- ============================================================================
+-- Statistics Queries
+-- ============================================================================
+
+-- name: GetStats :one
+-- Get aggregated statistics
+SELECT * FROM stats_summary;
+
+-- name: GetPrefixUsage :many
+-- Get usage statistics per prefix
+SELECT 
+    prefix_28,
+    COUNT(*) as total_batches,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_batches,
+    MAX(nonce_end) as highest_nonce,
+    SUM(keys_scanned) as total_keys_scanned
+FROM jobs
+GROUP BY prefix_28
+ORDER BY prefix_28
+LIMIT ?;
+
+-- name: GetWorkerStats :many
+-- Get statistics per worker
+SELECT 
+    w.id,
+    w.worker_type,
+    w.total_keys_scanned,
+    w.last_seen,
+    COUNT(j.id) as total_jobs,
+    SUM(CASE WHEN j.status = 'processing' THEN 1 ELSE 0 END) as active_jobs,
+    SUM(CASE WHEN j.status = 'completed' THEN 1 ELSE 0 END) as completed_jobs
+FROM workers w
+LEFT JOIN jobs j ON j.worker_id = w.id
+GROUP BY w.id
+ORDER BY w.total_keys_scanned DESC
+LIMIT ?;
+
+-- ============================================================================
+-- End of Queries
+-- ============================================================================
