@@ -46,6 +46,7 @@
     - Store all times in the database as UTC. 
     - Never use `time.Local`.
 - **Database:** Use `sqlc` to generate code from raw SQL. Avoid heavy ORMs.
+- **Testing:** Use `t.TempDir()` for temporary directories in all tests that need to create files.
 
 ## 3. Worker Specifications
 
