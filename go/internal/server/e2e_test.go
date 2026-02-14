@@ -41,7 +41,7 @@ func TestServerE2E(t *testing.T) {
 	}
 
 	// Initialize database (applies migrations)
-	ctx := context.Background()
+	ctx := t.Context()
 	db, err := database.InitDB(ctx, cfg.DBPath)
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
@@ -73,7 +73,7 @@ func TestServerE2E(t *testing.T) {
 		Database  string `json:"database"`
 	}
 	ok := false
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 		resp, err = client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
