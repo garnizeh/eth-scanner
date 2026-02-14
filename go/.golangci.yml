@@ -1,0 +1,54 @@
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  modules-download-mode: readonly
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - gosec
+    - govet
+    - errorlint
+    - misspell
+    - nestif
+    - noctx
+    - prealloc
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - errcheck
+    - wrapcheck
+    - staticcheck
+    - ineffassign
+    - unused
+    - revive
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - swaggo
+  exclusions:
+    generated: lax
+
+issues:
+  # Setting 0 disables the limit and shows all unique linter errors.
+  max-issues-per-linter: 0
+  
+  # Setting 0 disables the limit and shows all errors, even if they have
+  # the same text (e.g., the same repetitive 'revive' warning).
+  max-same-issues: 10
+
+  # (Optional but helpful) Set to false to show all issues even if they occur on the same line.
+  uniq-by-line: false    

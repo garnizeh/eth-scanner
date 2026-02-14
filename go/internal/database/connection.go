@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -32,7 +33,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 
 	// Test connection
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.TODO()); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -48,7 +49,9 @@ func NewQueries(db *sql.DB) *Queries {
 // CloseDB closes the database connection
 func CloseDB(db *sql.DB) error {
 	if db != nil {
-		return db.Close()
+		if err := db.Close(); err != nil {
+			return fmt.Errorf("failed to close database: %w", err)
+		}
 	}
 	return nil
 }
