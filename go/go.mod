@@ -4,7 +4,7 @@ go 1.26
 
 tool github.com/sqlc-dev/sqlc/cmd/sqlc
 
-require modernc.org/sqlite v1.45.0 // indirect
+require modernc.org/sqlite v1.45.0
 
 require (
 	cel.dev/expr v0.24.0 // indirect
