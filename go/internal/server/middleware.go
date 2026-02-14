@@ -1,9 +1,11 @@
-package api
+// Package server contains HTTP handlers and middleware for the Master API.
+package server
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -69,7 +71,11 @@ func (w *statusCapturingResponseWriter) Write(b []byte) (int, error) {
 		// implicitly assume 200 if Write is called without WriteHeader
 		w.status = http.StatusOK
 	}
-	return w.ResponseWriter.Write(b)
+	n, err := w.ResponseWriter.Write(b)
+	if err != nil {
+		return n, fmt.Errorf("response write: %w", err)
+	}
+	return n, nil
 }
 
 // CORS sets permissive CORS headers for development and handles preflight OPTIONS.
@@ -113,7 +119,7 @@ func RequestID(next http.Handler) http.Handler {
 func generateRequestID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", fmt.Errorf("rand.Read: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }

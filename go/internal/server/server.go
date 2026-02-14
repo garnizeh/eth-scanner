@@ -1,5 +1,5 @@
-//nolint:revive
-package api
+// Package server contains HTTP handlers and server bootstrap code for the Master API.
+package server
 
 import (
 	"context"
