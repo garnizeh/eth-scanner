@@ -3,6 +3,10 @@
 
 .PHONY: help build test clean sqlc run-master run-worker fmt lint clean-branches
 
+# Git configuration for clean-branches
+REMOTE = origin
+DEFAULT_BRANCH = main
+
 # Default target: show help
 help:
 	@echo "EthScanner Distributed - Available Make Targets"
@@ -118,6 +122,9 @@ verify:
 
 # Clean merged local branches
 clean-branches:
-	@echo "Cleaning merged local branches..."
-	@git branch --merged | grep -v main | xargs git branch -d
-	@echo "✓ Branches cleaned"
+	@echo "Fetching latest refs from $(REMOTE)..."
+	@git fetch --prune $(REMOTE)
+	@for b in `git branch --merged $(REMOTE)/$(DEFAULT_BRANCH) | grep -vE "(^\*|\b$(DEFAULT_BRANCH)\b|\bmain\b|\bdevelop\b)" | sed 's/^..//'`; do \
+		printf "Deleting local branch '%s'\n" "$$b"; \
+		git branch -d "$$b"; \
+	done
