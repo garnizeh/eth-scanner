@@ -38,14 +38,14 @@ build: $(MASTER_BINARY) $(WORKER_BINARY)
 	@echo "✓ Build complete"
 
 # Build master binary
-$(MASTER_BINARY): cmd/master/*.go
+$(MASTER_BINARY):
 	@mkdir -p $(BINARY_DIR)
 	@echo "Building master..."
 	@go build $(BUILD_FLAGS) -o $(MASTER_BINARY) ./cmd/master
 	@echo "  → $(MASTER_BINARY)"
 
 # Build worker binary
-$(WORKER_BINARY): cmd/worker-pc/*.go
+$(WORKER_BINARY):
 	@mkdir -p $(BINARY_DIR)
 	@echo "Building worker..."
 	@go build $(BUILD_FLAGS) -o $(WORKER_BINARY) ./cmd/worker-pc

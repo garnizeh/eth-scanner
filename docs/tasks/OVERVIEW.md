@@ -55,6 +55,7 @@ This allows insertion of new tasks between existing ones without renumbering:
 | P01-T050 | Create `scripts/init-db.sh` (initialize SQLite database with schema) | Medium | None |
 | P01-T060 | Verify Go toolchain (no CGO requirement for `modernc.org/sqlite`) | High | P01-T010 |
 | P01-T070 | Create basic `Makefile` or `justfile` for common tasks (build, test, run) | Low | P01-T010 |
+| P01-T080 | Setup GitHub Actions CI Workflow | High | P01-T070 |
 
 ---
 
