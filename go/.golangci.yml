@@ -27,24 +27,6 @@ linters:
     - unused
     - revive
 
-linters-settings:
-  revive:
-    rules:
-      - name: var-naming
-        severity: warning
-        disabled: false
-        arguments:
-          - ["ID"] # AllowList
-          - ["VM"] # DenyList
-          - - skip-initialism-name-checks: true
-              upper-case-const: true
-              skip-package-name-checks: true
-              skip-package-name-collision-with-go-std: true
-              extra-bad-package-names:
-                - helpers
-                - models
-                - utils
-
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0 
