@@ -29,6 +29,7 @@
     - The `esp32/` folder contains the ESP32 firmware and C++/Arduino/FreeRTOS code.
     - The `go/cmd/master/` folder contains the Master API server (Go).
     - The `go/cmd/worker-pc/` folder contains the PC worker implementation (Go).
+- **Absolute file paths:** When invoking tools or providing file paths (especially in automated edits or terminal commands), always use the absolute path to the file in the workspace (for example: `/home/user/code/garnizeh/eth-scanner/go/test-sqlite.go`). This repository uses the VS Code workspace feature; do not rely on relative paths or assumptions about the current working directory.
 
 ## 1. Core Tech Stack
 - **Backend (Master/PC Worker):** Go (Golang).
