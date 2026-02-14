@@ -63,13 +63,13 @@ This allows insertion of new tasks between existing ones without renumbering:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P02-T010 | Validate `docs/database/schema.sql` against SDD requirements | High | None |
-| P02-T020 | Create `go/internal/database/queries.sql` with all sqlc queries | High | P02-T010 |
+| P02-T010 | Validate `go/internal/database/sql/001_schema.sql` against SDD requirements | High | None |
+| P02-T020 | Create `go/internal/database/sql/queries.sql` with all sqlc queries | High | P02-T010 |
 | P02-T030 | Configure `sqlc.yaml` for code generation | High | P01-T040 |
 | P02-T040 | Run `sqlc generate` and verify generated code in `internal/database/` | High | P02-T020, P02-T030 |
 | P02-T050 | Implement `internal/database/db.go` (SQLite connection with `modernc.org/sqlite`) | High | P02-T040 |
 | P02-T060 | Create database initialization function (apply schema on first run) | High | P02-T050 |
-| P02-T070 | Implement database migration versioning (simple version table) | Low | P02-T060 |
+| P02-T070 | Implement database migration versioning using goose lib | Low | P02-T060 |
 | P02-T080 | Write unit tests for database layer (connection, schema application) | Medium | P02-T060 |
 
 ---
