@@ -7,7 +7,7 @@ run:
   tests: true
 
 linters:
-  disable-all: true 
+  default: standard
   enable:
     - bodyclose
     - gosec
@@ -26,8 +26,29 @@ linters:
     - ineffassign
     - unused
     - revive
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - swaggo
+  exclusions:
+    generated: lax
 
 issues:
+  # Setting 0 disables the limit and shows all unique linter errors.
   max-issues-per-linter: 0
-  max-same-issues: 0 
-  exclude-use-default: false
+  
+  # Setting 0 disables the limit and shows all errors, even if they have
+  # the same text (e.g., the same repetitive 'revive' warning).
+  max-same-issues: 10
+
+  # (Optional but helpful) Set to false to show all issues even if they occur on the same line.
+  uniq-by-line: false    
