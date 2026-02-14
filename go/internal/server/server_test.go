@@ -13,7 +13,7 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	s := NewServer(&config.Config{}, nil)
+	s := New(&config.Config{}, nil)
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -45,7 +45,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestRegisterRoutes(t *testing.T) {
-	s := NewServer(&config.Config{}, nil)
+	s := New(&config.Config{}, nil)
 	s.RegisterRoutes()
 
 	// health should return 200
@@ -70,7 +70,7 @@ func TestRegisterRoutes(t *testing.T) {
 // wrapping context.Canceled.
 func TestStartGracefulShutdown(t *testing.T) {
 	cfg := &config.Config{Port: "0"}
-	s := NewServer(cfg, nil)
+	s := New(cfg, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
