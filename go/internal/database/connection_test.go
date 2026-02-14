@@ -6,7 +6,7 @@ import (
 
 func TestInitDB(t *testing.T) {
 	// Test with in-memory database (no files created)
-	db, err := InitDB(":memory:")
+	db, err := InitDB(t.Context(), ":memory:")
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
@@ -22,14 +22,17 @@ func TestInitDB(t *testing.T) {
 	if queries == nil {
 		t.Error("NewQueries returned nil")
 	}
+
+	// Test a simple query to verify schema is applied
+	_, err = queries.GetStats(t.Context())
+	if err != nil {
+		t.Errorf("Failed to execute GetStats query: %v", err)
+	}
 }
 
 func TestCloseDB(t *testing.T) {
-	// Create temporary database file in test temp directory
-	tempDir := t.TempDir()
-	dbPath := tempDir + "/test_close.db"
-
-	db, err := InitDB(dbPath)
+	// Test with in-memory database (no files created)
+	db, err := InitDB(t.Context(), ":memory:")
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
