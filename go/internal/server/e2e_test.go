@@ -19,14 +19,17 @@ import (
 func TestServerE2E(t *testing.T) {
 	t.Parallel()
 
-	// Choose an available port
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	// Choose an available port using ListenConfig with context (lint: noctx)
+	lc := &net.ListenConfig{}
+	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to find free port: %v", err)
 	}
 	addr := l.Addr().(*net.TCPAddr)
 	port := addr.Port
-	_ = l.Close()
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to close listener: %v", err)
+	}
 
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "e2e.db")
@@ -43,7 +46,11 @@ func TestServerE2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
-	defer database.CloseDB(db)
+	defer func() {
+		if err := database.CloseDB(db); err != nil {
+			t.Errorf("CloseDB failed: %v", err)
+		}
+	}()
 
 	srv := New(cfg, db)
 	srv.RegisterRoutes()
@@ -67,7 +74,8 @@ func TestServerE2E(t *testing.T) {
 	}
 	ok := false
 	for i := 0; i < 20; i++ {
-		resp, err = client.Get(url)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		resp, err = client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			if err := json.NewDecoder(resp.Body).Decode(&body); err == nil {
 				ok = true
@@ -94,9 +102,8 @@ func TestServerE2E(t *testing.T) {
 	cancel()
 	select {
 	case e := <-errCh:
-		// server returns a non-nil error wrapping context cancellation; treat as success
-		if e == nil {
-			// ok
+		if e != nil {
+			t.Logf("server returned: %v", e)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("server did not shutdown within timeout")
