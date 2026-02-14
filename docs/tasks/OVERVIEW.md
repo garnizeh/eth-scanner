@@ -81,9 +81,9 @@ This allows insertion of new tasks between existing ones without renumbering:
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
 | P03-T010 | Implement `internal/config/config.go` (load from env/file: port, DB path) | High | P01-T020 |
-| P03-T020 | Implement `internal/api/server.go` (HTTP server setup with `net/http` or `chi`) | High | P03-T010 |
-| P03-T030 | Implement `internal/api/middleware.go` (logging, CORS, request ID) | Medium | P03-T020 |
-| P03-T040 | Implement `internal/api/routes.go` (route registration) | High | P03-T020 |
+| P03-T020 | Implement `internal/server/server.go` (HTTP server setup with `net/http` or `chi`) | High | P03-T010 |
+| P03-T030 | Implement `internal/server/middleware.go` (logging, CORS, request ID) | Medium | P03-T020 |
+| P03-T040 | Implement `internal/server/routes.go` (route registration) | High | P03-T020 |
 | P03-T050 | Create `GET /health` endpoint (basic health check) | High | P03-T040 |
 | P03-T060 | Create `cmd/master/main.go` entry point (wire dependencies, start server) | High | P03-T020 |
 | P03-T070 | Test server startup and `/health` endpoint manually | High | P03-T060 |
