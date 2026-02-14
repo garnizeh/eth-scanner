@@ -7,6 +7,11 @@
 REMOTE = origin
 DEFAULT_BRANCH = main
 
+# Default runtime environment variables (can be overridden in environment)
+MASTER_PORT ?= 8080
+MASTER_DB_PATH ?= ./data/eth-scanner.db
+MASTER_LOG_LEVEL ?= info
+
 # Default target: show help
 help:
 	@echo "EthScanner Distributed - Available Make Targets"
@@ -90,7 +95,10 @@ sqlc:
 # Run master API server
 run-master:
 	@echo "Starting Master API server..."
-	@go run ./cmd/master
+	@MASTER_PORT=$(MASTER_PORT) \
+	MASTER_DB_PATH=$(MASTER_DB_PATH) \
+	MASTER_LOG_LEVEL=$(MASTER_LOG_LEVEL) \
+	go run ./cmd/master
 
 # Run PC worker
 run-worker:
