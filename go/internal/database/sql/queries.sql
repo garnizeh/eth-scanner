@@ -1,18 +1,3 @@
--- ============================================================================
--- EthScanner Distributed - SQL Queries (sqlc)
--- ============================================================================
--- Database: SQLite (Pure Go - modernc.org/sqlite)
--- Generated Code Target: Go (internal/database package)
--- Date: February 14, 2026
---
--- This file contains all SQL queries used by the Master API and Workers.
--- Code is generated using sqlc (https://sqlc.dev)
--- ============================================================================
-
--- ============================================================================
--- Jobs Management Queries
--- ============================================================================
-
 -- name: FindAvailableBatch :one
 -- Find an available batch (pending or expired lease)
 SELECT * FROM jobs
@@ -91,10 +76,6 @@ WHERE status = ?
 ORDER BY created_at DESC
 LIMIT ?;
 
--- ============================================================================
--- Results Management Queries
--- ============================================================================
-
 -- name: InsertResult :one
 -- Insert a new result (found key)
 INSERT INTO results (private_key, address, worker_id, job_id, nonce_found)
@@ -117,10 +98,6 @@ ORDER BY found_at DESC;
 SELECT * FROM results
 ORDER BY found_at DESC
 LIMIT ?;
-
--- ============================================================================
--- Workers Management Queries
--- ============================================================================
 
 -- name: UpsertWorker :exec
 -- Insert or update worker heartbeat
@@ -152,10 +129,6 @@ ORDER BY last_seen DESC;
 SELECT * FROM workers
 WHERE worker_type = ?
 ORDER BY last_seen DESC;
-
--- ============================================================================
--- Statistics Queries
--- ============================================================================
 
 -- name: GetStats :one
 -- Get aggregated statistics
@@ -189,7 +162,3 @@ LEFT JOIN jobs j ON j.worker_id = w.id
 GROUP BY w.id
 ORDER BY w.total_keys_scanned DESC
 LIMIT ?;
-
--- ============================================================================
--- End of Queries
--- ============================================================================

@@ -14,19 +14,6 @@ type Querier interface {
 	CompleteBatch(ctx context.Context, arg CompleteBatchParams) error
 	// Create a new batch (job) for a worker
 	CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, error)
-	// ============================================================================
-	// EthScanner Distributed - SQL Queries (sqlc)
-	// ============================================================================
-	// Database: SQLite (Pure Go - modernc.org/sqlite)
-	// Generated Code Target: Go (internal/database package)
-	// Date: February 14, 2026
-	//
-	// This file contains all SQL queries used by the Master API and Workers.
-	// Code is generated using sqlc (https://sqlc.dev)
-	// ============================================================================
-	// ============================================================================
-	// Jobs Management Queries
-	// ============================================================================
 	// Find an available batch (pending or expired lease)
 	FindAvailableBatch(ctx context.Context) (Job, error)
 	// Get workers active in the last N minutes
@@ -47,9 +34,6 @@ type Querier interface {
 	GetResultByPrivateKey(ctx context.Context, privateKey string) (Result, error)
 	// Find results by Ethereum address
 	GetResultsByAddress(ctx context.Context, address string) ([]Result, error)
-	// ============================================================================
-	// Statistics Queries
-	// ============================================================================
 	// Get aggregated statistics
 	GetStats(ctx context.Context) (StatsSummary, error)
 	// Get worker information by ID
@@ -58,9 +42,6 @@ type Querier interface {
 	GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerStatsRow, error)
 	// Get all workers of a specific type
 	GetWorkersByType(ctx context.Context, workerType string) ([]Worker, error)
-	// ============================================================================
-	// Results Management Queries
-	// ============================================================================
 	// Insert a new result (found key)
 	InsertResult(ctx context.Context, arg InsertResultParams) (Result, error)
 	// Lease an existing batch to a worker
@@ -69,9 +50,6 @@ type Querier interface {
 	UpdateCheckpoint(ctx context.Context, arg UpdateCheckpointParams) error
 	// Update worker's total key count
 	UpdateWorkerKeyCount(ctx context.Context, arg UpdateWorkerKeyCountParams) error
-	// ============================================================================
-	// Workers Management Queries
-	// ============================================================================
 	// Insert or update worker heartbeat
 	UpsertWorker(ctx context.Context, arg UpsertWorkerParams) error
 }
