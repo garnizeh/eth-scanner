@@ -23,6 +23,8 @@ coverage.html
 *.sqlite3
 *.db-shm
 *.db-wal
+# Local data files
+data/
 
 # sqlc generated code (optional - may want to commit)
 # go/internal/database/models.go
