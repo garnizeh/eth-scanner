@@ -8,10 +8,13 @@
 - **Efficiency:** Prioritize CPU, memory, and storage efficiency above all else. Every byte matters.
 - **Minimal Tech Stack:** Keep the stack simple and maintainable.
 - **Docs Location:** All project documentation (except the project's root README) must be created inside the `docs/` directory, organized into a sensible subfolder structure to keep content tidy.
+- **Consult System Design Document:** Always consult `docs/architecture/system-design-document.md` whenever you need a project-wide reference or to align expectations with ongoing development.
+- **Task Tracking:** Use `docs/tasks/backlog` for pending and in-progress tasks and `docs/tasks/done` for completed tasks. Tasks in `docs/tasks/backlog` must be sequentially numbered and worked on in numeric order; these folders are the single source of truth for project state and task workflow.
+    - **Follow Tasks Overview:** When creating, updating, or executing tasks, strictly follow the definitions, workflow, and naming conventions in `docs/tasks/OVERVIEW.md`. Treat files in `docs/tasks/backlog/` and `docs/tasks/done/` as the authoritative task state; update task files and move them between folders to reflect status changes.
 - **Workspace Layout (VS Code):** This project is organized as a VS Code workspace. The repository root should be opened as a workspace in VS Code.
-    - The `esp32-worker/` folder contains the ESP32 firmware and C++/Arduino/FreeRTOS code.
-    - The `cmd/master/` folder contains the Master API server (Go).
-    - The `cmd/worker-pc/` folder contains the PC worker implementation (Go).
+    - The `esp32/` folder contains the ESP32 firmware and C++/Arduino/FreeRTOS code.
+    - The `go/cmd/master/` folder contains the Master API server (Go).
+    - The `go/cmd/worker-pc/` folder contains the PC worker implementation (Go).
 
 ## 1. Core Tech Stack
 - **Backend (Master/PC Worker):** Go (Golang).
@@ -39,15 +42,19 @@
 - **Memory:** Use static buffers (`char[]`) and avoid `std::string` or `String` class to prevent heap fragmentation.
 
 ### B. PC Worker (Go)
-- **Paralellism:** Scale using `runtime.NumCPU()` and a pool of worker goroutines.
+- **Parallelism:** Scale using `runtime.NumCPU()` and a pool of worker goroutines.
 - **Crypto:** Use `github.com/ethereum/go-ethereum/crypto`.
+- **Dynamic Batch Sizing:** Request batch size based on measured/estimated throughput (targeting approximately 1 hour of work per lease).
 
 ## 4. Distributed Scanning Logic (Space Partitioning)
 - **Private Key:** 32 bytes (256 bits).
-- **Master Strategy:** The API manages the **Prefix** (e.g., first 4 to 8 bytes).
-- **Worker Strategy:** The worker receives a prefix and iterates through the remaining bytes.
-- **Lease System:** The database tracks jobs with `status` (`pending`, `processing`, `completed`) and an `expires_at` (UTC) to handle worker timeouts.
+- **Master Strategy:** The API manages the **global 28-byte prefix** and allocates worker nonce ranges.
+- **Worker Strategy:** The worker receives `prefix_28` and scans a **4-byte nonce range** (`nonce_start` to `nonce_end`).
+- **Dynamic Batching:** Workers request `requested_batch_size` according to device capacity (PC and ESP32 should receive different batch sizes).
+- **Lease System:** The database tracks jobs with `status` (`pending`, `processing`, `completed`), `worker_id`, `current_nonce`, and `expires_at` (UTC) to handle worker timeouts and resume.
+- **Checkpointing:** Workers must periodically report progress (`current_nonce`, `keys_scanned`) to minimize rework after failures.
 
 ## 5. Implementation Patterns for AI
-- **SQL Generation:** "Write a SQL schema for a `jobs` table including `prefix`, `status`, `worker_id`, and `expires_at` (UTC), then provide the `sqlc` query to claim an expired job."
-- **ESP32 Task:** "Create a FreeRTOS task pinned to Core 1 that iterates through a 24-byte suffix given an 8-byte prefix."
+- **SQL Generation:** "Write a SQL schema for a `jobs` table including `prefix_28`, `nonce_start`, `nonce_end`, `current_nonce`, `status`, `worker_id`, and `expires_at` (UTC), then provide `sqlc` queries to lease a pending/expired job and update checkpoints."
+- **API Flow:** "Implement `POST /api/v1/jobs/lease`, `PATCH /api/v1/jobs/{job_id}/checkpoint`, and `POST /api/v1/jobs/{job_id}/complete` following UTC lease expiration semantics."
+- **ESP32 Task:** "Create a FreeRTOS task pinned to Core 1 that iterates nonce values over a 4-byte range while reusing static 32-byte key buffers (`prefix_28 + nonce`)."

@@ -9,6 +9,9 @@ Quick links
 - Go code: `go/`
 - ESP32 firmware: `esp32/`
 - Scripts: `scripts/` (e.g., `scripts/init-db.sh`)
+- Tasks (backlog): `docs/tasks/backlog` (pending / in-progress tasks — sequentially numbered; work is performed in numeric order)
+- Tasks (done): `docs/tasks/done` (completed tasks)
+- Tasks overview: `docs/tasks/OVERVIEW.md` (phases, task naming, workflow and templates)
 
 Getting started (Linux)
 
@@ -76,7 +79,7 @@ Quick setup notes
 Go (Master API & PC worker)
 
 ```
-# Ensure Go is installed (1.20+ recommended)
+# Ensure Go is installed (1.26+ recommended)
 go version
 
 # from project root: initialize DB (creates SQLite DB)
