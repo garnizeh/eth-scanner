@@ -1,3 +1,5 @@
+// Package config provides configuration loading and validation for the
+// Master API and worker components.
 package config
 
 import (

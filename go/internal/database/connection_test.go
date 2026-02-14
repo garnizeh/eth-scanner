@@ -12,7 +12,11 @@ func TestInitDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("db.Close failed: %v", err)
+		}
+	}()
 
 	// Test ping
 	if err := db.PingContext(t.Context()); err != nil {
@@ -61,13 +65,21 @@ func TestCloseDB(t *testing.T) {
 func TestInitDBWithSchema(t *testing.T) {
 	ctx := context.Background()
 	dbPath := "test_schema.db"
-	defer os.Remove(dbPath)
+	defer func() {
+		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("failed to remove db file: %v", err)
+		}
+	}()
 
 	db, err := InitDB(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("db.Close failed: %v", err)
+		}
+	}()
 
 	// Test NewQueries
 	queries := NewQueries(db)

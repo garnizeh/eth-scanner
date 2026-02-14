@@ -7,7 +7,7 @@ run:
   tests: true
 
 linters:
-  default: standard
+  disable-all: true 
   enable:
     - bodyclose
     - gosec
@@ -26,29 +26,26 @@ linters:
     - ineffassign
     - unused
     - revive
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
 
-formatters:
-  enable:
-    - gofmt
-    - goimports
-    - swaggo
-  exclusions:
-    generated: lax
+linters-settings:
+  revive:
+    rules:
+      - name: var-naming
+        severity: warning
+        disabled: false
+        arguments:
+          - ["ID"] # AllowList
+          - ["VM"] # DenyList
+          - - skip-initialism-name-checks: true
+              upper-case-const: true
+              skip-package-name-checks: true
+              skip-package-name-collision-with-go-std: true
+              extra-bad-package-names:
+                - helpers
+                - models
+                - utils
 
 issues:
-  # Setting 0 disables the limit and shows all unique linter errors.
   max-issues-per-linter: 0
-  
-  # Setting 0 disables the limit and shows all errors, even if they have
-  # the same text (e.g., the same repetitive 'revive' warning).
-  max-same-issues: 10
-
-  # (Optional but helpful) Set to false to show all issues even if they occur on the same line.
-  uniq-by-line: false    
+  max-same-issues: 0 
+  exclude-use-default: false

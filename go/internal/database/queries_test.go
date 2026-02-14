@@ -11,7 +11,11 @@ import (
 func setupTestDB(t *testing.T) (*sql.DB, *Queries) {
 	ctx := context.Background()
 	dbPath := "test_queries.db"
-	t.Cleanup(func() { os.Remove(dbPath) })
+	t.Cleanup(func() {
+		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("failed to remove db file: %v", err)
+		}
+	})
 
 	db, err := InitDB(ctx, dbPath)
 	if err != nil {
@@ -24,7 +28,11 @@ func setupTestDB(t *testing.T) (*sql.DB, *Queries) {
 func TestCreateAndLeaseBatch(t *testing.T) {
 	ctx := context.Background()
 	db, queries := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
 
 	// Create a batch
 	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
@@ -61,7 +69,11 @@ func TestCreateAndLeaseBatch(t *testing.T) {
 func TestFindAvailableBatch(t *testing.T) {
 	ctx := context.Background()
 	db, queries := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
 
 	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
 
@@ -89,7 +101,11 @@ func TestFindAvailableBatch(t *testing.T) {
 func TestUpdateCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	db, queries := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
 
 	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
 
@@ -139,7 +155,11 @@ func TestUpdateCheckpoint(t *testing.T) {
 func TestCompleteBatch(t *testing.T) {
 	ctx := context.Background()
 	db, queries := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
 
 	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
 
@@ -188,7 +208,11 @@ func TestCompleteBatch(t *testing.T) {
 func TestUTCTimestamps(t *testing.T) {
 	ctx := context.Background()
 	db, queries := setupTestDB(t)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
 
 	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
 

@@ -1,9 +1,12 @@
+// Package database provides helpers to initialize and manage the SQLite
+// database connection and run embedded migrations.
 package database
 
 import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 
@@ -40,13 +43,17 @@ func InitDB(ctx context.Context, dbPath string) (*sql.DB, error) {
 
 	// Test connection
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		if cerr := db.Close(); cerr != nil {
+			return nil, fmt.Errorf("failed to ping database: %w", errors.Join(err, cerr))
+		}
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Apply schema migrations
 	if err := migrate(ctx, db); err != nil {
-		db.Close()
+		if cerr := db.Close(); cerr != nil {
+			return nil, fmt.Errorf("failed to apply database schema: %w", errors.Join(err, cerr))
+		}
 		return nil, fmt.Errorf("failed to apply database schema: %w", err)
 	}
 

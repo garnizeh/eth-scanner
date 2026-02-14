@@ -1,4 +1,4 @@
-package api
+package server
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestCORSPreflight(t *testing.T) {
 	called := false
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
+	h := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { called = true })
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest("OPTIONS", "/bar", nil)
@@ -58,7 +58,7 @@ func TestCORSPreflight(t *testing.T) {
 
 func TestCORSNormal(t *testing.T) {
 	called := false
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusOK) })
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { called = true; w.WriteHeader(http.StatusOK) })
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/baz", nil)
@@ -79,7 +79,7 @@ func TestLoggerMiddleware(t *testing.T) {
 	log.SetOutput(&buf)
 	defer log.SetOutput(os.Stderr)
 
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte("ok"))
 	})
