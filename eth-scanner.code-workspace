@@ -1,0 +1,24 @@
+{
+  "folders": [
+    {
+      "name": "00 - Project Root",
+      "path": "."
+    },
+    {
+      "name": "01 - Master API (Go)",
+      "path": "go"
+    },
+    {
+      "name": "02 - ESP32 Firmware (C++)",
+      "path": "esp32"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "go": true,
+      "esp32": true,
+      "**/.git": true,
+      "**/node_modules": true
+    }
+  }
+}

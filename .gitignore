@@ -1,0 +1,57 @@
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+/go/bin/
+/go/pkg/
+*.test
+vendor/
+
+# SQLite DB
+*.db
+*.sqlite
+
+# Environment
+.env
+.env.local
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# ESP32 / Arduino / PlatformIO
+.ino.*
+.arduino*
+/.pioenvs/
+/.piolibdeps/
+.pio/
+
+# Logs
+logs/
+*.log
+
+# Generated files
+dist/
+build/
+
+# macOS
+*.DS_Store
+
+# Node
+node_modules/
+
+# Misc
+coverage.out
+
+# Ignore secrets
+secrets.json
+
+# Allow gitkeep
+!**/.gitkeep
