@@ -8,40 +8,40 @@ import (
 
 // Config holds application configuration loaded from environment variables.
 type Config struct {
-    // Port is the TCP port the server listens on (e.g. "8080").
-    Port string
+	// Port is the TCP port the server listens on (e.g. "8080").
+	Port string
 
-    // DBPath is the filesystem path to the SQLite database file.
-    DBPath string
+	// DBPath is the filesystem path to the SQLite database file.
+	DBPath string
 
-    // LogLevel controls application logging: debug, info, warn, error.
-    LogLevel string
+	// LogLevel controls application logging: debug, info, warn, error.
+	LogLevel string
 }
 
 // Load reads configuration from environment variables, applies defaults and
 // validates required values. It returns a configured Config or an error.
 func Load() (*Config, error) {
-    cfg := &Config{
-        Port:     strings.TrimSpace(os.Getenv("MASTER_PORT")),
-        DBPath:   strings.TrimSpace(os.Getenv("MASTER_DB_PATH")),
-        LogLevel: strings.TrimSpace(os.Getenv("MASTER_LOG_LEVEL")),
-    }
+	cfg := &Config{
+		Port:     strings.TrimSpace(os.Getenv("MASTER_PORT")),
+		DBPath:   strings.TrimSpace(os.Getenv("MASTER_DB_PATH")),
+		LogLevel: strings.TrimSpace(os.Getenv("MASTER_LOG_LEVEL")),
+	}
 
-    if cfg.Port == "" {
-        cfg.Port = "8080"
-    }
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
 
-    if cfg.LogLevel == "" {
-        cfg.LogLevel = "info"
-    } else {
-        // normalize
-        cfg.LogLevel = strings.ToLower(cfg.LogLevel)
-    }
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "info"
+	} else {
+		// normalize
+		cfg.LogLevel = strings.ToLower(cfg.LogLevel)
+	}
 
-    // Validate DBPath is present
-    if cfg.DBPath == "" {
-        return nil, fmt.Errorf("MASTER_DB_PATH is required")
-    }
+	// Validate DBPath is present
+	if cfg.DBPath == "" {
+		return nil, fmt.Errorf("MASTER_DB_PATH is required")
+	}
 
-    return cfg, nil
+	return cfg, nil
 }
