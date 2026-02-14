@@ -13,7 +13,7 @@ func TestInitDB(t *testing.T) {
 	defer db.Close()
 
 	// Test ping
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(t.Context()); err != nil {
 		t.Errorf("Database ping failed: %v", err)
 	}
 
