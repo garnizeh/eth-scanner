@@ -11,6 +11,13 @@
 - **Consult System Design Document:** Always consult `docs/architecture/system-design-document.md` whenever you need a project-wide reference or to align expectations with ongoing development.
 - **Task Tracking:** Use `docs/tasks/backlog` for pending and in-progress tasks and `docs/tasks/done` for completed tasks. Tasks in `docs/tasks/backlog` must be sequentially numbered and worked on in numeric order; these folders are the single source of truth for project state and task workflow.
     - **Follow Tasks Overview:** When creating, updating, or executing tasks, strictly follow the definitions, workflow, and naming conventions in `docs/tasks/OVERVIEW.md`. Treat files in `docs/tasks/backlog/` and `docs/tasks/done/` as the authoritative task state; update task files and move them between folders to reflect status changes.
+        - **Git Workflow for Tasks:** When starting a new task, always switch to the `main` branch, update it from origin, and create a dedicated local branch for the task. Example workflow:
+            1. `git checkout main`
+            2. `git fetch origin --prune`
+            3. `git pull origin main`
+            4. `git checkout -b task/P01-T010-short-description`
+            Work on the branch and update the corresponding task file in `docs/tasks/backlog/`.
+        - **Commit & Push After Completion:** After a task is finished (all acceptance criteria met, tests passing where applicable, and the task document updated), commit your changes on the task branch and push to origin. Use a clear commit message referencing the task ID (e.g., `P01-T010: Initialize Go module — complete`). Optionally open a pull request for review.
 - **Workspace Layout (VS Code):** This project is organized as a VS Code workspace. The repository root should be opened as a workspace in VS Code.
     - The `esp32/` folder contains the ESP32 firmware and C++/Arduino/FreeRTOS code.
     - The `go/cmd/master/` folder contains the Master API server (Go).
