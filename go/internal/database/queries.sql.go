@@ -93,8 +93,6 @@ func (q *Queries) CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, 
 }
 
 const findAvailableBatch = `-- name: FindAvailableBatch :one
-
-
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
 WHERE status = 'pending' 
    OR (status = 'processing' AND expires_at < datetime('now', 'utc'))
@@ -102,19 +100,6 @@ ORDER BY created_at ASC
 LIMIT 1
 `
 
-// ============================================================================
-// EthScanner Distributed - SQL Queries (sqlc)
-// ============================================================================
-// Database: SQLite (Pure Go - modernc.org/sqlite)
-// Generated Code Target: Go (internal/database package)
-// Date: February 14, 2026
-//
-// This file contains all SQL queries used by the Master API and Workers.
-// Code is generated using sqlc (https://sqlc.dev)
-// ============================================================================
-// ============================================================================
-// Jobs Management Queries
-// ============================================================================
 // Find an available batch (pending or expired lease)
 func (q *Queries) FindAvailableBatch(ctx context.Context) (Job, error) {
 	row := q.db.QueryRowContext(ctx, findAvailableBatch)
@@ -463,13 +448,9 @@ func (q *Queries) GetResultsByAddress(ctx context.Context, address string) ([]Re
 }
 
 const getStats = `-- name: GetStats :one
-
 SELECT pending_batches, processing_batches, completed_batches, total_batches, total_keys_scanned, avg_pc_batch_size, avg_esp32_batch_size, results_found, total_workers, active_workers, pc_workers, esp32_workers, active_prefixes FROM stats_summary
 `
 
-// ============================================================================
-// Statistics Queries
-// ============================================================================
 // Get aggregated statistics
 func (q *Queries) GetStats(ctx context.Context) (StatsSummary, error) {
 	row := q.db.QueryRowContext(ctx, getStats)
@@ -608,7 +589,6 @@ func (q *Queries) GetWorkersByType(ctx context.Context, workerType string) ([]Wo
 }
 
 const insertResult = `-- name: InsertResult :one
-
 INSERT INTO results (private_key, address, worker_id, job_id, nonce_found)
 VALUES (?, ?, ?, ?, ?)
 RETURNING id, private_key, address, worker_id, job_id, nonce_found, found_at
@@ -622,9 +602,6 @@ type InsertResultParams struct {
 	NonceFound int64  `json:"nonce_found"`
 }
 
-// ============================================================================
-// Results Management Queries
-// ============================================================================
 // Insert a new result (found key)
 func (q *Queries) InsertResult(ctx context.Context, arg InsertResultParams) (Result, error) {
 	row := q.db.QueryRowContext(ctx, insertResult,
@@ -720,7 +697,6 @@ func (q *Queries) UpdateWorkerKeyCount(ctx context.Context, arg UpdateWorkerKeyC
 }
 
 const upsertWorker = `-- name: UpsertWorker :exec
-
 INSERT INTO workers (id, worker_type, last_seen, metadata)
 VALUES (?, ?, datetime('now', 'utc'), ?)
 ON CONFLICT(id) DO UPDATE SET
@@ -734,9 +710,6 @@ type UpsertWorkerParams struct {
 	Metadata   sql.NullString `json:"metadata"`
 }
 
-// ============================================================================
-// Workers Management Queries
-// ============================================================================
 // Insert or update worker heartbeat
 func (q *Queries) UpsertWorker(ctx context.Context, arg UpsertWorkerParams) error {
 	_, err := q.db.ExecContext(ctx, upsertWorker, arg.ID, arg.WorkerType, arg.Metadata)

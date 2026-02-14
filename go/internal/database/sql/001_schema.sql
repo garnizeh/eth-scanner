@@ -15,6 +15,9 @@
 -- All timestamps are stored in UTC format.
 -- ============================================================================
 
+-- +goose Up
+-- +goose StatementBegin
+
 -- ============================================================================
 -- Jobs Table
 -- ============================================================================
@@ -250,6 +253,33 @@ SELECT
     -- Prefix progress (distinct prefixes being worked on)
     COUNT(DISTINCT prefix_28) AS active_prefixes
 FROM jobs;
+
+-- +goose StatementEnd
+
+
+-- +goose Down
+-- +goose StatementBegin
+
+DROP VIEW IF EXISTS stats_summary;
+
+DROP INDEX IF EXISTS idx_workers_last_seen;
+DROP INDEX IF EXISTS idx_workers_type;
+
+DROP INDEX IF EXISTS idx_results_found_at;
+DROP INDEX IF EXISTS idx_results_worker;
+DROP INDEX IF EXISTS idx_results_address;
+
+DROP INDEX IF EXISTS idx_jobs_worker_type;
+DROP INDEX IF EXISTS idx_jobs_prefix;
+DROP INDEX IF EXISTS idx_jobs_created;
+DROP INDEX IF EXISTS idx_jobs_worker;
+DROP INDEX IF EXISTS idx_jobs_status_expires;
+
+DROP TABLE IF EXISTS results;
+DROP TABLE IF EXISTS jobs;
+DROP TABLE IF EXISTS workers;
+
+-- +goose StatementEnd
 
 -- ============================================================================
 -- Sample Queries (for sqlc code generation)
