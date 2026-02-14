@@ -42,7 +42,7 @@ func TestServerE2E(t *testing.T) {
 		LogLevel: "debug",
 	}
 
-	// Initialize database (applies migrations)	
+	// Initialize database (applies migrations)
 	db, err := database.InitDB(ctx, cfg.DBPath)
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
