@@ -1,3 +1,61 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+bin/
+dist/
+*.test
+*.out
+go.work
+
+# Go coverage files
+*.coverprofile
+coverage.txt
+coverage.html
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# sqlc generated code (optional - may want to commit)
+# go/internal/database/models.go
+# go/internal/database/querier.go
+# go/internal/database/db.go
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+logs/
+
+# ESP32 build artifacts (if using PlatformIO)
+esp32/.pio/
+esp32/.vscode/
+esp32/build/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
 # Build artifacts
 bin/
 *.exe
