@@ -102,3 +102,5 @@ ESP32 firmware (Arduino / PlatformIO)
 Notes
 - This README is a minimal starter; see `docs/architecture/system-design-document.md` for design details and API contracts.
 - If you want a different license owner/year in `LICENSE`, update the file accordingly.
+
+---
