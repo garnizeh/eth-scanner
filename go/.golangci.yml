@@ -1,3 +1,10 @@
+version: "2.0"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  modules-download-mode: readonly
+
 linters-settings:
   errcheck:
     check-type-assertions: true
@@ -5,19 +12,14 @@ linters-settings:
     check-shadowing: true
 
 linters:
-  # Desabilita todos e habilita apenas os essenciais + alguns extras bons
   disable-all: true
   enable:
-    - errcheck    # Verifica se você está ignorando erros
-    - gosimple    # Sugere simplificações de código
-    - govet       # Ferramenta padrão do Go para analisar bugs
-    - ineffassign # Detecta atribuições de variáveis que nunca são usadas
-    - staticcheck # Análise estática avançada
-    - unused      # Detecta funções/variáveis não utilizadas
-    - revive      # Linter de estilo (sucessor do golint)
-    - gocritic    # Dicas de performance e estilo
-
-run:
-  timeout: 5m
-  # Se o linter falhar, ele mostra quantos problemas encontrou
-  issues-exit-code: 1
+    - errcheck
+    - gosimple
+    - govet   
+    - ineffassign
+    - staticcheck
+    - unused     
+    - revive     
+    - gocritic   
+    - gosec
