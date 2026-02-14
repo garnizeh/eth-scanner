@@ -1,6 +1,8 @@
 package database
 
 import (
+	"context"
+	"os"
 	"testing"
 )
 
@@ -53,5 +55,29 @@ func TestCloseDB(t *testing.T) {
 	err = CloseDB(nil)
 	if err != nil {
 		t.Errorf("CloseDB on nil connection failed: %v", err)
+	}
+}
+
+func TestInitDBWithSchema(t *testing.T) {
+	ctx := context.Background()
+	dbPath := "test_schema.db"
+	defer os.Remove(dbPath)
+
+	db, err := InitDB(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	// Test NewQueries
+	queries := NewQueries(db)
+	if queries == nil {
+		t.Error("NewQueries returned nil")
+	}
+
+	// Test a simple query to verify schema is applied
+	_, err = queries.GetStats(ctx)
+	if err != nil {
+		t.Errorf("Failed to execute GetStats query: %v", err)
 	}
 }
