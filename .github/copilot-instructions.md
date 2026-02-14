@@ -17,6 +17,13 @@
             3. `git pull origin main`
             4. `git checkout -b task/P01-T010-short-description`
             Work on the branch and update the corresponding task file in `docs/tasks/backlog/`.
+        - **Automation / Agent checklist:** When an automated agent (Copilot) runs tasks, it MUST perform the following checks and actions automatically before making edits or commits:
+            1. Inspect the current Git branch. If the branch is not `main` or not the intended task branch, do NOT proceed silently — switch to `main`, update it, then create the task branch.
+            2. Locate the task file in `docs/tasks/backlog/` corresponding to the task ID (e.g., `P01-T020.md`) and confirm the task is in `Not Started` or `In Progress` state. If the task file is missing or status is not appropriate, abort and report.
+            3. Verify prerequisite tasks (e.g., `P01-T010`) are completed when required — for example check presence of `go/go.mod` to confirm `P01-T010`. If prerequisites are missing, abort and report the missing dependency.
+            4. Create the task branch using the naming convention `task/<TASK-ID>-short-description` from an up-to-date `main` branch. Do not create branches off feature or unrelated branches.
+            5. After changes are made, update the task file status and move it to `docs/tasks/done/` only when acceptance criteria are met. Commit messages MUST include the task ID (e.g., `P01-T020: Create internal folder structure — in progress`).
+            6. If the agent cannot verify any of the above automatically, stop and ask the user; do not proceed.
         - **Commit & Push After Completion:** After a task is finished (all acceptance criteria met, tests passing where applicable, and the task document updated), commit your changes on the task branch and push to origin. Use a clear commit message referencing the task ID (e.g., `P01-T010: Initialize Go module — complete`). Optionally open a pull request for review.
 - **Workspace Layout (VS Code):** This project is organized as a VS Code workspace. The repository root should be opened as a workspace in VS Code.
     - The `esp32/` folder contains the ESP32 firmware and C++/Arduino/FreeRTOS code.
