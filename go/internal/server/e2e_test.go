@@ -19,9 +19,11 @@ import (
 func TestServerE2E(t *testing.T) {
 	t.Parallel()
 
-	// Choose an available port using ListenConfig with context (lint: noctx)
+	ctx := t.Context()
+
+	// Choose an available port using ListenConfig with context
 	lc := &net.ListenConfig{}
-	l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	l, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to find free port: %v", err)
 	}
@@ -40,8 +42,7 @@ func TestServerE2E(t *testing.T) {
 		LogLevel: "debug",
 	}
 
-	// Initialize database (applies migrations)
-	ctx := t.Context()
+	// Initialize database (applies migrations)	
 	db, err := database.InitDB(ctx, cfg.DBPath)
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
