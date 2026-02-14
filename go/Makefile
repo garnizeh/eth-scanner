@@ -1,7 +1,7 @@
 # EthScanner Distributed - Makefile
 # Provides convenient shortcuts for common development tasks
 
-.PHONY: help build test clean sqlc run-master run-worker fmt lint clean-branches
+.PHONY: help all tidy vuln build test clean sqlc run-master run-worker fmt lint clean-branches
 
 # Git configuration for clean-branches
 REMOTE = origin
@@ -11,6 +11,8 @@ DEFAULT_BRANCH = main
 help:
 	@echo "EthScanner Distributed - Available Make Targets"
 	@echo ""
+	@echo "  make all          - Run full CI pipeline (tidy, fmt, lint, vuln, sqlc, build, test)"
+	@echo "  make vuln         - Check for vulnerabilities in dependencies"
 	@echo "  make build        - Build master and worker binaries"
 	@echo "  make test         - Run all unit tests"
 	@echo "  make sqlc         - Generate database code from SQL"
@@ -21,6 +23,22 @@ help:
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make clean-branches - Clean merged local branches"
 	@echo ""
+
+# Run full CI pipeline
+all: tidy fmt lint vuln sqlc build test
+	@echo "✓ All checks passed"
+
+# Tidy Go modules
+tidy:
+	@echo "Tidying Go modules..."
+	@go mod tidy
+	@echo "✓ Modules tidied"
+
+# Check for vulnerabilities
+vuln:
+	@echo "Checking for vulnerabilities..."
+	@go tool govulncheck ./...
+	@echo "✓ Vulnerability check complete"
 
 # Build configuration
 BINARY_DIR = bin
