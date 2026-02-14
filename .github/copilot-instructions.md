@@ -47,6 +47,7 @@
     - Never use `time.Local`.
 - **Database:** Use `sqlc` to generate code from raw SQL. Avoid heavy ORMs.
 - **Testing:** Use `t.TempDir()` for temporary directories in all tests that need to create files.
+- **Error Handling:** Never ignore or discard errors returned by functions; the linter will complain. Always add context to errors using `fmt.Errorf` with `%w` for wrapping, e.g., `return fmt.Errorf("failed to set goose dialect: %w", err)`.
 
 ## 3. Worker Specifications
 
