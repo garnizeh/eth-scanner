@@ -6,12 +6,6 @@ run:
   modules-download-mode: readonly
   tests: true
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  govet:
-    check-shadowing: true
-
 linters:
   default: standard
   enable:
