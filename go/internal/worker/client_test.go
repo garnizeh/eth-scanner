@@ -135,3 +135,212 @@ func TestAPIError_ErrorMethod(t *testing.T) {
 		t.Fatalf("APIError.Error() = %q, want %q", e.Error(), want)
 	}
 }
+
+func TestLeaseBatch_Success(t *testing.T) {
+	prefix := strings.Repeat("ab", 28) // 56 hex chars -> 28 bytes
+	expires := time.Now().Add(10 * time.Minute).UTC().Format(time.RFC3339)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      "job-123",
+			"prefix_28":   prefix,
+			"nonce_start": 1,
+			"nonce_end":   10,
+			"expires_at":  expires,
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "test-key"}
+	c := NewClient(cfg)
+
+	lease, err := c.LeaseBatch(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("LeaseBatch failed: %v", err)
+	}
+	if lease.JobID != "job-123" {
+		t.Fatalf("unexpected JobID: %s", lease.JobID)
+	}
+	if len(lease.Prefix28) != 28 {
+		t.Fatalf("unexpected prefix length: %d", len(lease.Prefix28))
+	}
+}
+
+func TestLeaseBatch_NoJobs404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "no jobs available"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected ErrNoJobsAvailable")
+	}
+	if !errors.Is(err, ErrNoJobsAvailable) {
+		t.Fatalf("expected ErrNoJobsAvailable, got %T: %v", err, err)
+	}
+}
+
+func TestLeaseBatch_InvalidPrefixLength(t *testing.T) {
+	// prefix too short
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      "job-1",
+			"prefix_28":   "abcd", // too short
+			"nonce_start": 0,
+			"nonce_end":   1,
+			"expires_at":  time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected error for invalid prefix length")
+	}
+	if !strings.Contains(err.Error(), "invalid prefix_28") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLeaseBatch_InvalidExpiresAt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      "job-1",
+			"prefix_28":   strings.Repeat("ab", 28),
+			"nonce_start": 0,
+			"nonce_end":   1,
+			"expires_at":  "not-a-time",
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected error for invalid expires_at")
+	}
+	if !strings.Contains(err.Error(), "invalid expires_at") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLeaseBatch_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "invalid api key"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected ErrUnauthorized")
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %T: %v", err, err)
+	}
+}
+
+func TestLeaseBatch_APIErrorWrapped(t *testing.T) {
+	// Master API returns 500 with an error message; LeaseBatch should wrap the APIError
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "server", "message": "oops"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected wrapped API error")
+	}
+	if !strings.Contains(err.Error(), "lease request failed") {
+		t.Fatalf("expected top-level error to mention lease request failed, got: %v", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected underlying APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500 inside APIError, got %d", apiErr.StatusCode)
+	}
+}
+
+func TestLeaseBatch_InvalidPrefixHex(t *testing.T) {
+	// prefix contains invalid hex characters -> hex.DecodeString should fail
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"job_id":      "job-1",
+			"prefix_28":   strings.Repeat("zz", 28), // invalid hex
+			"nonce_start": 0,
+			"nonce_end":   1,
+			"expires_at":  time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected error for invalid prefix hex")
+	}
+	if !strings.Contains(err.Error(), "invalid prefix_28 hex") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if errors.Unwrap(err) == nil {
+		t.Fatalf("expected underlying hex error to be wrapped")
+	}
+}
+
+func TestLeaseBatch_LeaseRequestInvalidBaseURLWrapped(t *testing.T) {
+	// Create a client with an invalid base URL to trigger doRequestWithContext parse error
+	cfg := &Config{APIURL: "http://%41:invalid", WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	_, err := c.LeaseBatch(context.Background(), 1)
+	if err == nil {
+		t.Fatalf("expected lease request to fail due to invalid base URL")
+	}
+	if !strings.Contains(err.Error(), "lease request failed") {
+		t.Fatalf("expected top-level lease request failed error, got: %v", err)
+	}
+	if errors.Unwrap(err) == nil {
+		t.Fatalf("expected underlying error to be wrapped")
+	}
+}

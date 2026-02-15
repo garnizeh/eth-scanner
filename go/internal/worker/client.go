@@ -3,6 +3,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -117,4 +118,73 @@ func (c *Client) doRequestWithContext(ctx context.Context, method, p string, req
 	}
 
 	return nil
+}
+
+// ErrNoJobsAvailable is returned when the API reports no available jobs (HTTP 404).
+var ErrNoJobsAvailable = errors.New("no jobs available")
+
+type JobLease struct {
+	JobID      string
+	Prefix28   []byte
+	NonceStart uint32
+	NonceEnd   uint32
+	ExpiresAt  time.Time
+}
+
+// LeaseBatch requests a job lease from the Master API.
+func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*JobLease, error) {
+	req := leaseRequest{
+		WorkerID:           c.workerID,
+		RequestedBatchSize: requestedBatchSize,
+	}
+
+	var resp leaseResponse
+	err := c.doRequestWithContext(ctx, http.MethodPost, "/api/v1/jobs/lease", req, &resp)
+	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return nil, ErrUnauthorized
+		}
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+			return nil, ErrNoJobsAvailable
+		}
+		return nil, fmt.Errorf("lease request failed: %w", err)
+	}
+
+	// Decode prefix_28 from hex
+	prefix28, decErr := hex.DecodeString(resp.Prefix28)
+	if decErr != nil {
+		return nil, fmt.Errorf("invalid prefix_28 hex: %w", decErr)
+	}
+	if len(prefix28) != 28 {
+		return nil, fmt.Errorf("invalid prefix_28 length: got %d, want 28", len(prefix28))
+	}
+
+	// Parse expires_at as UTC
+	expiresAt, perr := time.Parse(time.RFC3339, resp.ExpiresAt)
+	if perr != nil {
+		return nil, fmt.Errorf("invalid expires_at: %w", perr)
+	}
+
+	return &JobLease{
+		JobID:      resp.JobID,
+		Prefix28:   prefix28,
+		NonceStart: resp.NonceStart,
+		NonceEnd:   resp.NonceEnd,
+		ExpiresAt:  expiresAt.UTC(),
+	}, nil
+}
+
+// Internal request/response types
+type leaseRequest struct {
+	WorkerID           string `json:"worker_id"`
+	RequestedBatchSize uint32 `json:"requested_batch_size"`
+}
+
+type leaseResponse struct {
+	JobID      string `json:"job_id"`
+	Prefix28   string `json:"prefix_28"` // hex-encoded
+	NonceStart uint32 `json:"nonce_start"`
+	NonceEnd   uint32 `json:"nonce_end"`
+	ExpiresAt  string `json:"expires_at"` // RFC3339
 }

@@ -7,7 +7,22 @@
 - **MVP-First:** Prioritize only what is required for a working MVP. Defer non-essential features.
 - **Efficiency:** Prioritize CPU, memory, and storage efficiency above all else. Every byte matters.
 - **Test Failure Cases:** Be meticulous when creating tests: always include unit tests for failure and edge cases in addition to success paths. For any function that performs validation, parsing, HTTP requests, or error wrapping, add negative tests that assert proper handling of invalid inputs, expected error messages, and error unwrapping. Examples: invalid base URL parsing, malformed JSON responses, HTTP 4xx/5xx handling (including 401 Unauthorized), and verifying custom error types' Error() output.
-  
+ - **Required Error-case Tests (mandatory):** For any code that parses, validates, or communicates over the network you MUST add unit tests that cover the following failure cases (in addition to success paths):
+    - invalid base URL or invalid request URL parsing (e.g., malformed host or percent-encoding) and ensure errors are wrapped and surfaced to callers
+    - HTTP 401 Unauthorized and confirm callers receive the sentinel error (use errors.Is to assert)
+    - HTTP 404 No jobs available and ensure callers return ErrNoJobsAvailable (use errors.Is)
+    - HTTP 4xx/5xx server errors and ensure they are returned as *APIError and wrapped by higher-level helpers when appropriate
+    - malformed or unexpected JSON response bodies (invalid types, missing required fields)
+    - invalid hex payloads (e.g., invalid hex in `prefix_28`) and invalid timestamp formats (e.g., `expires_at`) and assert the underlying parsing errors are wrapped
+    - network-level failures (connection refused, timeouts) when possible using test servers or listeners
+
+    For each of the above tests:
+    - assert the top-level error contains a helpful message (e.g., "lease request failed") and that the underlying error can be extracted with errors.Unwrap or errors.As when applicable
+    - use httptest.NewServer to simulate API responses and always check the return value of `json.NewEncoder(w).Encode(...)` inside handlers (fail the test on error) to avoid errcheck failures
+    - prefer errors.As and errors.Is when asserting wrapped errors; never compare error strings or use direct type assertions
+    - name unused handler parameters `_` to satisfy revive
+    - keep tests deterministic (use fixed times or truncate zero-values) and use t.TempDir when creating files
+
     Additional testing rules to avoid common linter failures:
     - Always check returned errors from writers/encoders/closers in tests. For example, check the error returned by `json.NewEncoder(w).Encode(...)` and fail the test if it returns an error. This avoids `errcheck` failures.
     - When asserting specific error types or sentinel errors, use `errors.As` and `errors.Is` respectively to support wrapped errors; do not use direct type assertions or `==` comparisons on `error` values. This avoids `errorlint` failures.

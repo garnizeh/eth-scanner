@@ -40,6 +40,10 @@
       "/^make test$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^cd /home/user/code/garnizeh/eth-scanner/go && make fmt$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }
