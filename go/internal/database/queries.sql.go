@@ -56,7 +56,7 @@ type CreateBatchParams struct {
 	CurrentNonce       sql.NullInt64  `json:"current_nonce"`
 	WorkerID           sql.NullString `json:"worker_id"`
 	WorkerType         sql.NullString `json:"worker_type"`
-	Column7            sql.NullString `json:"column_7"`
+	LeaseSeconds       sql.NullString `json:"lease_seconds"`
 	RequestedBatchSize sql.NullInt64  `json:"requested_batch_size"`
 }
 
@@ -69,7 +69,7 @@ func (q *Queries) CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, 
 		arg.CurrentNonce,
 		arg.WorkerID,
 		arg.WorkerType,
-		arg.Column7,
+		arg.LeaseSeconds,
 		arg.RequestedBatchSize,
 	)
 	var i Job
@@ -635,10 +635,10 @@ WHERE id = ?
 `
 
 type LeaseBatchParams struct {
-	WorkerID   sql.NullString `json:"worker_id"`
-	WorkerType sql.NullString `json:"worker_type"`
-	Column3    sql.NullString `json:"column_3"`
-	ID         int64          `json:"id"`
+	WorkerID     sql.NullString `json:"worker_id"`
+	WorkerType   sql.NullString `json:"worker_type"`
+	LeaseSeconds sql.NullString `json:"lease_seconds"`
+	ID           int64          `json:"id"`
 }
 
 // Lease an existing batch to a worker
@@ -646,7 +646,7 @@ func (q *Queries) LeaseBatch(ctx context.Context, arg LeaseBatchParams) error {
 	_, err := q.db.ExecContext(ctx, leaseBatch,
 		arg.WorkerID,
 		arg.WorkerType,
-		arg.Column3,
+		arg.LeaseSeconds,
 		arg.ID,
 	)
 	return err

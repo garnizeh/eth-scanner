@@ -283,3 +283,21 @@ func TestCreateBatch_BatchSizeZero(t *testing.T) {
 		t.Fatalf("expected no job, got: %+v", job)
 	}
 }
+
+func TestCreateBatch_ExpiresAtIsUTC(t *testing.T) {
+	ctx := t.Context()
+	_, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+	job, err := m.CreateBatch(ctx, prefix, 100)
+	if err != nil {
+		t.Fatalf("CreateBatch error: %v", err)
+	}
+	if !job.ExpiresAt.Valid {
+		t.Fatalf("expected expires_at to be set")
+	}
+	if job.ExpiresAt.Time.Location() != time.UTC {
+		t.Fatalf("expected expires_at to be UTC, got %v", job.ExpiresAt.Time.Location())
+	}
+}

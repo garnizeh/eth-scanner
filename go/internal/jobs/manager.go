@@ -43,10 +43,10 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 
 	// Lease the batch (update worker_id, status, expires_at)
 	p := database.LeaseBatchParams{
-		WorkerID:   sql.NullString{String: workerID, Valid: true},
-		WorkerType: sql.NullString{Valid: false},
-		Column3:    sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-		ID:         job.ID,
+		WorkerID:     sql.NullString{String: workerID, Valid: true},
+		WorkerType:   sql.NullString{Valid: false},
+		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+		ID:           job.ID,
 	}
 	if err := m.db.LeaseBatch(ctx, p); err != nil {
 		return nil, fmt.Errorf("lease batch: %w", err)
@@ -160,6 +160,8 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 	}
 
 	// Prepare params for CreateBatch (sqlc generated)
+	// Ensure expires_at is set using UTC-based lease duration (1 hour)
+	leaseSeconds := int64((1 * time.Hour).Seconds())
 	params := database.CreateBatchParams{
 		Prefix28:           prefix28,
 		NonceStart:         int64(start),
@@ -167,7 +169,7 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 		CurrentNonce:       sql.NullInt64{Int64: int64(start), Valid: true},
 		WorkerID:           sql.NullString{Valid: false},
 		WorkerType:         sql.NullString{Valid: false},
-		Column7:            sql.NullString{Valid: false},
+		LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
 		RequestedBatchSize: sql.NullInt64{Int64: int64(batchSize), Valid: true},
 	}
 
