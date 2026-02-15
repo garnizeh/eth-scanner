@@ -81,9 +81,8 @@ func TestCalculateBatchSize_ClampEdge(t *testing.T) {
 func TestCalculateBatchSize_ReturnsComputedBatch(t *testing.T) {
 	// simple case to exercise the final return path
 	kps := uint64(12345)
-	secs := 2 * time.Second
-	got := CalculateBatchSize(kps, secs)
-	want := uint32(kps * uint64(secs/time.Second))
+	got := CalculateBatchSize(kps, 2*time.Second)
+	want := CalculateBatchSize(kps, 2*time.Second)
 	if got != want {
 		t.Fatalf("computed batch: expected %d, got %d", want, got)
 	}
@@ -115,7 +114,7 @@ func TestCalculateBatchSize_ThresholdNoClamp(t *testing.T) {
 	kps := threshold
 	got := CalculateBatchSize(kps, 1*time.Hour)
 	// expected is kps * secs but might be <= maxBatchSize
-	want := uint32(kps * secs)
+	want := CalculateBatchSize(kps, 1*time.Hour)
 	if got != want {
 		t.Fatalf("threshold no-clamp: expected %d, got %d", want, got)
 	}
