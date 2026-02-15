@@ -188,3 +188,29 @@ type leaseResponse struct {
 	NonceEnd   uint32 `json:"nonce_end"`
 	ExpiresAt  string `json:"expires_at"` // RFC3339
 }
+
+// checkpointRequest is the payload sent to update a job's checkpoint.
+type checkpointRequest struct {
+	WorkerID     string `json:"worker_id"`
+	CurrentNonce uint32 `json:"current_nonce"`
+	KeysScanned  uint64 `json:"keys_scanned"`
+}
+
+// UpdateCheckpoint reports progress for a job to the Master API.
+func (c *Client) UpdateCheckpoint(ctx context.Context, jobID string, currentNonce uint32, keysScanned uint64) error {
+	req := checkpointRequest{
+		WorkerID:     c.workerID,
+		CurrentNonce: currentNonce,
+		KeysScanned:  keysScanned,
+	}
+
+	path := fmt.Sprintf("/api/v1/jobs/%s/checkpoint", jobID)
+
+	if err := c.doRequestWithContext(ctx, http.MethodPatch, path, req, nil); err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return ErrUnauthorized
+		}
+		return fmt.Errorf("checkpoint update failed: %w", err)
+	}
+	return nil
+}

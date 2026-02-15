@@ -344,3 +344,85 @@ func TestLeaseBatch_LeaseRequestInvalidBaseURLWrapped(t *testing.T) {
 		t.Fatalf("expected underlying error to be wrapped")
 	}
 }
+
+func TestUpdateCheckpoint_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("expected PATCH, got %s", r.Method)
+		}
+		expectedPath := "/api/v1/jobs/test-job-123/checkpoint"
+		if r.URL.Path != expectedPath {
+			t.Fatalf("expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+		if r.Header.Get("X-API-Key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var req checkpointRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.WorkerID != "test-worker" {
+			t.Fatalf("unexpected worker id: %s", req.WorkerID)
+		}
+		if req.CurrentNonce != 12345 {
+			t.Fatalf("unexpected current nonce: %d", req.CurrentNonce)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
+	if err := c.UpdateCheckpoint(context.Background(), "test-job-123", 12345, 12345); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUpdateCheckpoint_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "missing api key"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
+	c := NewClient(cfg)
+
+	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0)
+	if err == nil {
+		t.Fatalf("expected ErrUnauthorized")
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %T: %v", err, err)
+	}
+}
+
+func TestUpdateCheckpoint_APIErrorWrapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "worker_id mismatch", "message": "job is assigned to different worker"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0)
+	if err == nil {
+		t.Fatalf("expected wrapped API error")
+	}
+	if !strings.Contains(err.Error(), "checkpoint update failed") {
+		t.Fatalf("expected top-level error to mention checkpoint update failed, got: %v", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected underlying APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusConflict {
+		t.Fatalf("expected status 409 inside APIError, got %d", apiErr.StatusCode)
+	}
+}
