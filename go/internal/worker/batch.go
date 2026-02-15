@@ -18,9 +18,16 @@ func CalculateBatchSize(keysPerSecond uint64, targetDuration time.Duration) uint
 		targetDuration = time.Duration(defaultSecs) * time.Second
 	}
 
-	secs := uint64(targetDuration / time.Second)
-	if secs == 0 {
+	// Convert duration to seconds using float to avoid int64->uint64 casts
+	secsFloat := targetDuration.Seconds()
+	var secs uint64
+	if secsFloat <= 0 {
 		secs = defaultSecs
+	} else {
+		secs = uint64(secsFloat)
+		if secs == 0 {
+			secs = defaultSecs
+		}
 	}
 
 	if keysPerSecond == 0 {
@@ -33,5 +40,11 @@ func CalculateBatchSize(keysPerSecond uint64, targetDuration time.Duration) uint
 	}
 
 	batch := keysPerSecond * secs
+	if batch == 0 {
+		return uint32(minFallback)
+	}
+	if batch > maxBatchSize {
+		return uint32(maxBatchSize)
+	}
 	return uint32(batch)
 }
