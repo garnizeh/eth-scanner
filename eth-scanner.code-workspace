@@ -24,6 +24,10 @@
       "/^cd /home/user/code/garnizeh/eth-scanner/go && make lint$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^cd /home/user/code/garnizeh/eth-scanner/go && make test$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }

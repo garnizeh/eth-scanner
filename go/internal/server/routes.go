@@ -45,7 +45,11 @@ func (s *Server) RegisterRoutes() {
 		http.Error(w, "Not Implemented", http.StatusNotImplemented)
 	})
 
-	s.router.HandleFunc("/api/v1/results", func(w http.ResponseWriter, _ *http.Request) {
+	s.router.HandleFunc("/api/v1/results", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			s.handleResultSubmit(w, r)
+			return
+		}
 		http.Error(w, "Not Implemented", http.StatusNotImplemented)
 	})
 
