@@ -71,7 +71,7 @@ func LoadConfig() (*Config, error) {
 func validateURL(raw string) error {
 	u, err := url.ParseRequestURI(raw)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse url: %w", err)
 	}
 	if u.Scheme == "" || u.Host == "" {
 		return fmt.Errorf("url must include scheme and host")
@@ -84,7 +84,7 @@ func autoGenerateWorkerID() (string, error) {
 	hn, _ := os.Hostname()
 	b := make([]byte, 4)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 	return fmt.Sprintf("worker-pc-%s-%s", sanitizeHostname(hn), hex.EncodeToString(b)), nil
 }
