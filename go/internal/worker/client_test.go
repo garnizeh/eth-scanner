@@ -20,7 +20,9 @@ func TestDoRequestWithAPIKeySuccess(t *testing.T) {
 			t.Fatalf("expected Content-Type application/json")
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -40,11 +42,14 @@ func TestDoRequestWithAPIKeySuccess(t *testing.T) {
 
 func TestDoRequestWithoutAPIKeySuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// X-API-Key should not be present
 		if r.Header.Get("X-API-Key") != "" {
 			t.Fatalf("expected no X-API-Key header when client has none")
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -58,9 +63,11 @@ func TestDoRequestWithoutAPIKeySuccess(t *testing.T) {
 }
 
 func TestDoRequestErrorResponseParsed(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "bad", "message": "invalid input"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "bad", "message": "invalid input"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -71,22 +78,24 @@ func TestDoRequestErrorResponseParsed(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for 400 response")
 	}
-	if apiErr, ok := err.(*APIError); ok {
-		if apiErr.StatusCode != http.StatusBadRequest {
-			t.Fatalf("expected status 400, got %d", apiErr.StatusCode)
-		}
-		if apiErr.Message != "invalid input" {
-			t.Fatalf("unexpected api error message: %s", apiErr.Message)
-		}
-	} else {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("expected APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", apiErr.StatusCode)
+	}
+	if apiErr.Message != "invalid input" {
+		t.Fatalf("unexpected api error message: %s", apiErr.Message)
 	}
 }
 
 func TestDoRequestUnauthorizedReturnsErrUnauthorized(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "missing api key"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "missing api key"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -97,7 +106,7 @@ func TestDoRequestUnauthorizedReturnsErrUnauthorized(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for 401 response")
 	}
-	if err != ErrUnauthorized {
+	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %T: %v", err, err)
 	}
 }

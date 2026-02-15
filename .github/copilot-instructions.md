@@ -7,6 +7,12 @@
 - **MVP-First:** Prioritize only what is required for a working MVP. Defer non-essential features.
 - **Efficiency:** Prioritize CPU, memory, and storage efficiency above all else. Every byte matters.
 - **Test Failure Cases:** Be meticulous when creating tests: always include unit tests for failure and edge cases in addition to success paths. For any function that performs validation, parsing, HTTP requests, or error wrapping, add negative tests that assert proper handling of invalid inputs, expected error messages, and error unwrapping. Examples: invalid base URL parsing, malformed JSON responses, HTTP 4xx/5xx handling (including 401 Unauthorized), and verifying custom error types' Error() output.
+  
+    Additional testing rules to avoid common linter failures:
+    - Always check returned errors from writers/encoders/closers in tests. For example, check the error returned by `json.NewEncoder(w).Encode(...)` and fail the test if it returns an error. This avoids `errcheck` failures.
+    - When asserting specific error types or sentinel errors, use `errors.As` and `errors.Is` respectively to support wrapped errors; do not use direct type assertions or `==` comparisons on `error` values. This avoids `errorlint` failures.
+    - In test HTTP handlers, if a parameter is unused, name it `_` (for example `func(w http.ResponseWriter, _ *http.Request)`) to avoid unused-parameter warnings from revive.
+    - If a function legitimately triggers an `unparam` false positive (e.g., widely used API but tests pass a constant), add a localized `//nolint:unparam` comment above the function and document why in a nearby code comment.
 - **Minimal Tech Stack:** Keep the stack simple and maintainable.
 - **Docs Location:** All project documentation (except the project's root README) must be created inside the `docs/` directory, organized into a sensible subfolder structure to keep content tidy.
 - **Consult System Design Document:** Always consult `docs/architecture/system-design-document.md` whenever you need a project-wide reference or to align expectations with ongoing development.

@@ -48,7 +48,9 @@ func NewClient(cfg *Config) *Client {
 // doRequestWithContext performs an HTTP request, marshaling reqBody (if not nil)
 // and unmarshaling response into respBody (if not nil). Returns *APIError for
 // non-2xx responses.
-func (c *Client) doRequestWithContext(ctx context.Context, method, p string, reqBody, respBody interface{}) error {
+//
+// nolint // ctx parameter is reserved for future use when we need to support request cancellation.
+func (c *Client) doRequestWithContext(ctx context.Context, method, p string, reqBody, respBody any) error {
 	// Build URL
 	base, err := url.Parse(c.baseURL)
 	if err != nil {
