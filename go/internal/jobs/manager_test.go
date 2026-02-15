@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"math"
 	"testing"
 	"time"
 
@@ -126,5 +127,95 @@ func TestLeaseExistingJob_NilManager(t *testing.T) {
 	}
 	if job != nil {
 		t.Fatalf("expected no job, got: %+v", job)
+	}
+}
+
+func TestGetNextNonceRange_BatchSizeZero(t *testing.T) {
+	db, q := setupInMemoryDB(t)
+	t.Cleanup(func() { _ = database.CloseDB(db) })
+
+	m := New(q)
+	prefix := make([]byte, 28)
+
+	start, end, err := m.GetNextNonceRange(context.Background(), prefix, 0)
+	if err == nil {
+		t.Fatalf("expected error for batchSize 0, got nil")
+	}
+	if start != 0 {
+		t.Fatalf("expected start 0, got %d", start)
+	}
+	if end != 0 {
+		t.Fatalf("expected end 0, got %d", end)
+	}
+}
+
+func TestGetNextNonceRange_FirstAllocation(t *testing.T) {
+	db, q := setupInMemoryDB(t)
+	t.Cleanup(func() { _ = database.CloseDB(db) })
+
+	m := New(q)
+	prefix := make([]byte, 28)
+
+	start, end, err := m.GetNextNonceRange(context.Background(), prefix, 1000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if start != 0 {
+		t.Fatalf("expected start 0, got %d", start)
+	}
+	if end != 999 {
+		t.Fatalf("expected end 999, got %d", end)
+	}
+}
+
+func TestGetNextNonceRange_SubsequentAllocation(t *testing.T) {
+	db, q := setupInMemoryDB(t)
+	t.Cleanup(func() { _ = database.CloseDB(db) })
+
+	// insert a job with nonce_end = 999
+	prefix := make([]byte, 28)
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, requested_batch_size) VALUES (?, ?, ?, 'completed', ?)`, prefix, 0, 999, 1000); err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+
+	m := New(q)
+	start, end, err := m.GetNextNonceRange(context.Background(), prefix, 200)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if start != 1000 {
+		t.Fatalf("expected start 1000, got %d", start)
+	}
+	if end != 1199 {
+		t.Fatalf("expected end 1199, got %d", end)
+	}
+}
+
+func TestGetNextNonceRange_InvalidPrefix(t *testing.T) {
+	db, q := setupInMemoryDB(t)
+	t.Cleanup(func() { _ = database.CloseDB(db) })
+
+	m := New(q)
+	_, _, err := m.GetNextNonceRange(context.Background(), []byte{1, 2, 3}, 100)
+	if err == nil {
+		t.Fatalf("expected error for invalid prefix length")
+	}
+}
+
+func TestGetNextNonceRange_Overflow(t *testing.T) {
+	db, q := setupInMemoryDB(t)
+	t.Cleanup(func() { _ = database.CloseDB(db) })
+
+	// set last nonce_end near max uint32
+	prefix := make([]byte, 28)
+	near := int64(math.MaxUint32 - 10)
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, requested_batch_size) VALUES (?, ?, ?, 'completed', ?)`, prefix, 0, near, 1000); err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+
+	m := New(q)
+	_, _, err := m.GetNextNonceRange(context.Background(), prefix, 20)
+	if err == nil {
+		t.Fatalf("expected overflow error, got nil")
 	}
 }

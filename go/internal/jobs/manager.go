@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/garnizeh/eth-scanner/internal/database"
@@ -57,4 +58,81 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 		return nil, fmt.Errorf("get job after lease: %w", err)
 	}
 	return &updated, nil
+}
+
+// GetNextNonceRange returns the next available nonce range [nonceStart, nonceEnd]
+// for a given 28-byte prefix and requested batch size. Nonces are uint32.
+func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchSize uint32) (uint32, uint32, error) {
+	if len(prefix28) != 28 {
+		return 0, 0, fmt.Errorf("prefix_28 must be 28 bytes")
+	}
+	if batchSize == 0 {
+		return 0, 0, fmt.Errorf("batchSize must be > 0")
+	}
+	// Use GetPrefixUsage to determine whether we've seen this prefix before
+	// and obtain the highest nonce_end if present. This avoids ambiguity
+	// between MAX(...) returning 0 vs NULL when no rows exist.
+	usage, err := m.db.GetPrefixUsage(ctx, 1000)
+	if err != nil {
+		return 0, 0, fmt.Errorf("get prefix usage: %w", err)
+	}
+
+	var found bool
+	var lastEnd uint64
+	for _, row := range usage {
+		if len(row.Prefix28) != len(prefix28) {
+			continue
+		}
+		equal := true
+		for i := range prefix28 {
+			if row.Prefix28[i] != prefix28[i] {
+				equal = false
+				break
+			}
+		}
+		if !equal {
+			continue
+		}
+		found = true
+		if row.HighestNonce == nil {
+			lastEnd = 0
+			break
+		}
+		switch v := row.HighestNonce.(type) {
+		case int64:
+			if v < 0 {
+				return 0, 0, fmt.Errorf("invalid negative highest_nonce: %d", v)
+			}
+			lastEnd = uint64(v)
+		default:
+			return 0, 0, fmt.Errorf("unexpected type for highest_nonce: %T", v)
+		}
+		break
+	}
+
+	if !found {
+		// No previous batches for this prefix: start at 0
+		nonceStart := uint64(0)
+		nonceEnd64 := nonceStart + uint64(batchSize) - 1
+		if nonceEnd64 > uint64(math.MaxUint32) {
+			return 0, 0, fmt.Errorf("batch size causes nonce_end overflow")
+		}
+		return uint32(nonceStart), uint32(nonceEnd64), nil
+	}
+
+	if lastEnd >= uint64(math.MaxUint32) {
+		return 0, 0, fmt.Errorf("nonce space exhausted for this prefix")
+	}
+
+	nonceStart := lastEnd + 1
+	// Check overflow when adding batchSize-1
+	if uint64(batchSize) > 0 && nonceStart > uint64(math.MaxUint32) {
+		return 0, 0, fmt.Errorf("nonceStart overflow")
+	}
+	nonceEnd64 := nonceStart + uint64(batchSize) - 1
+	if nonceEnd64 > uint64(math.MaxUint32) {
+		return 0, 0, fmt.Errorf("batch size causes nonce_end overflow")
+	}
+
+	return uint32(nonceStart), uint32(nonceEnd64), nil
 }
