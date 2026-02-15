@@ -94,7 +94,7 @@ func TestHandleJobLease_LeaseExistingPendingJob(t *testing.T) {
 		t.Fatalf("insert pending job: %v", err)
 	}
 
-	req := map[string]interface{}{
+	req := map[string]any{
 		"worker_id":            "worker-2",
 		"requested_batch_size": 1000,
 	}
@@ -129,7 +129,7 @@ func TestHandleJobLease_ValidationErrors(t *testing.T) {
 	s, _, _ := setupServer(t)
 
 	// Missing worker_id
-	req := map[string]interface{}{"requested_batch_size": 100}
+	req := map[string]any{"requested_batch_size": 100}
 	b, _ := json.Marshal(req)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/lease", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
@@ -140,7 +140,7 @@ func TestHandleJobLease_ValidationErrors(t *testing.T) {
 	}
 
 	// Invalid batch size (0)
-	req2 := map[string]interface{}{"worker_id": "w", "requested_batch_size": 0}
+	req2 := map[string]any{"worker_id": "w", "requested_batch_size": 0}
 	b2, _ := json.Marshal(req2)
 	r2 := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/lease", bytes.NewReader(b2))
 	r2.Header.Set("Content-Type", "application/json")
