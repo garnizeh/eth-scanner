@@ -6,6 +6,7 @@
 - **Ask First:** When in doubt, ask simple yes/no questions; wait for the user's answer before proceeding.
 - **MVP-First:** Prioritize only what is required for a working MVP. Defer non-essential features.
 - **Efficiency:** Prioritize CPU, memory, and storage efficiency above all else. Every byte matters.
+- **Test Failure Cases:** Be meticulous when creating tests: always include unit tests for failure and edge cases in addition to success paths. For any function that performs validation, parsing, HTTP requests, or error wrapping, add negative tests that assert proper handling of invalid inputs, expected error messages, and error unwrapping. Examples: invalid base URL parsing, malformed JSON responses, HTTP 4xx/5xx handling (including 401 Unauthorized), and verifying custom error types' Error() output.
 - **Minimal Tech Stack:** Keep the stack simple and maintainable.
 - **Docs Location:** All project documentation (except the project's root README) must be created inside the `docs/` directory, organized into a sensible subfolder structure to keep content tidy.
 - **Consult System Design Document:** Always consult `docs/architecture/system-design-document.md` whenever you need a project-wide reference or to align expectations with ongoing development.
