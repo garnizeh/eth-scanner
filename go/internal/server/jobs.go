@@ -139,7 +139,7 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
 		ID:           created.ID,
 	}
-	if err := q.LeaseBatch(ctx, lb); err != nil {
+	if _, err := q.LeaseBatch(ctx, lb); err != nil {
 		return nil, fmt.Errorf("lease created batch: %w", err)
 	}
 	updated, err := q.GetJobByID(ctx, created.ID)

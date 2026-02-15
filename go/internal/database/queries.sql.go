@@ -624,14 +624,15 @@ func (q *Queries) InsertResult(ctx context.Context, arg InsertResultParams) (Res
 	return i, err
 }
 
-const leaseBatch = `-- name: LeaseBatch :exec
+const leaseBatch = `-- name: LeaseBatch :execrows
 UPDATE jobs
 SET 
     status = 'processing',
     worker_id = ?,
     worker_type = ?,
     expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
-WHERE id = ?
+WHERE id = ? 
+  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL)))
 `
 
 type LeaseBatchParams struct {
@@ -642,14 +643,17 @@ type LeaseBatchParams struct {
 }
 
 // Lease an existing batch to a worker
-func (q *Queries) LeaseBatch(ctx context.Context, arg LeaseBatchParams) error {
-	_, err := q.db.ExecContext(ctx, leaseBatch,
+func (q *Queries) LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, leaseBatch,
 		arg.WorkerID,
 		arg.WorkerType,
 		arg.LeaseSeconds,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateCheckpoint = `-- name: UpdateCheckpoint :exec

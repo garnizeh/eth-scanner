@@ -28,6 +28,18 @@
       "/^cd /home/user/code/garnizeh/eth-scanner/go && make test$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^cd go && make test$/": {
+        "approve": true,
+        "matchCommandLine": true
+      },
+      "/^make sqlc$/": {
+        "approve": true,
+        "matchCommandLine": true
+      },
+      "/^make test$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }
