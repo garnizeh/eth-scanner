@@ -61,7 +61,9 @@ func (s *Server) RegisterRoutes() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
-	// Apply middleware chain in the required order: RequestID -> Logger -> CORS
-	// The ServeMux implements http.Handler so we can wrap it.
-	s.handler = RequestID(Logger(CORS(s.router)))
+	// Apply middleware chain in the required order: APIKey -> RequestID -> Logger -> CORS
+	// The ServeMux implements http.Handler so we can wrap it. apiKeyMiddleware
+	// is a method on Server so it can access configuration; when the API key
+	// is not set the middleware is a no-op to preserve test behavior.
+	s.handler = s.apiKeyMiddleware(RequestID(Logger(CORS(s.router))))
 }
