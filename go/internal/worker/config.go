@@ -1,0 +1,106 @@
+package worker
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net/url"
+	"os"
+	"time"
+)
+
+// Config holds worker configuration values loaded from environment.
+type Config struct {
+	APIURL             string
+	WorkerID           string
+	APIKey             string
+	CheckpointInterval time.Duration
+}
+
+// LoadConfig reads configuration from environment variables and validates them.
+// Required env vars:
+//
+//	WORKER_API_URL
+//
+// Optional env vars:
+//
+//	WORKER_ID (auto-generated if empty)
+//	WORKER_CHECKPOINT_INTERVAL (default: 5m)
+//	WORKER_API_KEY (optional, may be required by Master API depending on configuration)
+func LoadConfig() (*Config, error) {
+	apiURL := os.Getenv("WORKER_API_URL")
+	if apiURL == "" {
+		return nil, fmt.Errorf("missing required environment variable WORKER_API_URL")
+	}
+	// Validate URL
+	if err := validateURL(apiURL); err != nil {
+		return nil, fmt.Errorf("invalid WORKER_API_URL: %w", err)
+	}
+
+	// API key is optional. The Master API may disable header validation; if
+	// the key is absent the worker will discover this on first request and
+	// should handle an authentication error accordingly.
+	apiKey := os.Getenv("WORKER_API_KEY")
+
+	workerID := os.Getenv("WORKER_ID")
+	if workerID == "" {
+		id, err := autoGenerateWorkerID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to auto-generate WORKER_ID: %w", err)
+		}
+		workerID = id
+	}
+
+	checkpointInterval := 5 * time.Minute
+	if v := os.Getenv("WORKER_CHECKPOINT_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_CHECKPOINT_INTERVAL: %w", err)
+		}
+		checkpointInterval = d
+	}
+
+	return &Config{
+		APIURL:             apiURL,
+		WorkerID:           workerID,
+		APIKey:             apiKey,
+		CheckpointInterval: checkpointInterval,
+	}, nil
+}
+
+func validateURL(raw string) error {
+	u, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return err
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("url must include scheme and host")
+	}
+	return nil
+}
+
+// autoGenerateWorkerID builds an id using hostname and random bytes.
+func autoGenerateWorkerID() (string, error) {
+	hn, _ := os.Hostname()
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("worker-pc-%s-%s", sanitizeHostname(hn), hex.EncodeToString(b)), nil
+}
+
+// sanitizeHostname keeps hostname safe for use in IDs (very small sanitization).
+func sanitizeHostname(h string) string {
+	if h == "" {
+		return "unknown"
+	}
+	// remove spaces
+	out := make([]rune, 0, len(h))
+	for _, r := range h {
+		if r == ' ' || r == '/' || r == '\\' {
+			continue
+		}
+		out = append(out, r)
+	}
+	return string(out)
+}
