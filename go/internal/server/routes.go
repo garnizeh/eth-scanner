@@ -12,9 +12,7 @@ func (s *Server) RegisterRoutes() {
 
 	// API v1 routes (placeholders for now)
 	// Specific endpoints where possible
-	s.router.HandleFunc("/api/v1/jobs/lease", func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
-	})
+	s.router.HandleFunc("/api/v1/jobs/lease", s.handleJobLease)
 
 	// Generic api v1 base placeholder
 	s.router.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
