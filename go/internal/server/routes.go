@@ -53,8 +53,12 @@ func (s *Server) RegisterRoutes() {
 		http.Error(w, "Not Implemented", http.StatusNotImplemented)
 	})
 
-	s.router.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "Not Implemented", http.StatusNotImplemented)
+	s.router.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			s.handleStats(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
 	// Apply middleware chain in the required order: RequestID -> Logger -> CORS
