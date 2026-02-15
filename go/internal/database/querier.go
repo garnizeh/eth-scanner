@@ -45,7 +45,7 @@ type Querier interface {
 	// Insert a new result (found key)
 	InsertResult(ctx context.Context, arg InsertResultParams) (Result, error)
 	// Lease an existing batch to a worker
-	LeaseBatch(ctx context.Context, arg LeaseBatchParams) error
+	LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, error)
 	// Update job progress checkpoint
 	UpdateCheckpoint(ctx context.Context, arg UpdateCheckpointParams) error
 	// Update worker's total key count

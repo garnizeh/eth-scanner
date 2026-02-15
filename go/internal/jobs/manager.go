@@ -29,35 +29,46 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 		return nil, fmt.Errorf("manager or db is nil")
 	}
 
-	// Find an available batch (pending or expired)
-	job, err := m.db.FindAvailableBatch(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("find available batch: %w", err)
-	}
-
-	// Lease parameters
+	// Lease duration
 	leaseSeconds := int64((1 * time.Hour).Seconds())
 
-	// Lease the batch (update worker_id, status, expires_at)
-	p := database.LeaseBatchParams{
-		WorkerID:     sql.NullString{String: workerID, Valid: true},
-		WorkerType:   sql.NullString{Valid: false},
-		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-		ID:           job.ID,
-	}
-	if err := m.db.LeaseBatch(ctx, p); err != nil {
-		return nil, fmt.Errorf("lease batch: %w", err)
+	// Try up to 3 times to find and lease an existing job to handle concurrency
+	for i := 0; i < 3; i++ {
+		// Find an available batch (pending or expired)
+		job, err := m.db.FindAvailableBatch(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("find available batch: %w", err)
+		}
+
+		// Lease the batch (update worker_id, status, expires_at)
+		p := database.LeaseBatchParams{
+			WorkerID:     sql.NullString{String: workerID, Valid: true},
+			WorkerType:   sql.NullString{Valid: false},
+			LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+			ID:           job.ID,
+		}
+		rowsAffected, err := m.db.LeaseBatch(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("lease batch: %w", err)
+		}
+
+		if rowsAffected == 0 {
+			// Someone else leased it between our Find and Lease, try again
+			continue
+		}
+
+		// Re-load the job to return the up-to-date record
+		updated, err := m.db.GetJobByID(ctx, job.ID)
+		if err != nil {
+			return nil, fmt.Errorf("get job after lease: %w", err)
+		}
+		return &updated, nil
 	}
 
-	// Re-load the job to return the up-to-date record
-	updated, err := m.db.GetJobByID(ctx, job.ID)
-	if err != nil {
-		return nil, fmt.Errorf("get job after lease: %w", err)
-	}
-	return &updated, nil
+	return nil, nil // Fallback if we fail to lease after retries
 }
 
 // GetNextNonceRange returns the next available nonce range [nonceStart, nonceEnd]

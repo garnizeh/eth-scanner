@@ -29,7 +29,7 @@ INSERT INTO jobs (
 VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
 RETURNING *;
 
--- name: LeaseBatch :exec
+-- name: LeaseBatch :execrows
 -- Lease an existing batch to a worker
 UPDATE jobs
 SET 
@@ -37,7 +37,8 @@ SET
     worker_id = ?,
     worker_type = ?,
     expires_at = datetime('now', 'utc', '+' || :lease_seconds || ' seconds')
-WHERE id = ?;
+WHERE id = ? 
+  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL)));
 
 -- name: UpdateCheckpoint :exec
 -- Update job progress checkpoint
