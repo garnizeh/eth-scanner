@@ -123,3 +123,35 @@ func generateRequestID() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// apiKeyMiddleware enforces that requests include a valid X-API-KEY header
+// when the server configuration sets an APIKey. If s.cfg.APIKey is empty,
+// the middleware is a no-op to avoid breaking environments where the key is
+// intentionally not configured (e.g., local tests).
+func (s *Server) apiKeyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow preflight OPTIONS through to CORS handler
+		if r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if s == nil || s.cfg == nil || s.cfg.APIKey == "" {
+			// Not configured — allow through
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		key := r.Header.Get("X-API-KEY")
+		if key == "" {
+			http.Error(w, "missing api key", http.StatusUnauthorized)
+			return
+		}
+		if key != s.cfg.APIKey {
+			http.Error(w, "invalid api key", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

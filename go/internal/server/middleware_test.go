@@ -2,12 +2,16 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/garnizeh/eth-scanner/internal/config"
+	"github.com/garnizeh/eth-scanner/internal/database"
 )
 
 func TestRequestIDMiddleware(t *testing.T) {
@@ -95,5 +99,111 @@ func TestLoggerMiddleware(t *testing.T) {
 	}
 	if !strings.Contains(out, "status=201") {
 		t.Fatalf("log output missing status=201: %q", out)
+	}
+}
+
+// helper to create a server with a temporary DB and provided config
+func newServerWithCfg(t *testing.T, cfg *config.Config) *Server {
+	t.Helper()
+	ctx := t.Context()
+	dbPath := t.TempDir() + "/test.db"
+	db, err := database.InitDB(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	s := New(cfg, db)
+	s.RegisterRoutes()
+	return s
+}
+
+func TestAPIKeyMiddleware_NoConfig_Allows(t *testing.T) {
+	cfg := &config.Config{Port: "0", DBPath: ":memory:", APIKey: ""}
+	s := newServerWithCfg(t, cfg)
+
+	ts := httptest.NewServer(s.handler)
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	cli := &http.Client{}
+	resp, err := cli.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK when API key not configured, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIKeyMiddleware_RejectsMissingOrInvalid(t *testing.T) {
+	cfg := &config.Config{Port: "0", DBPath: ":memory:", APIKey: "secret"}
+	s := newServerWithCfg(t, cfg)
+
+	ts := httptest.NewServer(s.handler)
+	defer ts.Close()
+
+	// missing header
+	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	cli := &http.Client{}
+	resp, err := cli.Do(req1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for missing key, got %d", resp.StatusCode)
+	}
+
+	// invalid header
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	req2.Header.Set("X-API-KEY", "wrong")
+	resp2, err := cli.Do(req2)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for invalid key, got %d", resp2.StatusCode)
+	}
+}
+
+func TestAPIKeyMiddleware_AllowsValid(t *testing.T) {
+	cfg := &config.Config{Port: "0", DBPath: ":memory:", APIKey: "secret"}
+	s := newServerWithCfg(t, cfg)
+
+	ts := httptest.NewServer(s.handler)
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	req.Header.Set("X-API-KEY", "secret")
+	cli := &http.Client{}
+	resp, err := cli.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for valid key, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIKeyMiddleware_AllowsOptions(t *testing.T) {
+	// Ensure that when an API key is configured, preflight OPTIONS requests
+	// are still allowed through (apiKeyMiddleware should call next.ServeHTTP and return).
+	cfg := &config.Config{Port: "0", DBPath: ":memory:", APIKey: "secret"}
+	s := newServerWithCfg(t, cfg)
+
+	ts := httptest.NewServer(s.handler)
+	defer ts.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, ts.URL+"/health", nil)
+	cli := &http.Client{}
+	resp, err := cli.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content for OPTIONS preflight, got %d", resp.StatusCode)
 	}
 }

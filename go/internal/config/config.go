@@ -22,6 +22,10 @@ type Config struct {
 
 	// ShutdownTimeout is the default timeout for graceful shutdown (e.g. "30s").
 	ShutdownTimeout time.Duration
+
+	// APIKey is the secret API key required for requests when set. If empty,
+	// API key enforcement is disabled (useful for local testing).
+	APIKey string
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -59,6 +63,11 @@ func Load() (*Config, error) {
 	// Validate DBPath is present
 	if cfg.DBPath == "" {
 		return nil, fmt.Errorf("MASTER_DB_PATH is required")
+	}
+
+	// Load API key if present.
+	if k := strings.TrimSpace(os.Getenv("MASTER_API_KEY")); k != "" {
+		cfg.APIKey = k
 	}
 
 	return cfg, nil

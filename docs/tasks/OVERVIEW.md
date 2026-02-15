@@ -111,6 +111,7 @@ This allows insertion of new tasks between existing ones without renumbering:
 | P04-T130 | Write integration tests for lease endpoint (pending/expired jobs) | High | P04-T050 |
 | P04-T140 | Write integration tests for checkpoint endpoint | Medium | P04-T070 |
 | P04-T150 | Write integration tests for complete endpoint | Medium | P04-T090 |
+| P04-T160 | Add API key middleware for master API | Medium | P04-T150 |
 
 ---
 
