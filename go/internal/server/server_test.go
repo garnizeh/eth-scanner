@@ -143,6 +143,26 @@ func TestShutdownWaitsForInFlightRequests(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Start(runCtx) }()
 
+	// ensure server is listening before starting request to avoid race
+	startWaitCtx, startWaitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer startWaitCancel()
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	for {
+		select {
+		case <-startWaitCtx.Done():
+			t.Fatal("server did not start listening in time")
+		default:
+		}
+		d := &net.Dialer{Timeout: 200 * time.Millisecond}
+		c, err := d.DialContext(context.Background(), "tcp", addr)
+		if err == nil {
+			_ = c.Close()
+			goto startedListening
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+startedListening:
+
 	// start request
 	client := &http.Client{Timeout: 10 * time.Second}
 	reqDone := make(chan error, 1)
