@@ -23,6 +23,23 @@
     - name unused handler parameters `_` to satisfy revive
     - keep tests deterministic (use fixed times or truncate zero-values) and use t.TempDir when creating files
 
+Additional coverage requirements (avoid missed branches):
+
+- When adding numeric or duration-based helpers (for example `CalculateBatchSize` in `internal/worker/batch.go`), tests MUST cover all conditional branches and edge behaviors, including but not limited to:
+    - target duration <= 0 (should use default duration path)
+    - very small durations that truncate to 0 seconds (exercise the `secs == 0` fallback)
+    - zero throughput (`keysPerSecond == 0`) to exercise the minimum fallback path
+    - throughput values that trigger clamping via `keysPerSecond > maxBatchSize/secs`
+    - values that would overflow the multiplication and therefore must be clamped to `maxBatchSize`
+    - any other branches that return early (e.g., `batch == 0` fallback)
+
+For each such helper:
+    - write table-driven unit tests enumerating each case and assert the exact returned uint32
+    - include descriptive test names that reference the branch being executed (e.g., "zero-throughput -> fallback", "tiny-duration -> secs==0 fallback", "overflow -> clamp to max")
+    - prefer deterministic inputs (use fixed durations and constants) so CI reliably exercises the branches
+
+This aims to prevent regressions where lines (for example lines 18, 23, 37, 40 in `batch.go`) go untested because only the happy-path was covered.
+
     Additional testing rules to avoid common linter failures:
     - Always check returned errors from writers/encoders/closers in tests. For example, check the error returned by `json.NewEncoder(w).Encode(...)` and fail the test if it returns an error. This avoids `errcheck` failures.
     - When asserting specific error types or sentinel errors, use `errors.As` and `errors.Is` respectively to support wrapped errors; do not use direct type assertions or `==` comparisons on `error` values. This avoids `errorlint` failures.
