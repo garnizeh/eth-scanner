@@ -134,10 +134,10 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 
 	leaseSeconds := int64(leaseDuration.Seconds())
 	lb := database.LeaseBatchParams{
-		WorkerID:   sql.NullString{String: workerID, Valid: true},
-		WorkerType: sql.NullString{Valid: false},
-		Column3:    sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-		ID:         created.ID,
+		WorkerID:     sql.NullString{String: workerID, Valid: true},
+		WorkerType:   sql.NullString{Valid: false},
+		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+		ID:           created.ID,
 	}
 	if err := q.LeaseBatch(ctx, lb); err != nil {
 		return nil, fmt.Errorf("lease created batch: %w", err)

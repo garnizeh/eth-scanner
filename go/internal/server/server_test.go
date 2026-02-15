@@ -243,7 +243,7 @@ func TestShutdownRespectsTimeout(t *testing.T) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
-	start := time.Now()
+	start := time.Now().UTC()
 	go func() { errCh <- srv.Start(runCtx) }()
 
 	// wait a short moment for server to start

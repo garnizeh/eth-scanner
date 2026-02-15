@@ -26,7 +26,7 @@ INSERT INTO jobs (
     expires_at,
     requested_batch_size
 )
-VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
+VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
 RETURNING *;
 
 -- name: LeaseBatch :exec
@@ -36,7 +36,7 @@ SET
     status = 'processing',
     worker_id = ?,
     worker_type = ?,
-    expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
+    expires_at = datetime('now', 'utc', '+' || :lease_seconds || ' seconds')
 WHERE id = ?;
 
 -- name: UpdateCheckpoint :exec

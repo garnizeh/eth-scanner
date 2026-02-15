@@ -44,7 +44,7 @@ func TestCreateAndLeaseBatch(t *testing.T) {
 		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
-		Column7:            sql.NullString{String: "3600", Valid: true}, // expires in 1 hour
+		LeaseSeconds:       sql.NullString{String: "3600", Valid: true}, // expires in 1 hour
 		RequestedBatchSize: sql.NullInt64{Int64: 1000000, Valid: true},
 	})
 
@@ -117,7 +117,7 @@ func TestUpdateCheckpoint(t *testing.T) {
 		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
-		Column7:            sql.NullString{String: "3600", Valid: true},
+		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},
 		RequestedBatchSize: sql.NullInt64{Int64: 1000000, Valid: true},
 	})
 
@@ -171,7 +171,7 @@ func TestCompleteBatch(t *testing.T) {
 		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
-		Column7:            sql.NullString{String: "3600", Valid: true},
+		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},
 		RequestedBatchSize: sql.NullInt64{Int64: 1000000, Valid: true},
 	})
 
@@ -224,7 +224,7 @@ func TestUTCTimestamps(t *testing.T) {
 		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
-		Column7:            sql.NullString{String: "3600", Valid: true},
+		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},
 		RequestedBatchSize: sql.NullInt64{Int64: 1000000, Valid: true},
 	})
 
