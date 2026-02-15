@@ -14,11 +14,6 @@ import (
 // handleJobCheckpoint handles PATCH /api/v1/jobs/{id}/checkpoint
 // Request JSON: {"worker_id":"...","current_nonce":1234,"keys_scanned":100}
 func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	// Expect path like /api/v1/jobs/{id}/checkpoint
 	// Trim prefix handled by ServeMux and parse remaining segments
 	// Use path.Base and path.Dir to extract id and suffix
