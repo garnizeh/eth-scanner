@@ -90,6 +90,28 @@ func TestHandleJobComplete_FinalNonceMismatch(t *testing.T) {
 	}
 }
 
+func TestHandleJobComplete_FinalNonceTooLarge(t *testing.T) {
+	s, db, _ := setupServer(t)
+	ctx := t.Context()
+	prefix := make([]byte, 28)
+	res, err := db.ExecContext(ctx, `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, worker_id, current_nonce, requested_batch_size) VALUES (?, ?, ?, 'processing', ?, ?, ?)`, prefix, 0, 999, "worker-1", 0, 1000)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	req := map[string]any{"worker_id": "worker-1", "final_nonce": 1000, "keys_scanned": 100}
+	b, _ := json.Marshal(req)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/complete", bytes.NewReader(b))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleJobComplete_NotFound(t *testing.T) {
 	s, _, _ := setupServer(t)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/99999/complete", bytes.NewReader([]byte(`{"worker_id":"x","final_nonce":1,"keys_scanned":1}`)))
