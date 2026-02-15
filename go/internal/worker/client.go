@@ -214,3 +214,29 @@ func (c *Client) UpdateCheckpoint(ctx context.Context, jobID string, currentNonc
 	}
 	return nil
 }
+
+// completeRequest is the payload sent to mark a job as completed.
+type completeRequest struct {
+	WorkerID    string `json:"worker_id"`
+	FinalNonce  uint32 `json:"final_nonce"`
+	KeysScanned uint64 `json:"keys_scanned"`
+}
+
+// CompleteBatch marks a job as completed on the Master API.
+func (c *Client) CompleteBatch(ctx context.Context, jobID string, finalNonce uint32, totalKeysScanned uint64) error {
+	req := completeRequest{
+		WorkerID:    c.workerID,
+		FinalNonce:  finalNonce,
+		KeysScanned: totalKeysScanned,
+	}
+
+	path := fmt.Sprintf("/api/v1/jobs/%s/complete", jobID)
+
+	if err := c.doRequestWithContext(ctx, http.MethodPost, path, req, nil); err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return ErrUnauthorized
+		}
+		return fmt.Errorf("complete batch failed: %w", err)
+	}
+	return nil
+}

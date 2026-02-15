@@ -426,3 +426,88 @@ func TestUpdateCheckpoint_APIErrorWrapped(t *testing.T) {
 		t.Fatalf("expected status 409 inside APIError, got %d", apiErr.StatusCode)
 	}
 }
+
+func TestCompleteBatch_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		expectedPath := "/api/v1/jobs/test-job-456/complete"
+		if r.URL.Path != expectedPath {
+			t.Fatalf("expected path %s, got %s", expectedPath, r.URL.Path)
+		}
+		if r.Header.Get("X-API-Key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var req completeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.WorkerID != "test-worker" {
+			t.Fatalf("unexpected worker id: %s", req.WorkerID)
+		}
+		if req.FinalNonce != 4294967295 {
+			t.Fatalf("unexpected final nonce: %d", req.FinalNonce)
+		}
+		if req.KeysScanned != 4294967296 {
+			t.Fatalf("unexpected keys scanned: %d", req.KeysScanned)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
+	if err := c.CompleteBatch(context.Background(), "test-job-456", 4294967295, 4294967296); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCompleteBatch_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "missing api key"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
+	c := NewClient(cfg)
+
+	err := c.CompleteBatch(context.Background(), "job-1", 0, 0)
+	if err == nil {
+		t.Fatalf("expected ErrUnauthorized")
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %T: %v", err, err)
+	}
+}
+
+func TestCompleteBatch_APIErrorWrapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid final_nonce", "message": "final_nonce must equal nonce_end"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	err := c.CompleteBatch(context.Background(), "job-1", 0, 0)
+	if err == nil {
+		t.Fatalf("expected wrapped API error")
+	}
+	if !strings.Contains(err.Error(), "complete batch failed") {
+		t.Fatalf("expected top-level error to mention complete batch failed, got: %v", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected underlying APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 inside APIError, got %d", apiErr.StatusCode)
+	}
+}
