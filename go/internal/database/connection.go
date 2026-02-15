@@ -84,16 +84,14 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("failed to create sub filesystem: %w", err)
 	}
 
-	// Set goose to use the embedded filesystem for migrations
-	goose.SetBaseFS(subFS)
-
-	// Set dialect for SQLite
-	if err := goose.SetDialect("sqlite3"); err != nil {
-		return fmt.Errorf("failed to set goose dialect: %w", err)
+	// Use goose.NewProvider to avoid global state race conditions (SetBaseFS/SetDialect)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, db, subFS)
+	if err != nil {
+		return fmt.Errorf("failed to create goose provider: %w", err)
 	}
 
 	// Run all up migrations
-	if err := goose.UpContext(ctx, db, "."); err != nil {
+	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("failed to apply schema migrations: %w", err)
 	}
 
