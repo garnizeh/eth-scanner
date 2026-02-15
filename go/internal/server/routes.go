@@ -23,6 +23,15 @@ func (s *Server) RegisterRoutes() {
 	// Use prefix handlers for routes that include path parameters
 	s.router.HandleFunc("/api/v1/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		// Dispatch to specific handlers under /api/v1/jobs/
+		// Support /api/v1/jobs/{id}/complete
+		if strings.HasSuffix(r.URL.Path, "/complete") {
+			if r.Method == http.MethodPost {
+				s.handleJobComplete(w, r)
+				return
+			}
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		// Support /api/v1/jobs/{id}/checkpoint
 		if strings.HasSuffix(r.URL.Path, "/checkpoint") {
 			if r.Method == http.MethodPatch {
