@@ -63,6 +63,9 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 // GetNextNonceRange returns the next available nonce range [nonceStart, nonceEnd]
 // for a given 28-byte prefix and requested batch size. Nonces are uint32.
 func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchSize uint32) (uint32, uint32, error) {
+	if m == nil || m.db == nil {
+		return 0, 0, fmt.Errorf("manager or db is nil")
+	}
 	if len(prefix28) != 28 {
 		return 0, 0, fmt.Errorf("prefix_28 must be 28 bytes")
 	}
@@ -135,4 +138,42 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 	}
 
 	return uint32(nonceStart), uint32(nonceEnd64), nil
+}
+
+// CreateBatch creates a new job (batch) for the given prefix and batchSize.
+// It computes the next nonce range and inserts a job record returning the created Job.
+func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize uint32) (*database.Job, error) {
+	if m == nil || m.db == nil {
+		return nil, fmt.Errorf("manager or db is nil")
+	}
+	if len(prefix28) != 28 {
+		return nil, fmt.Errorf("prefix_28 must be 28 bytes")
+	}
+	if batchSize == 0 {
+		return nil, fmt.Errorf("batchSize must be > 0")
+	}
+
+	// Determine nonce range
+	start, end, err := m.GetNextNonceRange(ctx, prefix28, batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("get next nonce range: %w", err)
+	}
+
+	// Prepare params for CreateBatch (sqlc generated)
+	params := database.CreateBatchParams{
+		Prefix28:           prefix28,
+		NonceStart:         int64(start),
+		NonceEnd:           int64(end),
+		CurrentNonce:       sql.NullInt64{Int64: int64(start), Valid: true},
+		WorkerID:           sql.NullString{Valid: false},
+		WorkerType:         sql.NullString{Valid: false},
+		Column7:            sql.NullString{Valid: false},
+		RequestedBatchSize: sql.NullInt64{Int64: int64(batchSize), Valid: true},
+	}
+
+	job, err := m.db.CreateBatch(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("create batch: %w", err)
+	}
+	return &job, nil
 }
