@@ -240,3 +240,33 @@ func (c *Client) CompleteBatch(ctx context.Context, jobID string, finalNonce uin
 	}
 	return nil
 }
+
+// resultRequest is the payload sent to submit a found private key match.
+type resultRequest struct {
+	WorkerID        string `json:"worker_id"`
+	PrivateKey      string `json:"private_key"`      // hex-encoded 32-byte private key
+	EthereumAddress string `json:"ethereum_address"` // checksummed
+	FoundAt         string `json:"found_at"`         // RFC3339 UTC
+}
+
+// SubmitResult submits a found private key result to the Master API.
+func (c *Client) SubmitResult(ctx context.Context, privateKey []byte, address string) error {
+	if len(privateKey) != 32 {
+		return fmt.Errorf("invalid private key length: expected 32 bytes, got %d", len(privateKey))
+	}
+
+	req := resultRequest{
+		WorkerID:        c.workerID,
+		PrivateKey:      hex.EncodeToString(privateKey),
+		EthereumAddress: address,
+		FoundAt:         time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := c.doRequestWithContext(ctx, http.MethodPost, "/api/v1/results", req, nil); err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return ErrUnauthorized
+		}
+		return fmt.Errorf("result submission failed: %w", err)
+	}
+	return nil
+}

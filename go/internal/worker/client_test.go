@@ -511,3 +511,102 @@ func TestCompleteBatch_APIErrorWrapped(t *testing.T) {
 		t.Fatalf("expected status 400 inside APIError, got %d", apiErr.StatusCode)
 	}
 }
+
+func TestSubmitResult_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/results" {
+			t.Fatalf("expected /api/v1/results, got %s", r.URL.Path)
+		}
+		if r.Header.Get("X-API-Key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var req resultRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.WorkerID != "test-worker" {
+			t.Fatalf("unexpected worker id: %s", req.WorkerID)
+		}
+		if len(req.PrivateKey) != 64 {
+			t.Fatalf("unexpected private key length: %d", len(req.PrivateKey))
+		}
+		if req.EthereumAddress == "" {
+			t.Fatalf("missing ethereum address")
+		}
+		if _, err := time.Parse(time.RFC3339, req.FoundAt); err != nil {
+			t.Fatalf("invalid found_at timestamp: %v", err)
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
+	privateKey := make([]byte, 32)
+	if err := c.SubmitResult(context.Background(), privateKey, "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSubmitResult_InvalidPrivateKeyLength(t *testing.T) {
+	c := NewClient(&Config{APIURL: "http://example.com", WorkerID: "w", APIKey: ""})
+	err := c.SubmitResult(context.Background(), make([]byte, 16), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	if err == nil {
+		t.Fatalf("expected error for invalid private key length")
+	}
+	if !strings.Contains(err.Error(), "invalid private key length") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSubmitResult_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized", "message": "missing api key"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
+	c := NewClient(cfg)
+
+	err := c.SubmitResult(context.Background(), make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	if err == nil {
+		t.Fatalf("expected ErrUnauthorized")
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got %T: %v", err, err)
+	}
+}
+
+func TestSubmitResult_APIErrorWrapped(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid private_key", "message": "private_key must be 64 hex characters"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	err := c.SubmitResult(context.Background(), make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	if err == nil {
+		t.Fatalf("expected wrapped API error")
+	}
+	if !strings.Contains(err.Error(), "result submission failed") {
+		t.Fatalf("expected top-level error to mention result submission failed, got: %v", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected underlying APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 inside APIError, got %d", apiErr.StatusCode)
+	}
+}
