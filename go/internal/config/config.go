@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Config holds application configuration loaded from environment variables.
@@ -18,6 +19,9 @@ type Config struct {
 
 	// LogLevel controls application logging: debug, info, warn, error.
 	LogLevel string
+
+	// ShutdownTimeout is the default timeout for graceful shutdown (e.g. "30s").
+	ShutdownTimeout time.Duration
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -38,6 +42,18 @@ func Load() (*Config, error) {
 	} else {
 		// normalize
 		cfg.LogLevel = strings.ToLower(cfg.LogLevel)
+	}
+
+	// Shutdown timeout (defaults to 30s)
+	st := strings.TrimSpace(os.Getenv("MASTER_SHUTDOWN_TIMEOUT"))
+	if st == "" {
+		cfg.ShutdownTimeout = 30 * time.Second
+	} else {
+		d, err := time.ParseDuration(st)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MASTER_SHUTDOWN_TIMEOUT: %w", err)
+		}
+		cfg.ShutdownTimeout = d
 	}
 
 	// Validate DBPath is present

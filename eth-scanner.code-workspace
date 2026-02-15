@@ -19,6 +19,12 @@
       "esp32": true,
       "**/.git": true,
       "**/node_modules": true
+    },
+    "chat.tools.terminal.autoApprove": {
+      "/^cd /home/user/code/garnizeh/eth-scanner/go && make lint$/": {
+        "approve": true,
+        "matchCommandLine": true
+      }
     }
   }
 }
