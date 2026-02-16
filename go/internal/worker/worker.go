@@ -107,7 +107,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 
 	// Use atomics for values shared between goroutine and main flow to avoid races.
 	var (
-		currentNonce uint32 = lease.NonceStart
+		currentNonce = lease.NonceStart
 		totalKeys    uint64
 	)
 
