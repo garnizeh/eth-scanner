@@ -92,7 +92,10 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 // ScanRangeParallel partitions the job's nonce range and scans it using multiple
 // goroutines (one per CPU core). It returns the first result found and cancels
 // all other workers immediately.
-func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address) (*ScanResult, error) {
+// progressFn, if non-nil, is called to report progress where the first
+// argument is the last scanned nonce (inclusive) and the second is the
+// number of keys scanned in that chunk.
+func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, progressFn func(nonce uint32, keys uint64)) (*ScanResult, error) {
 	numWorkers := runtime.NumCPU()
 	if numWorkers <= 0 {
 		numWorkers = 1
@@ -112,8 +115,10 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address) 
 	errCh := make(chan error, 1)
 	var wg sync.WaitGroup
 
-	for range numWorkers {
-		wg.Go(func() {
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			for subJob := range jobsCh {
 				result, err := ScanRange(ctx, subJob, targetAddr)
 				if err != nil {
@@ -124,7 +129,17 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address) 
 					cancel()
 					return
 				}
+				// report progress for this chunk
+				if progressFn != nil {
+					keys := uint64(subJob.NonceEnd - subJob.NonceStart + 1)
+					progressFn(subJob.NonceEnd, keys)
+				}
 				if result != nil {
+					// report progress up to found nonce
+					if progressFn != nil {
+						keys := uint64(result.Nonce - subJob.NonceStart + 1)
+						progressFn(result.Nonce, keys)
+					}
 					select {
 					case resultCh <- result:
 					default:
@@ -133,7 +148,7 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address) 
 					return
 				}
 			}
-		})
+		}()
 	}
 
 	go func() {

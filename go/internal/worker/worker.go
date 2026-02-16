@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Worker orchestrates leasing jobs, scanning and reporting progress.
@@ -116,6 +119,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 	var (
 		currentNonce = lease.NonceStart
 		totalKeys    uint64
+		// unauthorizedFlag is set to 1 when checkpointing returns ErrUnauthorized
+		// so the main flow can abort and propagate ErrUnauthorized.
+		unauthorizedFlag int32
 	)
 
 	// Start checkpoint goroutine
@@ -135,6 +141,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 				bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				if err := w.client.UpdateCheckpoint(bgCtx, lease.JobID, cn, tk); err != nil {
 					if errors.Is(err, ErrUnauthorized) {
+						// mark unauthorized so main flow returns ErrUnauthorized
+						atomic.StoreInt32(&unauthorizedFlag, 1)
 						log.Printf("worker: final checkpoint unauthorized for job=%s", lease.JobID)
 					} else {
 						log.Printf("worker: final checkpoint failed: %v", err)
@@ -151,8 +159,10 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 				tk := atomic.LoadUint64(&totalKeys)
 				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, cn, tk); err != nil {
 					if errors.Is(err, ErrUnauthorized) {
-						// fatal
+						// fatal: mark flag and cancel lease context so scanning stops.
+						atomic.StoreInt32(&unauthorizedFlag, 1)
 						log.Printf("worker: checkpoint unauthorized")
+						cancel()
 						return
 					}
 					log.Printf("worker: checkpoint failed: %v", err)
@@ -163,25 +173,74 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 		}
 	}()
 
-	// Placeholder scanning: simulate work until either lease expires or we finish
-	log.Printf("worker: scanning job %s range [%d,%d] (simulated)", lease.JobID, lease.NonceStart, lease.NonceEnd)
+	// Start real scanning using the parallel scanner. Pass a progress callback
+	// that updates atomic counters for checkpointing.
+	numWorkers := runtime.NumCPU()
+	if numWorkers <= 0 {
+		numWorkers = 1
+	}
+	log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
 
-	select {
-	case <-leaseCtx.Done():
-		log.Printf("worker: lease context done for job %s: %v", lease.JobID, leaseCtx.Err())
+	// Track start time to compute throughput (keys/sec) for the scanned range.
+	startTime := time.Now()
+
+	// Build scanner job
+	var job Job
+	copy(job.Prefix28[:], lease.Prefix28)
+	job.ID = 0
+	job.NonceStart = lease.NonceStart
+	job.NonceEnd = lease.NonceEnd
+	job.ExpiresAt = lease.ExpiresAt
+
+	// parse target address from lease
+	target := common.HexToAddress(lease.TargetAddress)
+
+	progressFn := func(nonce uint32, keys uint64) {
+		atomic.StoreUint32(&currentNonce, nonce)
+		atomic.AddUint64(&totalKeys, keys)
+	}
+
+	result, err := ScanRangeParallel(leaseCtx, job, target, progressFn)
+
+	// Compute throughput from atomic totalKeys and elapsed time.
+	elapsed := time.Since(startTime)
+	tk := atomic.LoadUint64(&totalKeys)
+	cn := atomic.LoadUint32(&currentNonce)
+	var rate float64
+	if elapsed.Seconds() > 0 {
+		rate = float64(tk) / elapsed.Seconds()
+	}
+	log.Printf("worker: scan completed job=%s final_nonce=%d keys=%d duration=%s rate=%.2f keys/s", lease.JobID, cn, tk, elapsed.Round(time.Millisecond), rate)
+	if err != nil {
 		// Wait for checkpoint goroutine to finish
 		cancel()
 		<-doneCh
-		return fmt.Errorf("worker: %w", leaseCtx.Err())
-	case <-time.After(2 * time.Second):
-		// Simulate completion
-		atomic.StoreUint32(&currentNonce, lease.NonceEnd)
-		atomic.StoreUint64(&totalKeys, uint64(lease.NonceEnd-lease.NonceStart+1))
+		return fmt.Errorf("scan failed: %w", err)
+	}
+
+	// If a result was found, submit it
+	if result != nil {
+		// Submit result to master
+		if err := w.client.SubmitResult(ctx, result.PrivateKey[:], result.Address.Hex()); err != nil {
+			if errors.Is(err, ErrUnauthorized) {
+				return ErrUnauthorized
+			}
+			log.Printf("worker: failed to submit result: %v", err)
+		}
+		// Update atomics to final values for completion
+		atomic.StoreUint32(&currentNonce, result.Nonce)
+		// totalKeys already updated by progressFn
 	}
 
 	// Stop checkpoint goroutine and wait for it
 	cancel()
 	<-doneCh
+
+	// If the checkpoint loop encountered an unauthorized error, propagate it
+	// so the worker stops entirely.
+	if atomic.LoadInt32(&unauthorizedFlag) == 1 {
+		return ErrUnauthorized
+	}
 
 	// Complete the batch
 	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys); err != nil {
