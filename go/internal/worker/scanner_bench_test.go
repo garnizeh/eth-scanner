@@ -32,7 +32,8 @@ func BenchmarkScanRange_Single(b *testing.B) {
 				_, _ = ScanRange(ctx, job, target)
 			}
 			b.StopTimer()
-			keysPerSec := float64(uint64(b.N)*numKeys) / b.Elapsed().Seconds()
+			// Avoid integer overflow when converting b.N to uint64; compute in float64
+			keysPerSec := float64(b.N) * float64(numKeys) / b.Elapsed().Seconds()
 			b.ReportMetric(keysPerSec, "keys/sec")
 		})
 	}
@@ -52,7 +53,8 @@ func BenchmarkScanRange_Parallel(b *testing.B) {
 				_, _ = ScanRangeParallel(ctx, job, target)
 			}
 			b.StopTimer()
-			keysPerSec := float64(uint64(b.N)*numKeys) / b.Elapsed().Seconds()
+			// Avoid integer overflow when converting b.N to uint64; compute in float64
+			keysPerSec := float64(b.N) * float64(numKeys) / b.Elapsed().Seconds()
 			b.ReportMetric(keysPerSec, "keys/sec")
 		})
 	}
