@@ -12,6 +12,12 @@ MASTER_PORT ?= 8080
 MASTER_DB_PATH ?= ./data/eth-scanner.db
 MASTER_LOG_LEVEL ?= info
 
+# Worker runtime defaults (can be overridden in environment)
+WORKER_API_URL ?= http://localhost:8080
+WORKER_ID ?= worker-pc-local
+WORKER_API_KEY ?=
+WORKER_CHECKPOINT_INTERVAL ?= 5m
+
 # Default target: show help
 help:
 	@echo "EthScanner Distributed - Available Make Targets"
@@ -103,7 +109,11 @@ run-master:
 # Run PC worker
 run-worker:
 	@echo "Starting PC Worker..."
-	@go run ./cmd/worker-pc
+	@WORKER_API_URL=$(WORKER_API_URL) \
+	WORKER_ID=$(WORKER_ID) \
+	WORKER_API_KEY=$(WORKER_API_KEY) \
+	WORKER_CHECKPOINT_INTERVAL=$(WORKER_CHECKPOINT_INTERVAL) \
+	go run ./cmd/worker-pc
 
 # Format Go code
 fmt:
