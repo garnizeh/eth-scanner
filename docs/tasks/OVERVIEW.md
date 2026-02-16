@@ -238,6 +238,73 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 ---
 
+### Phase 11: Dashboard & Monitoring UI
+**Goal:** Build a web-based dashboard for real-time monitoring and analytics using the multi-tier statistics architecture.
+
+| Task ID | Description | Priority | Dependencies |
+|---------|-------------|----------|--------------|
+| P11-T010 | Choose frontend stack (React/Vue/Svelte + charting library) | High | None |
+| P11-T020 | Create `dashboard/` folder structure and initialize project | High | P11-T010 |
+| P11-T030 | Implement API client for Master API statistics endpoints | High | P11-T020 |
+| P11-T040 | Create dashboard layout (sidebar, header, main content area) | High | P11-T030 |
+| P11-T050 | Implement "Active Workers" panel (Tier 1: real-time from worker_history) | High | P11-T040 |
+| P11-T060 | Implement "Live Throughput" chart (keys/sec over last 5-10 minutes) | High | P11-T050 |
+| P11-T070 | Implement "Daily Performance" chart (Tier 2: worker_stats_daily trends) | High | P11-T040 |
+| P11-T080 | Implement "Monthly Trends" chart (Tier 3: worker_stats_monthly long-term) | Medium | P11-T040 |
+| P11-T090 | Implement "Worker Leaderboard" table (Tier 4: worker_stats_lifetime rankings) | Medium | P11-T040 |
+| P11-T100 | Implement "Jobs Overview" panel (active jobs, progress bars per prefix) | High | P11-T040 |
+| P11-T110 | Implement "Error Log" panel (recent failures from worker_history) | Medium | P11-T050 |
+| P11-T120 | Implement "Fleet Statistics" panel (total keys scanned, avg throughput, worker types) | Medium | P11-T090 |
+| P11-T130 | Add auto-refresh/polling for real-time data updates | High | P11-T050 |
+| P11-T140 | Implement worker detail view (click worker → see individual history/stats) | Medium | P11-T090 |
+| P11-T150 | Add responsive design for mobile/tablet viewing | Low | P11-T040 |
+| P11-T160 | Implement dark/light theme toggle | Low | P11-T040 |
+| P11-T170 | Add export functionality (CSV/JSON for stats) | Low | P11-T090 |
+| P11-T180 | Create production build configuration and deployment guide | High | P11-T130 |
+| P11-T190 | Write documentation for dashboard setup and usage | Medium | P11-T180 |
+
+**Dashboard Features Overview:**
+
+**Real-time Monitoring (Tier 1 - worker_history):**
+- Active workers list with last-seen timestamps
+- Live throughput graph (keys/second)
+- Recent errors and warnings
+- Current batch progress
+
+**Short-term Analytics (Tier 2 - worker_stats_daily):**
+- 7-day performance trends per worker
+- Day-over-day comparison charts
+- Worker efficiency metrics
+- Daily batch completion counts
+
+**Long-term Analytics (Tier 3 - worker_stats_monthly):**
+- Monthly performance trends
+- Year-over-year comparisons
+- Seasonal pattern detection
+- Historical throughput analysis
+
+**Lifetime Statistics (Tier 4 - worker_stats_lifetime):**
+- All-time worker leaderboard
+- Total keys scanned by worker
+- Best performing workers (avg keys/sec)
+- Worker uptime and activity history
+- Fleet-wide cumulative statistics
+
+**Jobs & Prefix Tracking:**
+- Active job list with progress bars
+- Prefix completion percentage
+- Estimated time to completion
+- Job assignment history
+
+**Technology Recommendations:**
+- **Frontend:** React/Next.js or Vue/Nuxt for SSR capabilities
+- **Charting:** Recharts, Chart.js, or D3.js for visualizations
+- **State:** React Query or SWR for API data fetching/caching
+- **UI:** Tailwind CSS or Material-UI for rapid development
+- **Real-time:** WebSocket or polling (every 5-10 seconds) for live updates
+
+---
+
 ### Phase A01: Performance & Optimization (Adhoc Tasks)
 **Goal:** Performance optimizations and refinements discovered during development/testing.
 
@@ -246,8 +313,78 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 | A01-T010 | Implement worker-specific prefix affinity for vertical nonce exhaustion | High | P04-T050, P05-T030 |
 | A01-T020 | Master background cleanup for abandoned leases (stale jobs reassignment) | Medium | A01-T010 |
 | A01-T030 | Worker dynamic batch size adjustment based on target job duration | Medium | None |
+| A01-T040 | Refactor jobs table schema for long-lived job model (macro jobs) | High | None |
+| A01-T050 | Implement worker_history table with configurable retention | High | A01-T040 |
+| A01-T055 | Add WORKER_HISTORY_LIMIT configuration support via env var | Medium | A01-T050 |
+| A01-T060 | Update Master API to record worker statistics on checkpoint/complete | High | A01-T050, A01-T055 |
+| A01-T065 | Update PC Worker client to support long-lived jobs and metrics reporting | High | A01-T060 |
+| A01-T070 | Integration testing and validation of optimized job management | High | A01-T065 |
 
 **Note:** Adhoc tasks (A0X-TXXX) are created on-demand to address performance issues, bugs, or optimizations discovered during development. They follow the same workflow as regular phase tasks but are tracked separately for visibility.
+
+---
+
+### A01 Deep Dive: Database Storage Optimization
+
+**Overview:**  
+Tasks A01-T040 through A01-T070 implement a comprehensive database optimization to prevent unbounded growth while enabling rich analytics. This is a critical architectural improvement for long-term system scalability.
+
+**Problem:**  
+The current implementation creates a new job record for every batch request. With high-throughput workers submitting checkpoints every few minutes, the database would grow to hundreds of megabytes within weeks, with most data being low-value historical records.
+
+**Solution - Two-Part Optimization:**
+
+**Part 1: Long-Lived Jobs (A01-T040)**
+- Replace "one job per batch" with "one job per prefix range"
+- Workers update the same job record via checkpoints instead of creating new records
+- Results: O(1) storage per active prefix instead of O(N) per batch
+
+**Part 2: Multi-Tier Statistics (A01-T050 to A01-T070)**
+
+Introduce a four-tier automatic aggregation architecture:
+
+```
+Tier 1: worker_history (raw detail)
+  • Retention: 10,000 records globally
+  • Use case: Real-time monitoring (last 5 minutes)
+  • Auto-prune: Aggregate to Tier 2 before deletion
+     ↓
+Tier 2: worker_stats_daily (daily aggregation)
+  • Retention: 1,000 records per worker
+  • Use case: Weekly/monthly trends
+  • Auto-prune: Aggregate to Tier 3 before deletion
+     ↓
+Tier 3: worker_stats_monthly (monthly aggregation)
+  • Retention: 1,000 records per worker
+  • Use case: Year-over-year analysis
+  • Auto-prune: Aggregate to Tier 4 before deletion
+     ↓
+Tier 4: worker_stats_lifetime (cumulative totals)
+  • Retention: No cap (1 record per worker, permanent)
+  • Use case: Leaderboards, overall statistics
+```
+
+**Key Features:**
+- **Automatic Aggregation**: SQLite triggers cascade data through tiers before deletion
+- **No Data Loss**: Metrics are preserved in aggregated form forever
+- **Per-Worker Isolation**: Each worker maintains independent caps for daily/monthly stats
+- **Dashboard-Ready**: Multi-scale queries without ETL (real-time, daily, monthly, lifetime)
+
+**Configuration:**
+```bash
+WORKER_HISTORY_LIMIT=10000         # Global cap (Tier 1)
+WORKER_DAILY_STATS_LIMIT=1000      # Per-worker cap (Tier 2)
+WORKER_MONTHLY_STATS_LIMIT=1000    # Per-worker cap (Tier 3)
+```
+
+**Impact:**
+- Storage: ~98.7% reduction vs. naive approach
+- Database size: Constant ~2-3 MB even with millions of checkpoints
+- Performance: Database queries remain fast regardless of uptime
+- Analytics: Rich multi-scale insights from seconds to years
+
+**Reference:**  
+See `docs/architecture/db-optimization-proposal.md` for complete technical specification, schema definitions, trigger logic, and example dashboard queries.
 
 ---
 
@@ -340,6 +477,7 @@ Each task file in `backlog/` or `done/` should follow this structure:
 - [ ] **P08:** ESP32 Worker - Crypto & Computation
 - [ ] **P09:** Integration, Testing & Validation
 - [ ] **P10:** Documentation, Deployment & Monitoring
+- [ ] **P11:** Dashboard & Monitoring UI
 
 **Adhoc/Optimization Tasks:**
 - [ ] **A01:** Performance & Optimization (ongoing)

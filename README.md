@@ -8,6 +8,7 @@ IMPORTANT: This project is for research/educational purposes only. Do NOT use it
 
 ## Quick Links
 - **Documentation:** [docs/architecture/system-design-document.md](docs/architecture/system-design-document.md)
+- **Database Optimization:** [docs/architecture/db-optimization-proposal.md](docs/architecture/db-optimization-proposal.md)
 - **PC Worker Benchmarks:** [docs/worker-pc-benchmarks.md](docs/worker-pc-benchmarks.md)
 - **API Reference:** Detailed in [System Design Document](docs/architecture/system-design-document.md#api-endpoints).
 - **Tasks (Backlog):** [docs/tasks/backlog](docs/tasks/backlog)
@@ -57,6 +58,20 @@ These variables were added to support adaptive batch sizing implemented in the P
 | `WORKER_BATCH_ADJUST_ALPHA` | Smoothing factor in [0,1] for batch-size adjustments (alpha) | `0.5` |
 | `WORKER_INITIAL_BATCH_SIZE` | Optional initial batch size to start with (0 = auto-calc) | `0` (auto) |
 
+Worker Statistics & Performance Monitoring
+
+These variables control the multi-tier statistics architecture for dashboard analytics and long-term performance tracking:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WORKER_HISTORY_LIMIT` | Maximum raw history records to keep globally (Tier 1: real-time monitoring) | `10000` |
+| `WORKER_DAILY_STATS_LIMIT` | Maximum daily aggregation records per worker (Tier 2: short-term trends) | `1000` |
+| `WORKER_MONTHLY_STATS_LIMIT` | Maximum monthly aggregation records per worker (Tier 3: long-term trends) | `1000` |
+
+**Note:** Worker lifetime statistics (Tier 4) have no cap—one permanent record per worker for leaderboards and cumulative totals.
+
+See [Database Optimization Proposal](docs/architecture/db-optimization-proposal.md) for architecture details.
+
 ### Running the Master API
 The database is initialized automatically with all necessary migrations on the first run. Ensure the directory for your database file exists.
 
@@ -94,6 +109,54 @@ eth-scanner/
 └── esp32/                      # ESP32 firmware (C++/Arduino) - PLANNED
 ```
 
+## Database Architecture & Storage Optimization
+
+EthScanner uses a **multi-tier statistics architecture** to prevent unbounded database growth while preserving comprehensive performance data for monitoring dashboards.
+
+### Architecture Overview
+
+Instead of storing every batch as a permanent job record, the system uses:
+
+1. **Long-lived Jobs**: A single job record represents an entire prefix scan range, updated in-place via checkpoints.
+2. **Multi-Tier Statistics**: Performance data automatically cascades through four storage tiers:
+
+```
+Tier 1: worker_history (raw detail, 10K global cap)
+   ↓ automatic aggregation
+Tier 2: worker_stats_daily (daily summaries, 1K per worker)
+   ↓ automatic aggregation
+Tier 3: worker_stats_monthly (monthly summaries, 1K per worker)
+   ↓ automatic aggregation
+Tier 4: worker_stats_lifetime (lifetime totals, 1 per worker, permanent)
+```
+
+### Benefits
+
+- **Bounded Storage**: Database size remains constant (~2-3 MB) even with millions of checkpoints
+- **No Data Loss**: Automatic aggregation preserves metrics before pruning
+- **Multi-Scale Analysis**: Dashboard can query real-time, daily, monthly, or lifetime statistics
+- **Worker Isolation**: Per-worker caps prevent individual workers from consuming all storage
+- **~98.7% Space Savings**: Compared to storing every batch as a permanent record
+
+### Configuration
+
+Control retention limits via environment variables:
+
+```bash
+WORKER_HISTORY_LIMIT=10000         # Raw history (global cap)
+WORKER_DAILY_STATS_LIMIT=1000      # Daily stats per worker
+WORKER_MONTHLY_STATS_LIMIT=1000    # Monthly stats per worker
+```
+
+See [Database Optimization Proposal](docs/architecture/db-optimization-proposal.md) for complete technical details.
+
+**Dashboard Integration:**  
+The multi-tier statistics architecture is designed to power a comprehensive web-based monitoring dashboard (Phase 11). Each tier serves specific dashboard use cases:
+- **Tier 1 (worker_history)**: Real-time monitoring, live throughput graphs, recent errors
+- **Tier 2 (worker_stats_daily)**: 7-day trends, day-over-day comparison charts
+- **Tier 3 (worker_stats_monthly)**: Long-term trends, year-over-year analysis
+- **Tier 4 (worker_stats_lifetime)**: Worker leaderboards, all-time statistics, fleet overview
+
 ## Project Progress
 - [x] **Phase 1: Foundation** - Repository structure and tooling.
 - [x] **Phase 2: Database Layer** - Type-safe SQL with `sqlc` and pure Go SQLite.
@@ -104,7 +167,12 @@ eth-scanner/
 - [ ] **Phase 7-8: ESP32 Worker** - (Planned) Resource-constrained device support.
 - [ ] **Phase 9: Integration, Testing & Validation** - (Planned) broader integration tests, benchmarks, and hardware validation.
 - [ ] **Phase 10: Documentation, Deployment & Monitoring** - (Planned) API docs, deployment guides, and observability.
-- [ ] **Phase A01: Performance & Optimization (Adhoc Tasks)** - Ongoing (track optimizations and refinements separately)
+- [ ] **Phase 11: Dashboard & Monitoring UI** - (Planned) Web-based dashboard with real-time monitoring, analytics, worker leaderboards, and multi-tier statistics visualization.
+- [ ] **Phase A01: Performance & Optimization (Adhoc Tasks)** - Ongoing optimizations including:
+  - [x] Worker-specific prefix affinity (vertical exhaustion)
+  - [x] Master background cleanup for stale jobs
+  - [x] Adaptive batch sizing based on throughput
+  - [ ] Database storage optimization with multi-tier statistics (A01-T040 to A01-T070)
 
 ## Development Commands (Go)
 Within the `go/` directory:
