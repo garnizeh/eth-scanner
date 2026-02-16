@@ -48,3 +48,17 @@ func BenchmarkDeriveEthereumAddressParallel(b *testing.B) {
 		}
 	})
 }
+
+func BenchmarkConstructPrivateKey(b *testing.B) {
+	var prefix [28]byte
+	for i := range prefix {
+		prefix[i] = byte(i)
+	}
+	nonce := uint32(0x12345678)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		_ = ConstructPrivateKey(prefix, nonce)
+	}
+}

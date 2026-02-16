@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
@@ -75,5 +76,38 @@ func TestDeriveEthereumAddress_TestVector(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("address mismatch: got %s, want %s", got.Hex(), want.Hex())
+	}
+}
+
+func TestConstructPrivateKey(t *testing.T) {
+	t.Parallel()
+
+	var prefix [28]byte
+	for i := range prefix {
+		prefix[i] = byte(i + 1)
+	}
+
+	tests := []struct {
+		name       string
+		nonce      uint32
+		wantSuffix [4]byte
+	}{
+		{name: "nonce=0", nonce: 0, wantSuffix: [4]byte{0, 0, 0, 0}},
+		{name: "nonce=1", nonce: 1, wantSuffix: [4]byte{1, 0, 0, 0}},
+		{name: "nonce=max", nonce: 0xFFFFFFFF, wantSuffix: [4]byte{0xFF, 0xFF, 0xFF, 0xFF}},
+		{name: "nonce=little_endian", nonce: 0x12345678, wantSuffix: [4]byte{0x78, 0x56, 0x34, 0x12}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := ConstructPrivateKey(prefix, tt.nonce)
+			if !bytes.Equal(got[:28], prefix[:]) {
+				t.Fatalf("prefix mismatch: got %x, want %x", got[:28], prefix)
+			}
+			if !bytes.Equal(got[28:], tt.wantSuffix[:]) {
+				t.Fatalf("nonce bytes mismatch: got %x, want %x", got[28:], tt.wantSuffix)
+			}
+		})
 	}
 }
