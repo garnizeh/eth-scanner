@@ -144,7 +144,7 @@ func TestLeaseBatch_Success(t *testing.T) {
 			t.Fatalf("expected POST, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"job_id":      "job-123",
 			"prefix_28":   prefix,
 			"nonce_start": 1,
@@ -196,7 +196,7 @@ func TestLeaseBatch_InvalidPrefixLength(t *testing.T) {
 	// prefix too short
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"job_id":      "job-1",
 			"prefix_28":   "abcd", // too short
 			"nonce_start": 0,
@@ -223,7 +223,7 @@ func TestLeaseBatch_InvalidPrefixLength(t *testing.T) {
 func TestLeaseBatch_InvalidExpiresAt(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"job_id":      "job-1",
 			"prefix_28":   strings.Repeat("ab", 28),
 			"nonce_start": 0,
@@ -301,7 +301,7 @@ func TestLeaseBatch_InvalidPrefixHex(t *testing.T) {
 	// prefix contains invalid hex characters -> hex.DecodeString should fail
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"job_id":      "job-1",
 			"prefix_28":   strings.Repeat("zz", 28), // invalid hex
 			"nonce_start": 0,
