@@ -100,6 +100,15 @@ SELECT * FROM results
 ORDER BY found_at DESC
 LIMIT ?;
 
+-- name: GetWorkerLastPrefix :one
+-- Tracks the last prefix assigned to a worker to enable vertical exhaustion
+SELECT prefix_28, MAX(nonce_end) as highest_nonce
+FROM jobs
+WHERE worker_id = ?
+GROUP BY prefix_28
+ORDER BY MAX(nonce_end) DESC
+LIMIT 1;
+
 -- name: UpsertWorker :exec
 -- Insert or update worker heartbeat
 INSERT INTO workers (id, worker_type, last_seen, metadata)

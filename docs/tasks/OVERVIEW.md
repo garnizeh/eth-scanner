@@ -14,9 +14,9 @@ This document provides a comprehensive overview of all project phases and tasks 
 
 ## Task Naming Convention
 
-**Format:** `P{Phase}-T{Task}`
+**Format:** `P{Phase}-T{Task}` for planned phases, `A{Phase}-T{Task}` for adhoc/optimization tasks
 
-- **Phase Number:** 2-digit zero-padded (P01, P02, ..., P99)
+- **Phase Number:** 2-digit zero-padded (P01, P02, ..., P99 for planned; A01, A02, ... for adhoc)
 - **Task Number:** 3-digit zero-padded with increments of 10 (T010, T020, T030, ...)
 - **Subtasks:** Use letter suffixes (T010a, T010b) or single-digit increments (T011, T012)
 
@@ -26,9 +26,18 @@ This allows insertion of new tasks between existing ones without renumbering:
 - Insert `P01-T025` between `P01-T020` and `P01-T030`
 
 **Examples:**
-- `P01-T010` → Phase 1, Task 10
+- `P01-T010` → Phase 1, Task 10 (planned phase)
 - `P03-T050a` → Phase 3, Task 50, subtask a
 - `P05-T025` → Phase 5, Task 25 (inserted between T020 and T030)
+- `A01-T010` → Adhoc Phase 1, Task 10 (performance optimization)
+- `A02-T020` → Adhoc Phase 2, Task 20 (bug fix or refinement)
+
+**Adhoc Tasks:**
+Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
+- Performance optimizations discovered during testing
+- Bug fixes or refinements not part of the original plan
+- Technical debt cleanup
+- Improvements to existing features
 
 ---
 
@@ -229,6 +238,17 @@ This allows insertion of new tasks between existing ones without renumbering:
 
 ---
 
+### Phase A01: Performance & Optimization (Adhoc Tasks)
+**Goal:** Performance optimizations and refinements discovered during development/testing.
+
+| Task ID | Description | Priority | Dependencies |
+|---------|-------------|----------|--------------|
+| A01-T010 | Implement worker-specific prefix affinity for vertical nonce exhaustion | High | P04-T050, P05-T030 |
+
+**Note:** Adhoc tasks (A0X-TXXX) are created on-demand to address performance issues, bugs, or optimizations discovered during development. They follow the same workflow as regular phase tasks but are tracked separately for visibility.
+
+---
+
 ## Task Status Legend
 
 - **Not Started:** Task file exists in `docs/tasks/backlog/`
@@ -318,6 +338,9 @@ Each task file in `backlog/` or `done/` should follow this structure:
 - [ ] **P08:** ESP32 Worker - Crypto & Computation
 - [ ] **P09:** Integration, Testing & Validation
 - [ ] **P10:** Documentation, Deployment & Monitoring
+
+**Adhoc/Optimization Tasks:**
+- [ ] **A01:** Performance & Optimization (ongoing)
 
 ---
 

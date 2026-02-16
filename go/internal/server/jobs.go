@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -113,6 +114,8 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 // given prefix (optionally provided as base64) and lease it to workerID.
 func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *database.Queries, workerID string, prefixOpt *string, batchSize uint32) (*database.Job, error) {
 	var prefix28 []byte
+
+	// If client provided a prefix, validate and use it.
 	if prefixOpt != nil {
 		decoded, err := base64.StdEncoding.DecodeString(*prefixOpt)
 		if err != nil {
@@ -122,7 +125,48 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 			return nil, fmt.Errorf("prefix_28 must decode to 28 bytes")
 		}
 		prefix28 = decoded
-	} else {
+	}
+
+	// Helper: attempt to find a worker-specific prefix with remaining nonces.
+	getWorkerAvailablePrefix := func() []byte {
+		last, err := q.GetWorkerLastPrefix(ctx, sql.NullString{String: workerID, Valid: true})
+		if err != nil || last.HighestNonce == nil {
+			return nil
+		}
+		// Safely convert the returned highest_nonce to uint64 only if non-negative
+		var highest uint64
+		switch v := last.HighestNonce.(type) {
+		case int64:
+			if v >= 0 {
+				highest = uint64(v)
+			}
+		case int32:
+			if v >= 0 {
+				highest = uint64(v)
+			}
+		case int:
+			if v >= 0 {
+				highest = uint64(v)
+			}
+		case float64:
+			if v >= 0 {
+				highest = uint64(v)
+			}
+		default:
+			return nil
+		}
+		if highest < math.MaxUint32 {
+			return last.Prefix28
+		}
+		return nil
+	}
+
+	if prefix28 == nil {
+		prefix28 = getWorkerAvailablePrefix()
+	}
+
+	// If still no prefix, generate a new random one.
+	if prefix28 == nil {
 		prefix28 = make([]byte, 28)
 		if _, err := rand.Read(prefix28); err != nil {
 			return nil, fmt.Errorf("failed to generate prefix: %w", err)

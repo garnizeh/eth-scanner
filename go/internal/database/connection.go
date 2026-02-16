@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"time"
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
@@ -27,8 +28,18 @@ func InitDB(ctx context.Context, dbPath string) (*sql.DB, error) {
 		// In-memory database - no file operations needed
 		dsn = ":memory:?_pragma=foreign_keys(ON)&_pragma=temp_store(MEMORY)&_pragma=cache_size(-64000)"
 	} else {
-		// File-based database with optimizations for single-writer API usage
-		dsn = fmt.Sprintf("file:%s?mode=rwc&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(30000)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)&_pragma=cache_size(-64000)", dbPath)
+		// File-based database with optimizations for API usage
+		dsn = fmt.Sprintf(
+			"file:%s?mode=rwc"+
+				"&_pragma=journal_mode(WAL)"+
+				"&_pragma=synchronous(NORMAL)"+
+				"&_pragma=busy_timeout(10000)"+
+				"&_pragma=journal_size_limit(67108864)"+
+				"&_pragma=mmap_size(536870912)"+
+				"&_pragma=cache_size(-64000)"+
+				"&_pragma=foreign_keys(ON)",
+			dbPath,
+		)
 	}
 
 	// Open connection with modernc.org/sqlite
@@ -37,9 +48,10 @@ func InitDB(ctx context.Context, dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool for single-writer SQLite
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// Configure connection pool to deal with concurrent access patterns (single writer, multiple readers)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(time.Hour)
 
 	// Test connection
 	if err := db.PingContext(ctx); err != nil {

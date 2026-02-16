@@ -33,7 +33,7 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 	leaseSeconds := int64((1 * time.Hour).Seconds())
 
 	// Try up to 3 times to find and lease an existing job to handle concurrency
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		// Find an available batch (pending or expired)
 		job, err := m.db.FindAvailableBatch(ctx)
 		if err != nil {
