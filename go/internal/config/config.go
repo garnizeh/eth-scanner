@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,6 +31,15 @@ type Config struct {
 	// TargetAddress is the Ethereum address that workers should search for.
 	// Defaults to 0x000000000000000000000000000000000000dEaD if not specified.
 	TargetAddress string
+
+	// StaleJobThresholdSeconds is the age in seconds after which a processing
+	// job with no recent checkpoints is considered abandoned and eligible for
+	// cleanup. Default: 7 days (604800 seconds).
+	StaleJobThresholdSeconds int64
+
+	// CleanupIntervalSeconds controls how often the master runs the cleanup
+	// background task (default: 6 hours = 21600 seconds).
+	CleanupIntervalSeconds int64
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -77,6 +87,27 @@ func Load() (*Config, error) {
 	cfg.TargetAddress = strings.TrimSpace(os.Getenv("MASTER_TARGET_ADDRESS"))
 	if cfg.TargetAddress == "" {
 		cfg.TargetAddress = "0x000000000000000000000000000000000000dEaD"
+	}
+
+	// Stale job cleanup settings
+	if v := strings.TrimSpace(os.Getenv("MASTER_STALE_JOB_THRESHOLD")); v == "" {
+		cfg.StaleJobThresholdSeconds = 604800 // 7 days
+	} else {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MASTER_STALE_JOB_THRESHOLD: %w", err)
+		}
+		cfg.StaleJobThresholdSeconds = n
+	}
+
+	if v := strings.TrimSpace(os.Getenv("MASTER_CLEANUP_INTERVAL")); v == "" {
+		cfg.CleanupIntervalSeconds = 21600 // 6 hours
+	} else {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MASTER_CLEANUP_INTERVAL: %w", err)
+		}
+		cfg.CleanupIntervalSeconds = n
 	}
 
 	return cfg, nil
