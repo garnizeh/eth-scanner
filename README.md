@@ -8,6 +8,7 @@ IMPORTANT: This project is for research/educational purposes only. Do NOT use it
 
 ## Quick Links
 - **Documentation:** [docs/architecture/system-design-document.md](docs/architecture/system-design-document.md)
+- **PC Worker Benchmarks:** [docs/worker-pc-benchmarks.md](docs/worker-pc-benchmarks.md)
 - **API Reference:** Detailed in [System Design Document](docs/architecture/system-design-document.md#api-endpoints).
 - **Tasks (Backlog):** [docs/tasks/backlog](docs/tasks/backlog)
 - **Tasks (Done):** [docs/tasks/done](docs/tasks/done)
