@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -83,7 +84,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		// successful lease -> reset backoff
 		backoff.Reset()
 
-		log.Printf("worker: leased job %s nonce [%d,%d] expires=%s", lease.JobID, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
+		// Log lease response details (this is the response to the earlier
+		// "requesting batch size" log). Include key prefix, target address,
+		// nonce range and expiry for observability.
+		prefixHex := ""
+		if len(lease.Prefix28) > 0 {
+			prefixHex = hex.EncodeToString(lease.Prefix28)
+		}
+		log.Printf("worker: leased job %s prefix=%s target=%s nonce=[%d,%d] expires=%s", lease.JobID, prefixHex, lease.TargetAddress, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
 
 		if err := w.processBatch(ctx, lease); err != nil {
 			// If unauthorized bubbled up, stop worker
