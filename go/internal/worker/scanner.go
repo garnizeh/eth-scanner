@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,22 +29,27 @@ type ScanResult struct {
 // for a private key whose derived address equals targetAddr. It periodically
 // checks ctx for cancellation and returns ctx.Err() if canceled.
 func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanResult, error) {
-	// Use a uint64 loop index to avoid uint32 wraparound when NonceEnd is 0xFFFFFFFF.
-	start := uint64(job.NonceStart)
-	end := uint64(job.NonceEnd)
-
 	const checkInterval = 10000
 
-	for i := start; i <= end; i++ {
-		nonce := uint32(i)
+	// If the start is greater than the end, nothing to scan.
+	if job.NonceStart > job.NonceEnd {
+		return nil, nil
+	}
 
-		if i%checkInterval == 0 {
+	// Use a uint32 loop variable to avoid unsafe downcasts; maintain a
+	// separate counter for periodic context checks so we don't overflow.
+	var counter uint64
+	for n := job.NonceStart; ; n++ {
+		nonce := n
+
+		if counter%checkInterval == 0 {
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, fmt.Errorf("scan canceled: %w", ctx.Err())
 			default:
 			}
 		}
+		counter++
 
 		key := ConstructPrivateKey(job.Prefix28, nonce)
 		addr, err := DeriveEthereumAddress(key)
@@ -58,6 +64,11 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 				Address:    addr,
 				Nonce:      nonce,
 			}, nil
+		}
+
+		// If we've reached the inclusive end, stop the loop.
+		if nonce == job.NonceEnd {
+			break
 		}
 	}
 
