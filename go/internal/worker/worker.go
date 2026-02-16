@@ -101,8 +101,15 @@ func (w *Worker) Run(ctx context.Context) error {
 // to the scanner component (not implemented here); this function contains a
 // simple placeholder to simulate work and the checkpointing logic.
 func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
-	// Lease context tied to the lease expiration time
-	leaseCtx, cancel := context.WithDeadline(ctx, lease.ExpiresAt)
+	// Lease context tied to (expires_at - gracePeriod) so we stop scanning
+	// slightly before the master-side lease expires to allow time for a final
+	// checkpoint and graceful shutdown.
+	grace := 30 * time.Second
+	if w.config != nil && w.config.LeaseGracePeriod != 0 {
+		grace = w.config.LeaseGracePeriod
+	}
+	deadline := lease.ExpiresAt.Add(-grace)
+	leaseCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 
 	// Use atomics for values shared between goroutine and main flow to avoid races.
@@ -121,6 +128,21 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 		for {
 			select {
 			case <-leaseCtx.Done():
+				// Send a final checkpoint before exiting. Use a background context
+				// with timeout so we don't hang if the API is slow.
+				cn := atomic.LoadUint32(&currentNonce)
+				tk := atomic.LoadUint64(&totalKeys)
+				bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := w.client.UpdateCheckpoint(bgCtx, lease.JobID, cn, tk); err != nil {
+					if errors.Is(err, ErrUnauthorized) {
+						log.Printf("worker: final checkpoint unauthorized for job=%s", lease.JobID)
+					} else {
+						log.Printf("worker: final checkpoint failed: %v", err)
+					}
+				} else {
+					log.Printf("worker: final checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
+				}
+				bgCancel()
 				return
 			case <-ticker.C:
 				// Report checkpoint using parent ctx to avoid being cancelled by leaseCtx

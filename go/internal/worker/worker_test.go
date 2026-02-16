@@ -112,6 +112,7 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "",
 		CheckpointInterval: 200 * time.Millisecond,
+		LeaseGracePeriod:   300 * time.Millisecond,
 	}
 
 	w := NewWorker(cfg)
@@ -122,7 +123,8 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 		Prefix28:   make([]byte, 28),
 		NonceStart: 0,
 		NonceEnd:   1,
-		ExpiresAt:  time.Now().Add(5 * time.Minute).UTC(),
+		// set a short expiry so the grace period triggers an earlier deadline
+		ExpiresAt: time.Now().Add(500 * time.Millisecond).UTC(),
 	}
 
 	if err := w.processBatch(context.Background(), lease); err != nil {

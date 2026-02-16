@@ -15,6 +15,10 @@ type Config struct {
 	WorkerID           string
 	APIKey             string
 	CheckpointInterval time.Duration
+	// LeaseGracePeriod is subtracted from lease expiry to create a scanning
+	// deadline so the worker can checkpoint and shut down gracefully before
+	// the master-side lease actually expires.
+	LeaseGracePeriod time.Duration
 	// Retry configuration
 	RetryMinDelay time.Duration
 	RetryMaxDelay time.Duration
@@ -68,6 +72,7 @@ func LoadConfig() (*Config, error) {
 		WorkerID:           workerID,
 		APIKey:             apiKey,
 		CheckpointInterval: checkpointInterval,
+		LeaseGracePeriod:   30 * time.Second,
 		RetryMinDelay:      1 * time.Second,
 		RetryMaxDelay:      5 * time.Minute,
 	}, nil
