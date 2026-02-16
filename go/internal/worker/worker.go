@@ -18,6 +18,7 @@ type Worker struct {
 	client             *Client
 	config             *Config
 	measuredThroughput uint64
+	batchSize          uint32
 }
 
 // NewWorker constructs a Worker. measuredThroughput may be zero to use
@@ -27,6 +28,7 @@ func NewWorker(cfg *Config) *Worker {
 		client:             NewClient(cfg),
 		config:             cfg,
 		measuredThroughput: 0,
+		batchSize:          0,
 	}
 }
 
@@ -46,11 +48,21 @@ func (w *Worker) Run(ctx context.Context) error {
 		default:
 		}
 
-		// Calculate batch size (target ~1 hour)
-		batchSize := CalculateBatchSize(w.measuredThroughput, 1*time.Hour)
-		log.Printf("worker: requesting batch size %d (~1h)", batchSize)
+		// Initialize batch size from worker state or config
+		if w.batchSize == 0 {
+			target := 1 * time.Hour
+			if w.config != nil && w.config.TargetJobDurationSeconds > 0 {
+				target = time.Duration(w.config.TargetJobDurationSeconds) * time.Second
+			}
+			if w.config != nil && w.config.InitialBatchSize > 0 {
+				w.batchSize = w.config.InitialBatchSize
+			} else {
+				w.batchSize = CalculateBatchSize(w.measuredThroughput, target)
+			}
+		}
+		log.Printf("worker: requesting batch size %d", w.batchSize)
 
-		lease, err := w.client.LeaseBatch(ctx, batchSize)
+		lease, err := w.client.LeaseBatch(ctx, w.batchSize)
 		if err != nil {
 			if errors.Is(err, ErrNoJobsAvailable) {
 				delay := backoff.Next()
@@ -93,7 +105,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 		log.Printf("worker: leased job %s prefix=%s target=%s nonce=[%d,%d] expires=%s", lease.JobID, prefixHex, lease.TargetAddress, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
 
-		if err := w.processBatch(ctx, lease); err != nil {
+		duration, keys, err := w.processBatch(ctx, lease)
+		if err != nil {
 			// If unauthorized bubbled up, stop worker
 			if errors.Is(err, ErrUnauthorized) {
 				return err
@@ -103,7 +116,20 @@ func (w *Worker) Run(ctx context.Context) error {
 			continue
 		}
 
-		log.Printf("worker: completed job %s", lease.JobID)
+		log.Printf("worker: completed job %s (duration=%s keys=%d)", lease.JobID, duration.Round(time.Millisecond), keys)
+
+		// Adjust batch size for next iteration using adaptive controller
+		if w.config != nil {
+			target := time.Duration(w.config.TargetJobDurationSeconds) * time.Second
+			newSize := AdjustBatchSize(w.batchSize, target, duration, w.config.MinBatchSize, w.config.MaxBatchSize, w.config.BatchAdjustAlpha)
+			log.Printf("worker: batch size adjusted %d -> %d", w.batchSize, newSize)
+			w.batchSize = newSize
+			// update measured throughput estimate
+			if duration.Seconds() > 0 {
+				w.measuredThroughput = uint64(float64(keys) / duration.Seconds())
+			}
+		}
+
 	}
 }
 
@@ -111,7 +137,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // and completing the job when done. The actual scanning (crypto) is delegated
 // to the scanner component (not implemented here); this function contains a
 // simple placeholder to simulate work and the checkpointing logic.
-func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
+func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Duration, uint64, error) {
 	// Lease context tied to (expires_at - gracePeriod) so we stop scanning
 	// slightly before the master-side lease expires to allow time for a final
 	// checkpoint and graceful shutdown.
@@ -223,7 +249,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 		// Wait for checkpoint goroutine to finish
 		cancel()
 		<-doneCh
-		return fmt.Errorf("scan failed: %w", err)
+		return elapsed, tk, fmt.Errorf("scan failed: %w", err)
 	}
 
 	// If a result was found, submit it
@@ -231,7 +257,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 		// Submit result to master
 		if err := w.client.SubmitResult(ctx, result.PrivateKey[:], result.Address.Hex()); err != nil {
 			if errors.Is(err, ErrUnauthorized) {
-				return ErrUnauthorized
+				return elapsed, tk, ErrUnauthorized
 			}
 			log.Printf("worker: failed to submit result: %v", err)
 		}
@@ -247,18 +273,18 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 	// If the checkpoint loop encountered an unauthorized error, propagate it
 	// so the worker stops entirely.
 	if atomic.LoadInt32(&unauthorizedFlag) == 1 {
-		return ErrUnauthorized
+		return elapsed, tk, ErrUnauthorized
 	}
 
 	// Complete the batch
 	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys); err != nil {
 		if errors.Is(err, ErrUnauthorized) {
-			return ErrUnauthorized
+			return elapsed, tk, ErrUnauthorized
 		}
-		return fmt.Errorf("failed to complete batch: %w", err)
+		return elapsed, tk, fmt.Errorf("failed to complete batch: %w", err)
 	}
 
-	return nil
+	return elapsed, tk, nil
 }
 
 // isRetryable determines whether an error should be retried.

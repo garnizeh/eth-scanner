@@ -20,15 +20,42 @@ IMPORTANT: This project is for research/educational purposes only. Do NOT use it
 - **Go 1.26+**
 - **Git**
 
-### Configuration
-The Master API is configured via environment variables. You can set them in your shell or use the defaults provided in the `Makefile`.
+## Configuration
+The Master API and PC Worker are configurable via environment variables. Set them in your shell or use the defaults in the `Makefile`.
+
+Master (server) environment variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MASTER_DB_PATH` | Path to the SQLite database file (Required) | `./data/eth-scanner.db` |
 | `MASTER_PORT` | TCP port for the API server | `8080` |
-| `MASTER_API_KEY` | Secret key for API authentication | (Disabled if empty) |
+| `MASTER_API_KEY` | Secret key for API authentication (optional) | (disabled if empty) |
 | `MASTER_LOG_LEVEL`| Logging verbosity (`debug`, `info`, `warn`, `error`) | `info` |
+| `MASTER_SHUTDOWN_TIMEOUT` | Graceful shutdown timeout (duration string) | `30s` |
+| `MASTER_STALE_JOB_THRESHOLD` | Stale threshold (seconds) after which a processing job is considered abandoned by the background cleanup | `604800` (7 days) |
+| `MASTER_CLEANUP_INTERVAL` | How often (seconds) the master runs the stale-job cleanup background task | `21600` (6 hours) |
+
+Worker (PC) environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WORKER_API_URL` | Base URL of the Master API (Required) | - |
+| `WORKER_ID` | Worker identifier (auto-generated if empty) | auto-generated |
+| `WORKER_API_KEY` | API key to send in `X-API-KEY` header (optional) | - |
+| `WORKER_CHECKPOINT_INTERVAL` | Interval between automatic checkpoints (duration string) | `5m` |
+| `WORKER_LEASE_GRACE_PERIOD` | Time subtracted from lease expiry to stop scanning early (duration string) | `30s` |
+
+Adaptive batch-sizing (new)
+
+These variables were added to support adaptive batch sizing implemented in the PC worker:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WORKER_TARGET_JOB_DURATION` | Desired batch processing time in seconds (target job duration) | `3600` (1 hour) |
+| `WORKER_MIN_BATCH_SIZE` | Minimum allowed requested batch size (keys) | `100000` |
+| `WORKER_MAX_BATCH_SIZE` | Maximum allowed requested batch size (keys) | `10000000` |
+| `WORKER_BATCH_ADJUST_ALPHA` | Smoothing factor in [0,1] for batch-size adjustments (alpha) | `0.5` |
+| `WORKER_INITIAL_BATCH_SIZE` | Optional initial batch size to start with (0 = auto-calc) | `0` (auto) |
 
 ### Running the Master API
 The database is initialized automatically with all necessary migrations on the first run. Ensure the directory for your database file exists.
@@ -72,10 +99,12 @@ eth-scanner/
 - [x] **Phase 2: Database Layer** - Type-safe SQL with `sqlc` and pure Go SQLite.
 - [x] **Phase 3: Core Infrastructure** - HTTP server, logging, and configuration.
 - [x] **Phase 4: Job Management** - Lease, Checkpoint, and Complete logic.
-- [ ] **Phase 5-6: PC Worker** - (Planned) High-throughput scanning implementation.
+- [x] **Phase 5: PC Worker - Core Implementation** - Completed
+- [x] **Phase 6: PC Worker - Crypto & Scanning Engine** - Completed
 - [ ] **Phase 7-8: ESP32 Worker** - (Planned) Resource-constrained device support.
-- [ ] **Phase 9: Integration, Testing & Validation** - (Planned) integration tests, benchmarks, and hardware validation.
+- [ ] **Phase 9: Integration, Testing & Validation** - (Planned) broader integration tests, benchmarks, and hardware validation.
 - [ ] **Phase 10: Documentation, Deployment & Monitoring** - (Planned) API docs, deployment guides, and observability.
+- [ ] **Phase A01: Performance & Optimization (Adhoc Tasks)** - Ongoing (track optimizations and refinements separately)
 
 ## Development Commands (Go)
 Within the `go/` directory:

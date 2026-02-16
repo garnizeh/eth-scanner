@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -22,6 +23,12 @@ type Config struct {
 	// Retry configuration
 	RetryMinDelay time.Duration
 	RetryMaxDelay time.Duration
+	// Adaptive batch sizing
+	TargetJobDurationSeconds int64   // seconds, default 3600
+	MinBatchSize             uint32  // default 100000
+	MaxBatchSize             uint32  // default 10000000
+	BatchAdjustAlpha         float64 // smoothing factor 0..1, default 0.5
+	InitialBatchSize         uint32  // optional initial batch size; 0 means use calculated default
 }
 
 // LoadConfig reads configuration from environment variables and validates them.
@@ -67,14 +74,65 @@ func LoadConfig() (*Config, error) {
 		checkpointInterval = d
 	}
 
+	// Adaptive batch sizing environment overrides
+	targetSecs := int64(3600)
+	if v := os.Getenv("WORKER_TARGET_JOB_DURATION"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_TARGET_JOB_DURATION: %w", err)
+		}
+		targetSecs = n
+	}
+
+	minBatch := uint32(100000)
+	if v := os.Getenv("WORKER_MIN_BATCH_SIZE"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_MIN_BATCH_SIZE: %w", err)
+		}
+		minBatch = uint32(n)
+	}
+
+	maxBatch := uint32(10000000)
+	if v := os.Getenv("WORKER_MAX_BATCH_SIZE"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_MAX_BATCH_SIZE: %w", err)
+		}
+		maxBatch = uint32(n)
+	}
+
+	alpha := 0.5
+	if v := os.Getenv("WORKER_BATCH_ADJUST_ALPHA"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_BATCH_ADJUST_ALPHA: %w", err)
+		}
+		alpha = f
+	}
+
+	initialBatch := uint32(0)
+	if v := os.Getenv("WORKER_INITIAL_BATCH_SIZE"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_INITIAL_BATCH_SIZE: %w", err)
+		}
+		initialBatch = uint32(n)
+	}
+
 	return &Config{
-		APIURL:             apiURL,
-		WorkerID:           workerID,
-		APIKey:             apiKey,
-		CheckpointInterval: checkpointInterval,
-		LeaseGracePeriod:   30 * time.Second,
-		RetryMinDelay:      1 * time.Second,
-		RetryMaxDelay:      5 * time.Minute,
+		APIURL:                   apiURL,
+		WorkerID:                 workerID,
+		APIKey:                   apiKey,
+		CheckpointInterval:       checkpointInterval,
+		LeaseGracePeriod:         30 * time.Second,
+		RetryMinDelay:            1 * time.Second,
+		RetryMaxDelay:            5 * time.Minute,
+		TargetJobDurationSeconds: targetSecs,
+		MinBatchSize:             minBatch,
+		MaxBatchSize:             maxBatch,
+		BatchAdjustAlpha:         alpha,
+		InitialBatchSize:         initialBatch,
 	}, nil
 }
 
