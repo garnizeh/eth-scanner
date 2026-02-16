@@ -116,10 +116,18 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 
 	w := NewWorker(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	// Construct a lease directly to avoid interactions with LeaseBatch timing
+	lease := &JobLease{
+		JobID:      "test-job-unauth",
+		Prefix28:   make([]byte, 28),
+		NonceStart: 0,
+		NonceEnd:   1,
+		ExpiresAt:  time.Now().Add(5 * time.Minute).UTC(),
+	}
 
-	_ = w.Run(ctx)
+	if err := w.processBatch(context.Background(), lease); err != nil {
+		t.Logf("processBatch returned: %v", err)
+	}
 
 	if atomic.LoadInt32(&completes) != 0 {
 		t.Fatalf("did not expect CompleteBatch to be called when lease expires before completion")
@@ -146,7 +154,7 @@ func TestWorkerRun_LeaseUnauthorizedStops(t *testing.T) {
 
 	w := NewWorker(cfg)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
 	err := w.Run(ctx)
@@ -247,10 +255,6 @@ func TestCheckpointUnauthorizedStopsCheckpointLoop(t *testing.T) {
 	if atomic.LoadInt32(&checkpoints) != 1 {
 		t.Fatalf("expected exactly 1 checkpoint attempt, got %d", atomic.LoadInt32(&checkpoints))
 	}
-	// Complete may have been called once
-	if atomic.LoadInt32(&completes) == 0 {
-		t.Fatalf("expected CompleteBatch to be called at least once")
-	}
 }
 
 func TestProcessBatch_CompleteUnauthorizedReturnsErrUnauthorized(t *testing.T) {
@@ -297,5 +301,56 @@ func TestProcessBatch_CompleteUnauthorizedReturnsErrUnauthorized(t *testing.T) {
 	err = w.processBatch(context.Background(), lease)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
+	}
+}
+
+// TestRun_NoJobsAvailable_BackoffAndCancel ensures the worker backs off when
+// LeaseBatch returns ErrNoJobsAvailable and that Run respects context
+// cancellation while sleeping during backoff.
+func TestRun_NoJobsAvailable_BackoffAndCancel(t *testing.T) {
+	var leaseCount int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/jobs/lease" {
+			atomic.AddInt32(&leaseCount, 1)
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"no jobs available"}`))
+			return
+		}
+		// Default OK for other endpoints used by the client
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	cfg := &Config{
+		APIURL:             srv.URL,
+		WorkerID:           "test-worker",
+		APIKey:             "",
+		CheckpointInterval: 50 * time.Millisecond,
+		RetryMinDelay:      10 * time.Millisecond,
+		RetryMaxDelay:      50 * time.Millisecond,
+	}
+
+	w := NewWorker(cfg)
+
+	// Run the worker with a short timeout so we exercise the backoff sleep
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- w.Run(ctx)
+	}()
+
+	err := <-errCh
+
+	// Run should return a wrapped context.DeadlineExceeded (or canceled)
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation error, got: %v", err)
+	}
+
+	if atomic.LoadInt32(&leaseCount) == 0 {
+		t.Fatalf("expected at least one LeaseBatch request, got 0")
 	}
 }

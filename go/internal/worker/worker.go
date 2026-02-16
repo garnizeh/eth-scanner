@@ -2,8 +2,10 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,13 +30,15 @@ func NewWorker(cfg *Config) *Worker {
 // fatal error (like ErrUnauthorized) occurs.
 func (w *Worker) Run(ctx context.Context) error {
 	log.Println("worker: starting")
+	// Setup backoff using config (defaults set in LoadConfig)
+	backoff := NewBackoff(w.config.RetryMinDelay, w.config.RetryMaxDelay)
 
 	for {
 		// Respect parent context cancellation
 		select {
 		case <-ctx.Done():
 			log.Println("worker: context cancelled, shutting down")
-			return ctx.Err()
+			return fmt.Errorf("worker: %w", ctx.Err())
 		default:
 		}
 
@@ -44,32 +48,43 @@ func (w *Worker) Run(ctx context.Context) error {
 
 		lease, err := w.client.LeaseBatch(ctx, batchSize)
 		if err != nil {
-			if err == ErrNoJobsAvailable {
-				log.Println("worker: no jobs available, retrying after delay")
+			if errors.Is(err, ErrNoJobsAvailable) {
+				delay := backoff.Next()
+				log.Printf("worker: no jobs available, waiting %v", delay)
 				select {
-				case <-time.After(30 * time.Second):
+				case <-time.After(delay):
 					continue
 				case <-ctx.Done():
-					return ctx.Err()
+					return fmt.Errorf("worker: %w", ctx.Err())
 				}
 			}
-			if err == ErrUnauthorized {
+			if errors.Is(err, ErrUnauthorized) {
 				return fmt.Errorf("worker: lease failed: %w", err)
 			}
-			log.Printf("worker: lease request failed: %v; retrying", err)
-			select {
-			case <-time.After(10 * time.Second):
-				continue
-			case <-ctx.Done():
-				return ctx.Err()
+
+			if isRetryable(err) {
+				delay := backoff.Next()
+				log.Printf("worker: lease failed (retryable): %v; waiting %v", err, delay)
+				select {
+				case <-time.After(delay):
+					continue
+				case <-ctx.Done():
+					return fmt.Errorf("worker: %w", ctx.Err())
+				}
 			}
+
+			// Non-retryable error: propagate
+			return fmt.Errorf("worker: lease failed (non-retryable): %w", err)
 		}
+
+		// successful lease -> reset backoff
+		backoff.Reset()
 
 		log.Printf("worker: leased job %s nonce [%d,%d] expires=%s", lease.JobID, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
 
 		if err := w.processBatch(ctx, lease); err != nil {
 			// If unauthorized bubbled up, stop worker
-			if err == ErrUnauthorized {
+			if errors.Is(err, ErrUnauthorized) {
 				return err
 			}
 			log.Printf("worker: processing batch failed: %v", err)
@@ -90,8 +105,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 	leaseCtx, cancel := context.WithDeadline(ctx, lease.ExpiresAt)
 	defer cancel()
 
+	// Use atomics for values shared between goroutine and main flow to avoid races.
 	var (
-		currentNonce = lease.NonceStart
+		currentNonce uint32 = lease.NonceStart
 		totalKeys    uint64
 	)
 
@@ -108,15 +124,18 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 				return
 			case <-ticker.C:
 				// Report checkpoint using parent ctx to avoid being cancelled by leaseCtx
-				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, currentNonce, totalKeys); err != nil {
-					if err == ErrUnauthorized {
+				// Snapshot atomically to avoid data races
+				cn := atomic.LoadUint32(&currentNonce)
+				tk := atomic.LoadUint64(&totalKeys)
+				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, cn, tk); err != nil {
+					if errors.Is(err, ErrUnauthorized) {
 						// fatal
 						log.Printf("worker: checkpoint unauthorized")
 						return
 					}
 					log.Printf("worker: checkpoint failed: %v", err)
 				} else {
-					log.Printf("worker: checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, currentNonce, totalKeys)
+					log.Printf("worker: checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
 				}
 			}
 		}
@@ -131,11 +150,11 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 		// Wait for checkpoint goroutine to finish
 		cancel()
 		<-doneCh
-		return leaseCtx.Err()
+		return fmt.Errorf("worker: %w", leaseCtx.Err())
 	case <-time.After(2 * time.Second):
 		// Simulate completion
-		currentNonce = lease.NonceEnd
-		totalKeys = uint64(lease.NonceEnd - lease.NonceStart + 1)
+		atomic.StoreUint32(&currentNonce, lease.NonceEnd)
+		atomic.StoreUint64(&totalKeys, uint64(lease.NonceEnd-lease.NonceStart+1))
 	}
 
 	// Stop checkpoint goroutine and wait for it
@@ -144,11 +163,32 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) error {
 
 	// Complete the batch
 	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys); err != nil {
-		if err == ErrUnauthorized {
+		if errors.Is(err, ErrUnauthorized) {
 			return ErrUnauthorized
 		}
 		return fmt.Errorf("failed to complete batch: %w", err)
 	}
 
 	return nil
+}
+
+// isRetryable determines whether an error should be retried.
+func isRetryable(err error) bool {
+	// If it's an APIError, retry on 5xx and 429.
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
+			return true
+		}
+		if apiErr.StatusCode == 429 {
+			return true
+		}
+		return false
+	}
+	// If it's ErrNoJobsAvailable, treat as retryable (should be handled earlier)
+	if errors.Is(err, ErrNoJobsAvailable) {
+		return true
+	}
+	// Non-API errors (network, timeouts) are considered retryable.
+	return true
 }
