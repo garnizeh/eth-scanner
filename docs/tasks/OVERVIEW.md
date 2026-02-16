@@ -149,6 +149,7 @@ This allows insertion of new tasks between existing ones without renumbering:
 | P06-T090 | Implement context cancellation for lease expiration | High | P06-T050 |
 | P06-T100 | Optimize crypto loop (buffer reuse, minimize allocations) | Medium | P06-T040 |
 | P06-T110 | Write benchmarks for key scanning throughput (keys/sec) | Medium | P06-T040 |
+| P06-T120 | Replace worker simulation with real job processing | High | P06-T100, P06-T110 |
 
 ---
 
