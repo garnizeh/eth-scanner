@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // Job describes a scanning job allocated by the master.
@@ -38,6 +39,13 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 		return nil, nil
 	}
 
+	// Hot loop optimization: pre-allocate buffers and hasher to avoid allocations
+	// inside the iteration.
+	hasher := crypto.NewKeccakState()
+	var pubBuf [64]byte
+	var hashBuf [32]byte
+	var key [32]byte
+
 	// Use a uint32 loop variable to avoid unsafe downcasts; maintain a
 	// separate counter for periodic context checks so we don't overflow.
 	var counter uint64
@@ -53,10 +61,14 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 		}
 		counter++
 
-		key := ConstructPrivateKey(job.Prefix28, nonce)
-		addr, err := DeriveEthereumAddress(key)
+		// Reuse key buffer
+		copy(key[:28], job.Prefix28[:])
+		binary.LittleEndian.PutUint32(key[28:], nonce)
+
+		// Use fast, allocation-free derivation path
+		addr, err := DeriveEthereumAddressFast(key, hasher, &pubBuf, &hashBuf)
 		if err != nil {
-			// skip invalid/private keys
+			// skip invalid keys (zero or overflow)
 			continue
 		}
 

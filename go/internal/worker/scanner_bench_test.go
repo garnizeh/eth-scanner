@@ -27,7 +27,7 @@ func BenchmarkScanRange_Single(b *testing.B) {
 			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
 			b.ReportAllocs()
 			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				_, _ = ScanRange(ctx, job, target)
 			}
 		})
@@ -43,7 +43,7 @@ func BenchmarkScanRange_Parallel(b *testing.B) {
 			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
 			b.ReportAllocs()
 			b.ResetTimer()
-			for range b.N {
+			for b.Loop() {
 				_, _ = ScanRangeParallel(ctx, job, target)
 			}
 		})

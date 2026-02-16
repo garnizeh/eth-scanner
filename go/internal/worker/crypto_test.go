@@ -79,6 +79,34 @@ func TestDeriveEthereumAddress_TestVector(t *testing.T) {
 	}
 }
 
+func TestDeriveEthereumAddressFast_MatchesStandard(t *testing.T) {
+	t.Parallel()
+
+	// Generate a few random keys and verify they produce the same address.
+	for i := range 10 {
+		key, _ := crypto.GenerateKey()
+		var privArr [32]byte
+		copy(privArr[:], crypto.FromECDSA(key))
+
+		want, err := DeriveEthereumAddress(privArr)
+		if err != nil {
+			t.Fatalf("DeriveEthereumAddress failed: %v", err)
+		}
+
+		hasher := crypto.NewKeccakState()
+		var pubBuf [64]byte
+		var hashBuf [32]byte
+		got, err := DeriveEthereumAddressFast(privArr, hasher, &pubBuf, &hashBuf)
+		if err != nil {
+			t.Fatalf("DeriveEthereumAddressFast failed: %v", err)
+		}
+
+		if got != want {
+			t.Fatalf("mismatch at key %d: got %s, want %s", i, got.Hex(), want.Hex())
+		}
+	}
+}
+
 func TestConstructPrivateKey(t *testing.T) {
 	t.Parallel()
 

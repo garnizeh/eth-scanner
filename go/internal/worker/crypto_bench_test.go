@@ -27,6 +27,48 @@ func BenchmarkDeriveEthereumAddress(b *testing.B) {
 	}
 }
 
+// BenchmarkDeriveEthereumAddressFast measures the cost of the optimized,
+// allocation-free address derivation.
+func BenchmarkDeriveEthereumAddressFast(b *testing.B) {
+	key, _ := crypto.GenerateKey()
+	privBytes := crypto.FromECDSA(key)
+	var privArr [32]byte
+	copy(privArr[:], privBytes[:32])
+
+	hasher := crypto.NewKeccakState()
+	var pubBuf [64]byte
+	var hashBuf [32]byte
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		if _, err := DeriveEthereumAddressFast(privArr, hasher, &pubBuf, &hashBuf); err != nil {
+			b.Fatalf("DeriveEthereumAddressFast failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkDeriveEthereumAddressFastParallel(b *testing.B) {
+	key, _ := crypto.GenerateKey()
+	privBytes := crypto.FromECDSA(key)
+	var privArr [32]byte
+	copy(privArr[:], privBytes[:32])
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		hasher := crypto.NewKeccakState()
+		var pubBuf [64]byte
+		var hashBuf [32]byte
+		for pb.Next() {
+			if _, err := DeriveEthereumAddressFast(privArr, hasher, &pubBuf, &hashBuf); err != nil {
+				b.Fatalf("DeriveEthereumAddressFast failed: %v", err)
+			}
+		}
+	})
+}
+
 // BenchmarkDeriveEthereumAddressParallel measures throughput under parallel
 // execution using RunParallel.
 func BenchmarkDeriveEthereumAddressParallel(b *testing.B) {
