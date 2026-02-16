@@ -35,6 +35,22 @@ func TestLoadConfig_Valid(t *testing.T) {
 	if cfg.CheckpointInterval != 2*time.Second {
 		t.Fatalf("unexpected CheckpointInterval: %v", cfg.CheckpointInterval)
 	}
+	// adaptive batch sizing defaults
+	if cfg.TargetJobDurationSeconds != 3600 {
+		t.Fatalf("unexpected TargetJobDurationSeconds default: %d", cfg.TargetJobDurationSeconds)
+	}
+	if cfg.MinBatchSize != 100000 {
+		t.Fatalf("unexpected MinBatchSize default: %d", cfg.MinBatchSize)
+	}
+	if cfg.MaxBatchSize != 10000000 {
+		t.Fatalf("unexpected MaxBatchSize default: %d", cfg.MaxBatchSize)
+	}
+	if cfg.BatchAdjustAlpha != 0.5 {
+		t.Fatalf("unexpected BatchAdjustAlpha default: %f", cfg.BatchAdjustAlpha)
+	}
+	if cfg.InitialBatchSize != 0 {
+		t.Fatalf("unexpected InitialBatchSize default: %d", cfg.InitialBatchSize)
+	}
 }
 
 func TestLoadConfig_AutoGenerateID(t *testing.T) {
@@ -53,6 +69,45 @@ func TestLoadConfig_AutoGenerateID(t *testing.T) {
 	}
 	if !strings.HasPrefix(cfg.WorkerID, "worker-pc-") {
 		t.Fatalf("unexpected WorkerID format: %s", cfg.WorkerID)
+	}
+	// adaptive batch sizing defaults are still applied
+	if cfg.TargetJobDurationSeconds != 3600 {
+		t.Fatalf("unexpected TargetJobDurationSeconds default: %d", cfg.TargetJobDurationSeconds)
+	}
+}
+
+func TestLoadConfig_AdaptiveEnvOverrides(t *testing.T) {
+	os.Setenv("WORKER_API_URL", "http://localhost:8080")
+	defer os.Unsetenv("WORKER_API_URL")
+	os.Setenv("WORKER_TARGET_JOB_DURATION", "1800")
+	defer os.Unsetenv("WORKER_TARGET_JOB_DURATION")
+	os.Setenv("WORKER_MIN_BATCH_SIZE", "12345")
+	defer os.Unsetenv("WORKER_MIN_BATCH_SIZE")
+	os.Setenv("WORKER_MAX_BATCH_SIZE", "54321")
+	defer os.Unsetenv("WORKER_MAX_BATCH_SIZE")
+	os.Setenv("WORKER_BATCH_ADJUST_ALPHA", "0.25")
+	defer os.Unsetenv("WORKER_BATCH_ADJUST_ALPHA")
+	os.Setenv("WORKER_INITIAL_BATCH_SIZE", "77777")
+	defer os.Unsetenv("WORKER_INITIAL_BATCH_SIZE")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed with adaptive overrides: %v", err)
+	}
+	if cfg.TargetJobDurationSeconds != 1800 {
+		t.Fatalf("expected TargetJobDurationSeconds 1800, got %d", cfg.TargetJobDurationSeconds)
+	}
+	if cfg.MinBatchSize != 12345 {
+		t.Fatalf("expected MinBatchSize 12345, got %d", cfg.MinBatchSize)
+	}
+	if cfg.MaxBatchSize != 54321 {
+		t.Fatalf("expected MaxBatchSize 54321, got %d", cfg.MaxBatchSize)
+	}
+	if cfg.BatchAdjustAlpha != 0.25 {
+		t.Fatalf("expected BatchAdjustAlpha 0.25, got %f", cfg.BatchAdjustAlpha)
+	}
+	if cfg.InitialBatchSize != 77777 {
+		t.Fatalf("expected InitialBatchSize 77777, got %d", cfg.InitialBatchSize)
 	}
 }
 

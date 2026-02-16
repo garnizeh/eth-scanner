@@ -119,3 +119,42 @@ func TestCalculateBatchSize_ThresholdNoClamp(t *testing.T) {
 		t.Fatalf("threshold no-clamp: expected %d, got %d", want, got)
 	}
 }
+
+func TestAdjustBatchSize_IncreasesWhenActualLessThanTarget(t *testing.T) {
+	cur := uint32(100000)
+	target := 3600 * time.Second
+	actual := 1800 * time.Second
+	got := AdjustBatchSize(cur, target, actual, 10000, 10000000, 0.5)
+	if got <= cur {
+		t.Fatalf("expected increased batch size, got %d (current %d)", got, cur)
+	}
+}
+
+func TestAdjustBatchSize_DecreasesWhenActualGreaterThanTarget(t *testing.T) {
+	cur := uint32(2000000)
+	target := 1800 * time.Second
+	actual := 3600 * time.Second
+	got := AdjustBatchSize(cur, target, actual, 100000, 10000000, 0.5)
+	if got >= cur {
+		t.Fatalf("expected decreased batch size, got %d (current %d)", got, cur)
+	}
+}
+
+func TestAdjustBatchSize_ClampsToMinMax(t *testing.T) {
+	cur := uint32(500000)
+	target := 10000 * time.Second
+	actual := 1 * time.Second
+	got := AdjustBatchSize(cur, target, actual, 1000, 10000, 0.9)
+	if got != 10000 {
+		t.Fatalf("expected clamp to max 10000, got %d", got)
+	}
+
+	// now extreme small
+	cur2 := uint32(5000)
+	target2 := 1 * time.Second
+	actual2 := 10000 * time.Second
+	got2 := AdjustBatchSize(cur2, target2, actual2, 1000, 10000, 0.9)
+	if got2 != 1000 {
+		t.Fatalf("expected clamp to min 1000, got %d", got2)
+	}
+}

@@ -48,3 +48,41 @@ func CalculateBatchSize(keysPerSecond uint64, targetDuration time.Duration) uint
 	}
 	return uint32(batch)
 }
+
+// AdjustBatchSize updates the current batch size based on observed actualDuration
+// vs the desired targetDuration. It applies a smoothing factor alpha in [0,1]
+// to avoid aggressive jumps. The result is clamped to [minBatchSize, maxBatchSize].
+func AdjustBatchSize(current uint32, targetDuration, actualDuration time.Duration, minBatchSize, maxBatchSize uint32, alpha float64) uint32 {
+	if current == 0 {
+		current = minBatchSize
+	}
+	if actualDuration <= 0 || targetDuration <= 0 {
+		return current
+	}
+
+	if alpha < 0 {
+		alpha = 0
+	}
+	if alpha > 1 {
+		alpha = 1
+	}
+
+	actualSec := actualDuration.Seconds()
+	targetSec := targetDuration.Seconds()
+	if actualSec <= 0 {
+		return current
+	}
+
+	adjustment := targetSec / actualSec
+	// smoothed factor: alpha * adjustment + (1-alpha) * 1.0
+	factor := alpha*adjustment + (1-alpha)*1.0
+
+	newf := float64(current) * factor
+	if newf < float64(minBatchSize) {
+		return minBatchSize
+	}
+	if newf > float64(maxBatchSize) {
+		return maxBatchSize
+	}
+	return uint32(newf)
+}
