@@ -149,6 +149,85 @@ func TestScanRange_ContextCancelled(t *testing.T) {
 // commonAddressZero returns the zero address for convenience.
 func commonAddressZero() (a common.Address) { return }
 
+func TestScanRangeParallel_Match(t *testing.T) {
+	t.Parallel()
+
+	// Generate a real key
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	privBytes := crypto.FromECDSA(key)
+
+	var prefix [28]byte
+	copy(prefix[:], privBytes[:28])
+	nonce := binary.LittleEndian.Uint32(privBytes[28:32])
+
+	// Narrow range that definitely includes the nonce
+	job := Job{
+		ID:         5,
+		Prefix28:   prefix,
+		NonceStart: nonce - 100,
+		NonceEnd:   nonce + 100,
+	}
+
+	var expectedKey [32]byte
+	copy(expectedKey[:], privBytes[:32])
+	expectedAddr, err := DeriveEthereumAddress(expectedKey)
+	if err != nil {
+		t.Fatalf("DeriveEthereumAddress failed: %v", err)
+	}
+
+	got, err := ScanRangeParallel(context.Background(), job, expectedAddr)
+	if err != nil {
+		t.Fatalf("ScanRangeParallel failed: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("expected result, got nil")
+	}
+	if got.Nonce != nonce {
+		t.Errorf("nonce mismatch: got %d, want %d", got.Nonce, nonce)
+	}
+}
+
+func TestScanRangeParallel_NoMatch(t *testing.T) {
+	t.Parallel()
+
+	job := Job{
+		ID:         6,
+		Prefix28:   [28]byte{1, 2, 3},
+		NonceStart: 0,
+		NonceEnd:   1000,
+	}
+
+	got, err := ScanRangeParallel(context.Background(), job, commonAddressZero())
+	if err != nil {
+		t.Fatalf("ScanRangeParallel failed: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil result, got %+v", got)
+	}
+}
+
+func TestScanRangeParallel_Cancellation(t *testing.T) {
+	t.Parallel()
+
+	job := Job{
+		ID:         7,
+		Prefix28:   [28]byte{9, 9, 9},
+		NonceStart: 0,
+		NonceEnd:   1000000,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	_, err := ScanRangeParallel(ctx, job, commonAddressZero())
+	if err == nil {
+		t.Fatal("expected error due to timeout, got nil")
+	}
+}
+
 func TestNonceBytesFromUint32(t *testing.T) {
 	t.Parallel()
 
