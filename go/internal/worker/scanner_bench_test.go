@@ -25,11 +25,15 @@ func BenchmarkScanRange_Single(b *testing.B) {
 	for _, tc := range scanBenchCases {
 		b.Run(tc.name, func(b *testing.B) {
 			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
+			numKeys := uint64(tc.nonceEnd) + 1
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
 				_, _ = ScanRange(ctx, job, target)
 			}
+			b.StopTimer()
+			keysPerSec := float64(uint64(b.N)*numKeys) / b.Elapsed().Seconds()
+			b.ReportMetric(keysPerSec, "keys/sec")
 		})
 	}
 }
@@ -41,11 +45,15 @@ func BenchmarkScanRange_Parallel(b *testing.B) {
 	for _, tc := range scanBenchCases {
 		b.Run(tc.name, func(b *testing.B) {
 			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
+			numKeys := uint64(tc.nonceEnd) + 1
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
 				_, _ = ScanRangeParallel(ctx, job, target)
 			}
+			b.StopTimer()
+			keysPerSec := float64(uint64(b.N)*numKeys) / b.Elapsed().Seconds()
+			b.ReportMetric(keysPerSec, "keys/sec")
 		})
 	}
 }

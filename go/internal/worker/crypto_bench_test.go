@@ -25,6 +25,8 @@ func BenchmarkDeriveEthereumAddress(b *testing.B) {
 			b.Fatalf("DeriveEthereumAddress failed: %v", err)
 		}
 	}
+	b.StopTimer()
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "keys/sec")
 }
 
 // BenchmarkDeriveEthereumAddressFast measures the cost of the optimized,
@@ -47,6 +49,8 @@ func BenchmarkDeriveEthereumAddressFast(b *testing.B) {
 			b.Fatalf("DeriveEthereumAddressFast failed: %v", err)
 		}
 	}
+	b.StopTimer()
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "keys/sec")
 }
 
 func BenchmarkDeriveEthereumAddressFastParallel(b *testing.B) {
@@ -67,6 +71,8 @@ func BenchmarkDeriveEthereumAddressFastParallel(b *testing.B) {
 			}
 		}
 	})
+	b.StopTimer()
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "keys/sec")
 }
 
 // BenchmarkDeriveEthereumAddressParallel measures throughput under parallel
@@ -89,6 +95,8 @@ func BenchmarkDeriveEthereumAddressParallel(b *testing.B) {
 			}
 		}
 	})
+	b.StopTimer()
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "keys/sec")
 }
 
 func BenchmarkConstructPrivateKey(b *testing.B) {
@@ -103,4 +111,6 @@ func BenchmarkConstructPrivateKey(b *testing.B) {
 	for b.Loop() {
 		_ = ConstructPrivateKey(prefix, nonce)
 	}
+	b.StopTimer()
+	b.ReportMetric(float64(b.N)/b.Elapsed().Seconds(), "keys/sec")
 }
