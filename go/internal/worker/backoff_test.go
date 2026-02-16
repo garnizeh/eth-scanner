@@ -20,7 +20,7 @@ func TestBackoff_NextAndReset(t *testing.T) {
 	}
 
 	// advance several times to cap
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_ = b.Next()
 	}
 	dc := b.Next()

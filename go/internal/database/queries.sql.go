@@ -493,6 +493,28 @@ func (q *Queries) GetWorkerByID(ctx context.Context, id string) (Worker, error) 
 	return i, err
 }
 
+const getWorkerLastPrefix = `-- name: GetWorkerLastPrefix :one
+SELECT prefix_28, MAX(nonce_end) as highest_nonce
+FROM jobs
+WHERE worker_id = ?
+GROUP BY prefix_28
+ORDER BY MAX(nonce_end) DESC
+LIMIT 1
+`
+
+type GetWorkerLastPrefixRow struct {
+	Prefix28     []byte      `json:"prefix_28"`
+	HighestNonce interface{} `json:"highest_nonce"`
+}
+
+// Tracks the last prefix assigned to a worker to enable vertical exhaustion
+func (q *Queries) GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error) {
+	row := q.db.QueryRowContext(ctx, getWorkerLastPrefix, workerID)
+	var i GetWorkerLastPrefixRow
+	err := row.Scan(&i.Prefix28, &i.HighestNonce)
+	return i, err
+}
+
 const getWorkerStats = `-- name: GetWorkerStats :many
 SELECT 
     w.id,

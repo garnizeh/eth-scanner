@@ -115,10 +115,8 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, 
 	errCh := make(chan error, 1)
 	var wg sync.WaitGroup
 
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numWorkers {
+		wg.Go(func() {
 			for subJob := range jobsCh {
 				result, err := ScanRange(ctx, subJob, targetAddr)
 				if err != nil {
@@ -148,7 +146,7 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, 
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	go func() {

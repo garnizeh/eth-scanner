@@ -38,6 +38,8 @@ type Querier interface {
 	GetStats(ctx context.Context) (StatsSummary, error)
 	// Get worker information by ID
 	GetWorkerByID(ctx context.Context, id string) (Worker, error)
+	// Tracks the last prefix assigned to a worker to enable vertical exhaustion
+	GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error)
 	// Get statistics per worker
 	GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerStatsRow, error)
 	// Get all workers of a specific type

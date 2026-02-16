@@ -166,7 +166,7 @@ func TestConcurrentLeaseRequests_NoDuplicates(t *testing.T) {
 	ctx := context.Background()
 	// insert 5 pending jobs
 	prefix := make([]byte, 28)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, created_at) VALUES (?, ?, ?, 'pending', datetime('now','utc'))", prefix, i*100, (i+1)*100); err != nil {
 			t.Fatalf("failed insert pending: %v", err)
 		}
@@ -180,7 +180,7 @@ func TestConcurrentLeaseRequests_NoDuplicates(t *testing.T) {
 	ids := make(map[int64]struct{})
 	errs := make([]error, 0)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -219,5 +219,62 @@ func TestLeaseRequestValidation(t *testing.T) {
 	status2, _ := postLease(t, ts.URL, map[string]any{"worker_id": "x", "requested_batch_size": 0})
 	if status2 != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid batch size, got %d", status2)
+	}
+}
+
+func TestWorkerPrefixAffinity(t *testing.T) {
+	s, _ := setupServerWithDB(t)
+
+	ts := httptest.NewServer(s.handler)
+	defer ts.Close()
+
+	// first lease for worker-a
+	status1, out1 := postLease(t, ts.URL, map[string]any{"worker_id": "worker-a", "requested_batch_size": 100})
+	if status1 != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%v", status1, out1)
+	}
+	prefix1, ok := out1["prefix_28"].(string)
+	if !ok {
+		t.Fatalf("expected prefix_28 string in resp1")
+	}
+	end1f, ok := out1["nonce_end"].(float64)
+	if !ok {
+		t.Fatalf("expected nonce_end in resp1")
+	}
+	end1 := int64(end1f)
+
+	// second lease for same worker should continue same prefix
+	status2, out2 := postLease(t, ts.URL, map[string]any{"worker_id": "worker-a", "requested_batch_size": 100})
+	if status2 != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%v", status2, out2)
+	}
+	prefix2, ok := out2["prefix_28"].(string)
+	if !ok {
+		t.Fatalf("expected prefix_28 string in resp2")
+	}
+	start2f, ok := out2["nonce_start"].(float64)
+	if !ok {
+		t.Fatalf("expected nonce_start in resp2")
+	}
+	start2 := int64(start2f)
+
+	if prefix1 != prefix2 {
+		t.Fatalf("expected same prefix for same worker, got %s and %s", prefix1, prefix2)
+	}
+	if start2 != end1+1 {
+		t.Fatalf("expected second lease start = first end + 1 (%d), got %d", end1+1, start2)
+	}
+
+	// another worker should get a different prefix
+	status3, out3 := postLease(t, ts.URL, map[string]any{"worker_id": "worker-b", "requested_batch_size": 100})
+	if status3 != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%v", status3, out3)
+	}
+	prefix3, ok := out3["prefix_28"].(string)
+	if !ok {
+		t.Fatalf("expected prefix_28 string in resp3")
+	}
+	if prefix3 == prefix1 {
+		t.Fatalf("expected different prefix for different worker, both got %s", prefix3)
 	}
 }
