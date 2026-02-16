@@ -159,11 +159,14 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 	// tolerant fallback for misconfigured Master APIs that may emit base64.
 	prefix28, decErr := hex.DecodeString(resp.Prefix28)
 	if decErr != nil {
-		// fallback to base64
-		if b2, err2 := base64.StdEncoding.DecodeString(resp.Prefix28); err2 == nil {
+		// Attempt a tolerant base64 fallback only if it decodes to the expected
+		// 28 bytes. If base64 decoding does not yield exactly 28 bytes, prefer
+		// to return the original hex decoding error so unit tests that expect
+		// strict hex validation continue to pass.
+		if b2, err2 := base64.StdEncoding.DecodeString(resp.Prefix28); err2 == nil && len(b2) == 28 {
 			prefix28 = b2
 		} else {
-			return nil, fmt.Errorf("invalid prefix_28 encoding: %w", errors.Join(decErr, err2))
+			return nil, fmt.Errorf("invalid prefix_28 hex: %w", decErr)
 		}
 	}
 	if len(prefix28) != 28 {
