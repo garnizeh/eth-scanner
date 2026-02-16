@@ -24,7 +24,3 @@ See README.md for quick start, configuration, and development commands:
 - README: ./README.md
 - Design & schema: ./docs/architecture/db-optimization-proposal.md
 - Tasks & roadmap: ./docs/tasks/OVERVIEW.md
-
-If you want the short one-line tagline for the repository "About" box on GitHub, use:
-
-"Distributed, storage-efficient key-scanning research prototype with multi-tier analytics."
