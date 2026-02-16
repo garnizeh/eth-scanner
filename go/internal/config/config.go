@@ -26,6 +26,10 @@ type Config struct {
 	// APIKey is the secret API key required for requests when set. If empty,
 	// API key enforcement is disabled (useful for local testing).
 	APIKey string
+
+	// TargetAddress is the Ethereum address that workers should search for.
+	// Defaults to 0x000000000000000000000000000000000000dEaD if not specified.
+	TargetAddress string
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -68,6 +72,11 @@ func Load() (*Config, error) {
 	// Load API key if present.
 	if k := strings.TrimSpace(os.Getenv("MASTER_API_KEY")); k != "" {
 		cfg.APIKey = k
+	}
+
+	cfg.TargetAddress = strings.TrimSpace(os.Getenv("MASTER_TARGET_ADDRESS"))
+	if cfg.TargetAddress == "" {
+		cfg.TargetAddress = "0x000000000000000000000000000000000000dEaD"
 	}
 
 	return cfg, nil
