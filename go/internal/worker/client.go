@@ -3,6 +3,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -113,7 +114,9 @@ func (c *Client) doRequestWithContext(ctx context.Context, method, p string, req
 
 	if respBody != nil && len(respBytes) > 0 {
 		if err := json.Unmarshal(respBytes, respBody); err != nil {
-			return fmt.Errorf("unmarshal response: %w", err)
+			// Include a truncated copy of the response body to aid debugging
+			tb := truncateBytes(respBytes, 1024)
+			return fmt.Errorf("unmarshal response: %w; body=%s", err, string(tb))
 		}
 	}
 
@@ -152,9 +155,16 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 	}
 
 	// Decode prefix_28 from hex
+	// Try hex decode first (preferred). If that fails, attempt base64 as a
+	// tolerant fallback for misconfigured Master APIs that may emit base64.
 	prefix28, decErr := hex.DecodeString(resp.Prefix28)
 	if decErr != nil {
-		return nil, fmt.Errorf("invalid prefix_28 hex: %w", decErr)
+		// fallback to base64
+		if b2, err2 := base64.StdEncoding.DecodeString(resp.Prefix28); err2 == nil {
+			prefix28 = b2
+		} else {
+			return nil, fmt.Errorf("invalid prefix_28 encoding: %w", errors.Join(decErr, err2))
+		}
 	}
 	if len(prefix28) != 28 {
 		return nil, fmt.Errorf("invalid prefix_28 length: got %d, want 28", len(prefix28))
@@ -167,7 +177,7 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 	}
 
 	return &JobLease{
-		JobID:      resp.JobID,
+		JobID:      string(resp.JobID),
 		Prefix28:   prefix28,
 		NonceStart: resp.NonceStart,
 		NonceEnd:   resp.NonceEnd,
@@ -182,11 +192,47 @@ type leaseRequest struct {
 }
 
 type leaseResponse struct {
-	JobID      string `json:"job_id"`
-	Prefix28   string `json:"prefix_28"` // hex-encoded
-	NonceStart uint32 `json:"nonce_start"`
-	NonceEnd   uint32 `json:"nonce_end"`
-	ExpiresAt  string `json:"expires_at"` // RFC3339
+	JobID      laxString `json:"job_id"`
+	Prefix28   string    `json:"prefix_28"` // hex-encoded
+	NonceStart uint32    `json:"nonce_start"`
+	NonceEnd   uint32    `json:"nonce_end"`
+	ExpiresAt  string    `json:"expires_at"` // RFC3339
+}
+
+// laxString unmarshals a JSON value that may be either a string or a number into
+// a string representation. This makes the client tolerant to master API
+// responses that emit numeric job IDs.
+type laxString string
+
+func (s *laxString) UnmarshalJSON(b []byte) error {
+	// Handle JSON string
+	if len(b) == 0 {
+		*s = ""
+		return nil
+	}
+	// Try to unmarshal into a plain string first
+	var str string
+	if err := json.Unmarshal(b, &str); err == nil {
+		*s = laxString(str)
+		return nil
+	}
+	// Fallback: unmarshal into an interface and stringify (numbers, etc.)
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return fmt.Errorf("laxString unmarshal failed: %w", err)
+	}
+	*s = laxString(fmt.Sprint(v))
+	return nil
+}
+
+// truncateBytes returns at most n bytes from b (safely) for logging.
+func truncateBytes(b []byte, n int) []byte {
+	if len(b) <= n {
+		return b
+	}
+	out := make([]byte, n)
+	copy(out, b[:n])
+	return out
 }
 
 // checkpointRequest is the payload sent to update a job's checkpoint.
