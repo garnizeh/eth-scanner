@@ -15,6 +15,9 @@ type Config struct {
 	WorkerID           string
 	APIKey             string
 	CheckpointInterval time.Duration
+	// Retry configuration
+	RetryMinDelay time.Duration
+	RetryMaxDelay time.Duration
 }
 
 // LoadConfig reads configuration from environment variables and validates them.
@@ -65,6 +68,8 @@ func LoadConfig() (*Config, error) {
 		WorkerID:           workerID,
 		APIKey:             apiKey,
 		CheckpointInterval: checkpointInterval,
+		RetryMinDelay:      1 * time.Second,
+		RetryMaxDelay:      5 * time.Minute,
 	}, nil
 }
 
