@@ -10,6 +10,8 @@ import (
 )
 
 type Querier interface {
+	// Clear worker assignment for long-stale processing jobs so they can be re-leased
+	CleanupStaleJobs(ctx context.Context, thresholdSeconds sql.NullString) error
 	// Mark a batch as completed
 	CompleteBatch(ctx context.Context, arg CompleteBatchParams) error
 	// Create a new batch (job) for a worker

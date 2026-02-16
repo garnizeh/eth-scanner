@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -36,6 +38,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.TargetAddress != "0x000000000000000000000000000000000000dEaD" {
 		t.Fatalf("expected default TargetAddress dead, got %s", cfg.TargetAddress)
 	}
+	if cfg.StaleJobThresholdSeconds != 604800 {
+		t.Fatalf("expected default StaleJobThresholdSeconds 604800, got %d", cfg.StaleJobThresholdSeconds)
+	}
+	if cfg.CleanupIntervalSeconds != 21600 {
+		t.Fatalf("expected default CleanupIntervalSeconds 21600, got %d", cfg.CleanupIntervalSeconds)
+	}
 }
 
 func TestLoad_CustomEnv(t *testing.T) {
@@ -68,6 +76,10 @@ func TestLoad_CustomEnv(t *testing.T) {
 	if cfg.TargetAddress != "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" {
 		t.Fatalf("expected TargetAddress override, got %s", cfg.TargetAddress)
 	}
+	// Defaults not set in this test; ensure parsing does not error when unset
+	if cfg.StaleJobThresholdSeconds != 604800 {
+		t.Fatalf("expected default StaleJobThresholdSeconds when unset, got %d", cfg.StaleJobThresholdSeconds)
+	}
 }
 
 func TestLoad_InvalidShutdownTimeout(t *testing.T) {
@@ -75,6 +87,23 @@ func TestLoad_InvalidShutdownTimeout(t *testing.T) {
 	t.Setenv("MASTER_SHUTDOWN_TIMEOUT", "notaduration")
 	if _, err := Load(); err == nil {
 		t.Fatalf("expected error for invalid MASTER_SHUTDOWN_TIMEOUT, got nil")
+	}
+}
+
+func TestLoad_CustomCleanupEnv(t *testing.T) {
+	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("MASTER_STALE_JOB_THRESHOLD", "3600")
+	t.Setenv("MASTER_CLEANUP_INTERVAL", "1200")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	if cfg.StaleJobThresholdSeconds != 3600 {
+		t.Fatalf("expected StaleJobThresholdSeconds 3600, got %d", cfg.StaleJobThresholdSeconds)
+	}
+	if cfg.CleanupIntervalSeconds != 1200 {
+		t.Fatalf("expected CleanupIntervalSeconds 1200, got %d", cfg.CleanupIntervalSeconds)
 	}
 }
 
@@ -127,6 +156,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	if cfg.APIKey != "s3cr3t" {
 		t.Fatalf("expected APIKey s3cr3t, got %q", cfg.APIKey)
 	}
+	if cfg.StaleJobThresholdSeconds != 604800 {
+		t.Fatalf("expected default stale threshold when unset, got %d", cfg.StaleJobThresholdSeconds)
+	}
+	if cfg.CleanupIntervalSeconds != 21600 {
+		t.Fatalf("expected default cleanup interval when unset, got %d", cfg.CleanupIntervalSeconds)
+	}
 }
 
 func TestLoad_InvalidTimeout(t *testing.T) {
@@ -151,5 +186,53 @@ func TestLoad_MissingDBPath(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatalf("expected error when MASTER_DB_PATH is missing, got nil")
+	}
+}
+
+func TestLoad_InvalidStaleJobThreshold(t *testing.T) {
+	t.Parallel()
+
+	// preserve env
+	origDB := os.Getenv("MASTER_DB_PATH")
+	origStale := os.Getenv("MASTER_STALE_JOB_THRESHOLD")
+	defer func() {
+		_ = os.Setenv("MASTER_DB_PATH", origDB)
+		_ = os.Setenv("MASTER_STALE_JOB_THRESHOLD", origStale)
+	}()
+
+	// ensure DBPath is set so Load progresses to parsing the threshold
+	_ = os.Setenv("MASTER_DB_PATH", "dummy")
+	_ = os.Setenv("MASTER_STALE_JOB_THRESHOLD", "not-an-int")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatalf("expected error for invalid MASTER_STALE_JOB_THRESHOLD, got nil")
+	}
+	if !strings.Contains(err.Error(), "MASTER_STALE_JOB_THRESHOLD") {
+		t.Fatalf("error does not contain expected substring; got: %v", err)
+	}
+}
+
+func TestLoad_InvalidCleanupInterval(t *testing.T) {
+	t.Parallel()
+
+	// preserve env
+	origDB := os.Getenv("MASTER_DB_PATH")
+	origCleanup := os.Getenv("MASTER_CLEANUP_INTERVAL")
+	defer func() {
+		_ = os.Setenv("MASTER_DB_PATH", origDB)
+		_ = os.Setenv("MASTER_CLEANUP_INTERVAL", origCleanup)
+	}()
+
+	// ensure DBPath is set so Load progresses to parsing the cleanup interval
+	_ = os.Setenv("MASTER_DB_PATH", "dummy")
+	_ = os.Setenv("MASTER_CLEANUP_INTERVAL", "not-an-int")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatalf("expected error for invalid MASTER_CLEANUP_INTERVAL, got nil")
+	}
+	if !strings.Contains(err.Error(), "MASTER_CLEANUP_INTERVAL") {
+		t.Fatalf("error does not contain expected substring; got: %v", err)
 	}
 }

@@ -242,3 +242,46 @@ func TestUTCTimestamps(t *testing.T) {
 		t.Errorf("ExpiresAt should be UTC, got %s", job.ExpiresAt.Time.Location())
 	}
 }
+
+func TestCleanupStaleJobs(t *testing.T) {
+	ctx := context.Background()
+	db, queries := setupTestDB(t)
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("db.Close failed: %v", err)
+		}
+	}()
+
+	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
+
+	// Insert a processing job with an old last_checkpoint_at (8 days ago)
+	res, err := db.ExecContext(ctx, `
+		INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, worker_id, last_checkpoint_at, created_at)
+		VALUES (?, ?, ?, 'processing', ?, datetime('now','-8 days'), datetime('now','utc'))
+	`, prefix, 0, 1000, "dead-worker")
+	if err != nil {
+		t.Fatalf("failed to insert stale job: %v", err)
+	}
+	jid, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("failed to get last insert id: %v", err)
+	}
+
+	// Run cleanup with threshold 7 days (604800 seconds), job should be cleared
+	thr := sql.NullString{String: "604800", Valid: true}
+	if err := queries.CleanupStaleJobs(ctx, thr); err != nil {
+		t.Fatalf("CleanupStaleJobs failed: %v", err)
+	}
+
+	// Verify job updated to pending and worker_id NULL
+	job, err := queries.GetJobByID(ctx, jid)
+	if err != nil {
+		t.Fatalf("GetJobByID failed: %v", err)
+	}
+	if job.Status != "pending" {
+		t.Fatalf("expected job status pending after cleanup, got %s", job.Status)
+	}
+	if job.WorkerID.Valid {
+		t.Fatalf("expected worker_id to be NULL after cleanup, got %v", job.WorkerID)
+	}
+}

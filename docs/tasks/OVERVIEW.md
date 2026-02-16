@@ -244,6 +244,8 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
 | A01-T010 | Implement worker-specific prefix affinity for vertical nonce exhaustion | High | P04-T050, P05-T030 |
+| A01-T020 | Master background cleanup for abandoned leases (stale jobs reassignment) | Medium | A01-T010 |
+| A01-T030 | Worker dynamic batch size adjustment based on target job duration | Medium | None |
 
 **Note:** Adhoc tasks (A0X-TXXX) are created on-demand to address performance issues, bugs, or optimizations discovered during development. They follow the same workflow as regular phase tasks but are tracked separately for visibility.
 

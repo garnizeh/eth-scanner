@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/garnizeh/eth-scanner/internal/config"
+	"github.com/garnizeh/eth-scanner/internal/database"
 )
 
 // Server is the HTTP server for the Master API.
@@ -90,6 +91,41 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
+
+	// Start background cleanup for stale jobs. Runs in a goroutine and stops
+	// when the server context is cancelled.
+	go func() {
+		cleanupCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		interval := time.Duration(21600) * time.Second
+		if s.cfg != nil && s.cfg.CleanupIntervalSeconds > 0 {
+			interval = time.Duration(s.cfg.CleanupIntervalSeconds) * time.Second
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+				// perform cleanup with threshold from config
+				threshold := int64(604800)
+				if s.cfg != nil && s.cfg.StaleJobThresholdSeconds > 0 {
+					threshold = s.cfg.StaleJobThresholdSeconds
+				}
+				q := database.NewQueries(s.db)
+				// sqlc generated CleanupStaleJobs accepts sql.NullString for the
+				// :threshold_seconds parameter (string interpolation for datetime).
+				thr := sql.NullString{String: fmt.Sprintf("%d", threshold), Valid: true}
+				if err := q.CleanupStaleJobs(context.Background(), thr); err != nil {
+					log.Printf("cleanup stale jobs failed: %v", err)
+				} else {
+					log.Printf("cleanup stale jobs executed with threshold %d seconds", threshold)
+				}
+			}
+		}
+	}()
 
 	errCh := make(chan error, 1)
 	go func() {
