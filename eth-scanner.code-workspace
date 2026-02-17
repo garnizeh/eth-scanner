@@ -44,6 +44,11 @@
       "/^cd /home/user/code/garnizeh/eth-scanner/go && make fmt$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "sqlite3": true,
+      "/^cd esp32 && pio run$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }

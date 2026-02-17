@@ -16,6 +16,8 @@ type Manager struct {
 	db *database.Queries
 }
 
+var ErrPrefixExhausted = errors.New("requested prefix is already fully scanned or unavailable")
+
 // New constructs a new Manager with the provided database queries.
 func New(db *database.Queries) *Manager {
 	return &Manager{db: db}
@@ -127,27 +129,48 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 	if !found {
 		// No previous batches for this prefix: start at 0
 		nonceStart := uint64(0)
-		nonceEnd64 := nonceStart + uint64(batchSize) - 1
-		if nonceEnd64 > uint64(math.MaxUint32) {
-			return 0, 0, fmt.Errorf("batch size causes nonce_end overflow")
+		// remaining slots including nonceStart up to MaxUint32
+		remaining := uint64(math.MaxUint32) - nonceStart + 1
+		if remaining == 0 {
+			return 0, 0, fmt.Errorf("nonce space exhausted for this prefix")
+		}
+		// If requested batch is larger than remaining, cap to remaining
+		var alloc = uint64(batchSize)
+		if alloc > remaining {
+			alloc = remaining
+		}
+		nonceEnd64 := nonceStart + alloc - 1
+		// ensure values fit in uint32 before converting (silence static analyzers)
+		if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
+			return 0, 0, fmt.Errorf("nonce range overflow")
 		}
 		return uint32(nonceStart), uint32(nonceEnd64), nil
 	}
 
 	if lastEnd >= uint64(math.MaxUint32) {
-		return 0, 0, fmt.Errorf("nonce space exhausted for this prefix")
+		return 0, 0, ErrPrefixExhausted
 	}
 
 	nonceStart := lastEnd + 1
-	// Check overflow when adding batchSize-1
-	if uint64(batchSize) > 0 && nonceStart > uint64(math.MaxUint32) {
+	if nonceStart > uint64(math.MaxUint32) {
 		return 0, 0, fmt.Errorf("nonceStart overflow")
 	}
-	nonceEnd64 := nonceStart + uint64(batchSize) - 1
-	if nonceEnd64 > uint64(math.MaxUint32) {
-		return 0, 0, fmt.Errorf("batch size causes nonce_end overflow")
+	// remaining slots including nonceStart up to MaxUint32
+	remaining := uint64(math.MaxUint32) - nonceStart + 1
+	if remaining == 0 {
+		return 0, 0, ErrPrefixExhausted
 	}
+	// cap allocation to remaining if requested is larger
+	var alloc = uint64(batchSize)
+	if alloc > remaining {
+		alloc = remaining
+	}
+	nonceEnd64 := nonceStart + alloc - 1
 
+	// ensure values fit in uint32 before converting (silence static analyzers)
+	if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
+		return 0, 0, fmt.Errorf("nonce range overflow")
+	}
 	return uint32(nonceStart), uint32(nonceEnd64), nil
 }
 
@@ -173,6 +196,13 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 	// Prepare params for CreateBatch (sqlc generated)
 	// Ensure expires_at is set using UTC-based lease duration (1 hour)
 	leaseSeconds := int64((1 * time.Hour).Seconds())
+	// Actual allocated batch size may be smaller than requested if near nonce space end
+	allocated := uint64(end) - uint64(start) + 1
+	// safe cast to int64 after explicit bounds check to satisfy static analyzers
+	if allocated > uint64(math.MaxInt64) {
+		return nil, fmt.Errorf("allocated batch size too large: %d", allocated)
+	}
+	allocatedInt := int64(allocated)
 	params := database.CreateBatchParams{
 		Prefix28:           prefix28,
 		NonceStart:         int64(start),
@@ -181,7 +211,7 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 		WorkerID:           sql.NullString{Valid: false},
 		WorkerType:         sql.NullString{Valid: false},
 		LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-		RequestedBatchSize: sql.NullInt64{Int64: int64(batchSize), Valid: true},
+		RequestedBatchSize: sql.NullInt64{Int64: allocatedInt, Valid: true},
 	}
 
 	job, err := m.db.CreateBatch(ctx, params)

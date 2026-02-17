@@ -752,7 +752,7 @@ SELECT prefix_28, MAX(nonce_end) as highest_nonce
 FROM jobs
 WHERE worker_id = ?
 GROUP BY prefix_28
-ORDER BY MAX(nonce_end) DESC
+ORDER BY MAX(created_at) DESC
 LIMIT 1
 `
 

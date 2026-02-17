@@ -3,7 +3,9 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"math"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -188,14 +190,22 @@ func TestGetNextNonceRange_Overflow(t *testing.T) {
 
 	// set last nonce_end near max uint32
 	prefix := make([]byte, 28)
-	near := int64(math.MaxUint32 - 10)
-	if _, err := db.ExecContext(ctx, `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, requested_batch_size) VALUES (?, ?, ?, 'completed', ?)`, prefix, 0, near, 1000); err != nil {
+	// use uint32 to avoid signed->unsigned conversion warnings
+	near := uint32(math.MaxUint32 - 10)
+	if _, err := db.ExecContext(ctx, `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, requested_batch_size) VALUES (?, ?, ?, 'completed', ?)`, prefix, 0, int64(near), 1000); err != nil {
 		t.Fatalf("insert job: %v", err)
 	}
 
-	_, _, err := m.GetNextNonceRange(ctx, prefix, 20)
-	if err == nil {
-		t.Fatalf("expected overflow error, got nil")
+	// After change: allocation should be capped to remaining nonce space
+	start, end, err := m.GetNextNonceRange(ctx, prefix, 20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if start != near+1 {
+		t.Fatalf("expected start %d, got %d", near+1, start)
+	}
+	if end != uint32(math.MaxUint32) {
+		t.Fatalf("expected end %d, got %d", uint32(math.MaxUint32), end)
 	}
 }
 
@@ -402,5 +412,64 @@ func TestFindOrCreateMacroJob_LeaseExpiration(t *testing.T) {
 	}
 	if j.CurrentNonce.Int64 != 12345 {
 		t.Fatalf("expected current_nonce to be preserved (12345), got %v", j.CurrentNonce)
+	}
+}
+
+// TestCreateBatch_CapsToRemaining ensures that when the nonce space for a prefix
+// has fewer remaining nonces than requested, the manager will allocate only the
+// remaining range (i.e. cap the batch to avoid overflow).
+func TestCreateBatch_CapsToRemaining(t *testing.T) {
+	ctx := context.Background()
+	// Create a temporary DB file
+	d := t.TempDir()
+	dbPath := filepath.Join(d, "eth-scanner.db")
+
+	// init DB
+	db, err := database.InitDB(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	q := database.NewQueries(db)
+	m := New(q)
+
+	// Prepare a deterministic 28-byte prefix
+	prefix, _ := hex.DecodeString("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c")
+	if len(prefix) != 28 {
+		t.Fatalf("prefix length unexpected: %d", len(prefix))
+	}
+
+	// Insert an existing completed job that ends near MaxUint32 - 500
+	const maxUint32 uint64 = 4294967295
+	var lastEnd = int64(maxUint32 - 500)
+	insertSQL := `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, created_at, completed_at)
+VALUES (?, ?, ?, 'completed', datetime('now','utc'), datetime('now','utc'))`
+	if _, err := db.ExecContext(ctx, insertSQL, prefix, 0, lastEnd); err != nil {
+		t.Fatalf("failed to seed jobs: %v", err)
+	}
+
+	// Now request a batch larger than remaining (e.g., 1000 > 501 remaining)
+	requested := uint32(1000)
+	job, err := m.CreateBatch(ctx, prefix, requested)
+	if err != nil {
+		t.Fatalf("CreateBatch failed: %v", err)
+	}
+
+	// Assert the allocated range starts at lastEnd+1 and ends at MaxUint32
+	if job.NonceStart != lastEnd+1 {
+		t.Fatalf("unexpected nonce_start: got %d want %d", job.NonceStart, lastEnd+1)
+	}
+	if job.NonceEnd != int64(maxUint32) {
+		t.Fatalf("unexpected nonce_end: got %d want %d", job.NonceEnd, maxUint32)
+	}
+
+	// Ensure the requested_batch_size stored matches the actual allocated size
+	allocated := job.NonceEnd - job.NonceStart + 1
+	if !job.RequestedBatchSize.Valid {
+		t.Fatalf("requested_batch_size not set in created job")
+	}
+	if job.RequestedBatchSize.Int64 != allocated {
+		t.Fatalf("requested_batch_size stored mismatch: got %d want %d", job.RequestedBatchSize.Int64, allocated)
 	}
 }
