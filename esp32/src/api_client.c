@@ -43,13 +43,15 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
                         job_info_t *out_job)
 {
+    const char *url = CONFIG_ETHSCANNER_API_URL "/api/v1/jobs/lease";
+    ESP_LOGI(TAG, "Requesting lease for worker: %s (URL: %s)", worker_id, url);
     char response_buffer[MAX_HTTP_RECV_BUFFER] = {0};
     response_data_t res = {
         .buffer = response_buffer,
         .buffer_len = 0};
 
     esp_http_client_config_t config = {
-        .url = CONFIG_ETHSCANNER_API_URL "/api/v1/jobs/lease",
+        .url = url,
         .method = HTTP_METHOD_POST,
         .event_handler = http_event_handler,
         .user_data = &res,
@@ -139,6 +141,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
 {
     char url[256];
     snprintf(url, sizeof(url), "%s/api/v1/jobs/%lld/checkpoint", CONFIG_ETHSCANNER_API_URL, job_id);
+    ESP_LOGI(TAG, "Sending checkpoint for job %lld to %s", job_id, url);
 
     esp_http_client_config_t config = {
         .url = url,
@@ -194,6 +197,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
 {
     char url[256];
     snprintf(url, sizeof(url), "%s/api/v1/jobs/%lld/complete", CONFIG_ETHSCANNER_API_URL, job_id);
+    ESP_LOGI(TAG, "Completing job %lld (final_nonce: %u) (URL: %s)", job_id, (unsigned int)final_nonce, url);
 
     esp_http_client_config_t config = {
         .url = url,

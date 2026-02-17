@@ -49,6 +49,10 @@
       "/^cd esp32 && pio run$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^pio test -e esp32doit-devkit-v1$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }
