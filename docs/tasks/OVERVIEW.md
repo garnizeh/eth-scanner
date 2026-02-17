@@ -57,14 +57,14 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P01-T010 | Initialize Go module in `go/` folder | High | None |
-| P01-T020 | Create `internal/` folder structure (api, database, jobs, worker, config) | High | P01-T010 |
-| P01-T030 | Create `.gitignore` for Go, SQLite, IDE files | High | None |
-| P01-T040 | Set up `sqlc` configuration file (`sqlc.yaml`) | High | P01-T010 |
-| P01-T050 | Create `scripts/init-db.sh` (initialize SQLite database with schema) | Medium | None |
-| P01-T060 | Verify Go toolchain (no CGO requirement for `modernc.org/sqlite`) | High | P01-T010 |
-| P01-T070 | Create basic `Makefile` or `justfile` for common tasks (build, test, run) | Low | P01-T010 |
-| P01-T080 | Setup GitHub Actions CI Workflow | High | P01-T070 |
+| P01-T010 | Initialize Go module in `go/` folder | High | None | ✅ Completed |
+| P01-T020 | Create `internal/` folder structure (api, database, jobs, worker, config) | High | P01-T010 | ✅ Completed |
+| P01-T030 | Create `.gitignore` for Go, SQLite, IDE files | High | None | ✅ Completed |
+| P01-T040 | Set up `sqlc` configuration file (`sqlc.yaml`) | High | P01-T010 | ✅ Completed |
+| P01-T050 | Create `scripts/init-db.sh` (initialize SQLite database with schema) | Medium | None | ✅ Completed |
+| P01-T060 | Verify Go toolchain (no CGO requirement for `modernc.org/sqlite`) | High | P01-T010 | ✅ Completed |
+| P01-T070 | Create basic `Makefile` or `justfile` for common tasks (build, test, run) | Low | P01-T010 | ✅ Completed |
+| P01-T080 | Setup GitHub Actions CI Workflow | High | P01-T070 | ✅ Completed |
 
 ---
 
@@ -73,14 +73,14 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P02-T010 | Validate `go/internal/database/sql/001_schema.sql` against SDD requirements | High | None |
-| P02-T020 | Create `go/internal/database/sql/queries.sql` with all sqlc queries | High | P02-T010 |
-| P02-T030 | Configure `sqlc.yaml` for code generation | High | P01-T040 |
-| P02-T040 | Run `sqlc generate` and verify generated code in `internal/database/` | High | P02-T020, P02-T030 |
-| P02-T050 | Implement `internal/database/db.go` (SQLite connection with `modernc.org/sqlite`) | High | P02-T040 |
-| P02-T060 | Create database initialization function (apply schema on first run) | High | P02-T050 |
-| P02-T070 | Implement database migration versioning using goose lib | Low | P02-T060 |
-| P02-T080 | Write unit tests for database layer (connection, schema application) | Medium | P02-T060 |
+| P02-T010 | Validate `go/internal/database/sql/001_schema.sql` against SDD requirements | High | None | ✅ Completed |
+| P02-T020 | Create `go/internal/database/sql/queries.sql` with all sqlc queries | High | P02-T010 | ✅ Completed |
+| P02-T030 | Configure `sqlc.yaml` for code generation | High | P01-T040 | ✅ Completed |
+| P02-T040 | Run `sqlc generate` and verify generated code in `internal/database/` | High | P02-T020, P02-T030 | ✅ Completed |
+| P02-T050 | Implement `internal/database/db.go` (SQLite connection with `modernc.org/sqlite`) | High | P02-T040 | ✅ Completed |
+| P02-T060 | Create database initialization function (apply schema on first run) | High | P02-T050 | ✅ Completed |
+| P02-T070 | Implement database migration versioning using goose lib | Low | P02-T060 | ✅ Completed |
+| P02-T080 | Write unit tests for database layer (connection, schema application) | Medium | P02-T060 | ✅ Completed |
 
 ---
 
@@ -89,14 +89,14 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P03-T010 | Implement `internal/config/config.go` (load from env/file: port, DB path) | High | P01-T020 |
-| P03-T020 | Implement `internal/server/server.go` (HTTP server setup with `net/http` or `chi`) | High | P03-T010 |
-| P03-T030 | Implement `internal/server/middleware.go` (logging, CORS, request ID) | Medium | P03-T020 |
-| P03-T040 | Implement `internal/server/routes.go` (route registration) | High | P03-T020 |
-| P03-T050 | Create `GET /health` endpoint (basic health check) | High | P03-T040 |
-| P03-T060 | Create `cmd/master/main.go` entry point (wire dependencies, start server) | High | P03-T020 |
-| P03-T070 | Test server startup and `/health` endpoint manually | High | P03-T060 |
-| P03-T080 | Implement graceful shutdown with `context.Context` | Medium | P03-T060 |
+| P03-T010 | Implement `internal/config/config.go` (load from env/file: port, DB path) | High | P01-T020 | ✅ Completed |
+| P03-T020 | Implement `internal/server/server.go` (HTTP server setup with `net/http` or `chi`) | High | P03-T010 | ✅ Completed |
+| P03-T030 | Implement `internal/server/middleware.go` (logging, CORS, request ID) | Medium | P03-T020 | ✅ Completed |
+| P03-T040 | Implement `internal/server/routes.go` (route registration) | High | P03-T020 | ✅ Completed |
+| P03-T050 | Create `GET /health` endpoint (basic health check) | High | P03-T040 | ✅ Completed |
+| P03-T060 | Create `cmd/master/main.go` entry point (wire dependencies, start server) | High | P03-T020 | ✅ Completed |
+| P03-T070 | Test server startup and `/health` endpoint manually | High | P03-T060 | ✅ Completed |
+| P03-T080 | Implement graceful shutdown with `context.Context` | Medium | P03-T060 | ✅ Completed |
 
 ---
 
@@ -105,22 +105,22 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P04-T010 | Implement `internal/jobs/manager.go` skeleton (job manager struct) | High | P02-T050 |
-| P04-T020 | Implement job lease logic: find available/expired job from DB | High | P04-T010, P02-T040 |
-| P04-T030 | Implement nonce range allocation: get next available range for prefix | High | P04-T020 |
-| P04-T040 | Implement batch creation: create new job with dynamic batch size | High | P04-T030 |
-| P04-T050 | Create `POST /api/v1/jobs/lease` handler (request validation + lease logic) | High | P04-T040 |
-| P04-T060 | Implement UTC timestamp handling for `expires_at` (no `time.Local`) | High | P04-T050 |
-| P04-T070 | Create `PATCH /api/v1/jobs/{id}/checkpoint` handler (update progress) | High | P04-T010, P02-T040 |
-| P04-T080 | Implement worker_id validation in checkpoint endpoint | High | P04-T070 |
-| P04-T090 | Create `POST /api/v1/jobs/{id}/complete` handler (mark job completed) | High | P04-T010, P02-T040 |
-| P04-T100 | Implement final_nonce validation (must equal nonce_end) | High | P04-T090 |
-| P04-T110 | Create `POST /api/v1/results` handler (submit found private key) | Medium | P04-T010, P02-T040 |
-| P04-T120 | Create `GET /api/v1/stats` handler (return statistics from view) | Low | P04-T010, P02-T040 |
-| P04-T130 | Write integration tests for lease endpoint (pending/expired jobs) | High | P04-T050 |
-| P04-T140 | Write integration tests for checkpoint endpoint | Medium | P04-T070 |
-| P04-T150 | Write integration tests for complete endpoint | Medium | P04-T090 |
-| P04-T160 | Add API key middleware for master API | Medium | P04-T150 |
+| P04-T010 | Implement `internal/jobs/manager.go` skeleton (job manager struct) | High | P02-T050 | ✅ Completed |
+| P04-T020 | Implement job lease logic: find available/expired job from DB | High | P04-T010, P02-T040 | ✅ Completed |
+| P04-T030 | Implement nonce range allocation: get next available range for prefix | High | P04-T020 | ✅ Completed |
+| P04-T040 | Implement batch creation: create new job with dynamic batch size | High | P04-T030 | ✅ Completed |
+| P04-T050 | Create `POST /api/v1/jobs/lease` handler (request validation + lease logic) | High | P04-T040 | ✅ Completed |
+| P04-T060 | Implement UTC timestamp handling for `expires_at` (no `time.Local`) | High | P04-T050 | ✅ Completed |
+| P04-T070 | Create `PATCH /api/v1/jobs/{id}/checkpoint` handler (update progress) | High | P04-T010, P02-T040 | ✅ Completed |
+| P04-T080 | Implement worker_id validation in checkpoint endpoint | High | P04-T070 | ✅ Completed |
+| P04-T090 | Create `POST /api/v1/jobs/{id}/complete` handler (mark job completed) | High | P04-T010, P02-T040 | ✅ Completed |
+| P04-T100 | Implement final_nonce validation (must equal nonce_end) | High | P04-T090 | ✅ Completed |
+| P04-T110 | Create `POST /api/v1/results` handler (submit found private key) | Medium | P04-T010, P02-T040 | ✅ Completed |
+| P04-T120 | Create `GET /api/v1/stats` handler (return statistics from view) | Low | P04-T010, P02-T040 | ✅ Completed |
+| P04-T130 | Write integration tests for lease endpoint (pending/expired jobs) | High | P04-T050 | ✅ Completed |
+| P04-T140 | Write integration tests for checkpoint endpoint | Medium | P04-T070 | ✅ Completed |
+| P04-T150 | Write integration tests for complete endpoint | Medium | P04-T090 | ✅ Completed |
+| P04-T160 | Add API key middleware for master API | Medium | P04-T150 | ✅ Completed |
 
 ---
 
@@ -129,16 +129,16 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P05-T010 | Implement `internal/worker/config.go` (worker config: API URL, worker ID) | High | None |
-| P05-T020 | Implement `internal/worker/client.go` (HTTP client for Master API) | High | P05-T010 |
-| P05-T030 | Implement `LeaseBatch()` function (POST /api/v1/jobs/lease) | High | P05-T020 |
-| P05-T040 | Implement `UpdateCheckpoint()` function (PATCH /api/v1/jobs/{id}/checkpoint) | High | P05-T020 |
-| P05-T050 | Implement `CompleteBatch()` function (POST /api/v1/jobs/{id}/complete) | High | P05-T020 |
-| P05-T060 | Implement `SubmitResult()` function (POST /api/v1/results) | Medium | P05-T020 |
-| P05-T070 | Implement batch size calculator using `runtime.NumCPU()` | High | None |
-| P05-T080 | Implement worker main loop (lease → process → complete) | High | P05-T030, P05-T050 |
-| P05-T090 | Implement retry logic with exponential backoff (when no jobs available) | Medium | P05-T080 |
-| P05-T100 | Create `cmd/worker-pc/main.go` entry point | High | P05-T080 |
+| P05-T010 | Implement `internal/worker/config.go` (worker config: API URL, worker ID) | High | None | ✅ Completed |
+| P05-T020 | Implement `internal/worker/client.go` (HTTP client for Master API) | High | P05-T010 | ✅ Completed |
+| P05-T030 | Implement `LeaseBatch()` function (POST /api/v1/jobs/lease) | High | P05-T020 | ✅ Completed |
+| P05-T040 | Implement `UpdateCheckpoint()` function (PATCH /api/v1/jobs/{id}/checkpoint) | High | P05-T020 | ✅ Completed |
+| P05-T050 | Implement `CompleteBatch()` function (POST /api/v1/jobs/{id}/complete) | High | P05-T020 | ✅ Completed |
+| P05-T060 | Implement `SubmitResult()` function (POST /api/v1/results) | Medium | P05-T020 | ✅ Completed |
+| P05-T070 | Implement batch size calculator using `runtime.NumCPU()` | High | None | ✅ Completed |
+| P05-T080 | Implement worker main loop (lease → process → complete) | High | P05-T030, P05-T050 | ✅ Completed |
+| P05-T090 | Implement retry logic with exponential backoff (when no jobs available) | Medium | P05-T080 | ✅ Completed |
+| P05-T100 | Create `cmd/worker-pc/main.go` entry point | High | P05-T080 | ✅ Completed |
 
 ---
 
@@ -147,18 +147,18 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P06-T010 | Implement `internal/worker/crypto.go` (import `go-ethereum/crypto`) | High | None |
-| P06-T020 | Implement `DeriveEthereumAddress()` function (private key → address) | High | P06-T010 |
-| P06-T030 | Implement key construction (prefix_28 + nonce little-endian) | High | P06-T020 |
-| P06-T040 | Implement `internal/worker/scanner.go` (nonce range scanning) | High | P06-T030 |
-| P06-T050 | Implement worker pool with goroutines (`runtime.NumCPU()` workers) | High | P06-T040 |
-| P06-T060 | Implement nonce range partitioning across workers | High | P06-T050 |
-| P06-T070 | Implement atomic progress tracking (`atomic.Uint64` for current_nonce) | High | P06-T060 |
-| P06-T080 | Implement checkpoint goroutine (periodic PATCH every 5 minutes) | High | P06-T070, P05-T040 |
-| P06-T090 | Implement context cancellation for lease expiration | High | P06-T050 |
-| P06-T100 | Optimize crypto loop (buffer reuse, minimize allocations) | Medium | P06-T040 |
-| P06-T110 | Write benchmarks for key scanning throughput (keys/sec) | Medium | P06-T040 |
-| P06-T120 | Replace worker simulation with real job processing | High | P06-T100, P06-T110 |
+| P06-T010 | Implement `internal/worker/crypto.go` (import `go-ethereum/crypto`) | High | None | ✅ Completed |
+| P06-T020 | Implement `DeriveEthereumAddress()` function (private key → address) | High | P06-T010 | ✅ Completed |
+| P06-T030 | Implement key construction (prefix_28 + nonce little-endian) | High | P06-T020 | ✅ Completed |
+| P06-T040 | Implement `internal/worker/scanner.go` (nonce range scanning) | High | P06-T030 | ✅ Completed |
+| P06-T050 | Implement worker pool with goroutines (`runtime.NumCPU()` workers) | High | P06-T040 | ✅ Completed |
+| P06-T060 | Implement nonce range partitioning across workers | High | P06-T050 | ✅ Completed |
+| P06-T070 | Implement atomic progress tracking (`atomic.Uint64` for current_nonce) | High | P06-T060 | ✅ Completed |
+| P06-T080 | Implement checkpoint goroutine (periodic PATCH every 5 minutes) | High | P06-T070, P05-T040 | ✅ Completed |
+| P06-T090 | Implement context cancellation for lease expiration | High | P06-T050 | ✅ Completed |
+| P06-T100 | Optimize crypto loop (buffer reuse, minimize allocations) | Medium | P06-T040 | ✅ Completed |
+| P06-T110 | Write benchmarks for key scanning throughput (keys/sec) | Medium | P06-T040 | ✅ Completed |
+| P06-T120 | Replace worker simulation with real job processing | High | P06-T100, P06-T110 | ✅ Completed |
 
 ---
 
@@ -167,16 +167,16 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P07-T010 | Create `esp32/esp32-worker.ino` skeleton (Arduino project) | High | None |
-| P07-T020 | Create `esp32/config.h` (WiFi SSID, password, API URL placeholders) | High | P07-T010 |
-| P07-T030 | Implement WiFi connection manager (auto-reconnect on failure) | High | P07-T020 |
-| P07-T040 | Implement HTTP client wrapper (POST/PATCH requests to Master API) | High | P07-T030 |
-| P07-T050 | Initialize NVS (Non-Volatile Storage) for checkpoint persistence | High | P07-T010 |
-| P07-T060 | Implement `saveCheckpoint()` function (write to NVS) | High | P07-T050 |
-| P07-T070 | Implement `loadCheckpoint()` function (read from NVS on boot) | High | P07-T050 |
-| P07-T080 | Implement performance benchmark on boot (10-second dry run) | High | P07-T010 |
-| P07-T090 | Implement batch size calculator (keys/sec × 3600 for 1-hour batch) | High | P07-T080 |
-| P07-T100 | Create global job state struct (prefix_28, nonce_start, nonce_end, etc.) | High | P07-T010 |
+| P07-T010 | Initialize PlatformIO project with `framework = espidf` and define `src/main.c`. | High | None |
+| P07-T020 | Configure `Kconfig.projbuild` for **Menuconfig** integration (WiFi/API URL setup). | High | P07-T010 |
+| P07-T030 | Implement **ESP-NETIF** WiFi handler with Event Loop (Auto-reconnect & Backoff). | High | P07-T020 |
+| P07-T040 | Implement `esp_http_client` wrapper for Master API communication (POST/PATCH). | High | P07-T030 |
+| P07-T050 | Initialize **NVS (Non-Volatile Storage)** and obtain partition handles. | High | P07-T010 |
+| P07-T060 | Implement `save_checkpoint()` using `nvs_set_blob` for atomic job persistence. | High | P07-T050 |
+| P07-T070 | Implement `load_checkpoint()` to restore state during `app_main` boot sequence. | High | P07-T050 |
+| P07-T080 | Implement startup benchmark using `esp_timer_get_time()` for µs precision. | High | P07-T010 |
+| P07-T090 | Implement Batch Size Calculator (Keys/sec logic for 1-hour lease windows). | High | P07-T080 |
+| P07-T100 | Define Global State `struct` (prefix, nonce range, targets) in `shared_types.h`. | High | P07-T010 |
 
 ---
 
@@ -185,18 +185,28 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` library (secp256k1) | High | P07-T010 |
-| P08-T020 | Integrate `keccak256` hashing library | High | P08-T010 |
-| P08-T030 | Implement `deriveAddress()` function (private key → Ethereum address) | High | P08-T020 |
-| P08-T040 | Implement FreeRTOS task for Core 0 (networking + checkpointing) | High | P07-T040, P07-T060 |
-| P08-T050 | Implement job lease logic in Core 0 task (call Master API) | High | P08-T040, P07-T090 |
-| P08-T060 | Implement checkpoint upload logic in Core 0 (every 60 seconds) | High | P08-T040 |
-| P08-T070 | Implement FreeRTOS task for Core 1 (computation hot loop) | High | P08-T030 |
-| P08-T080 | Implement nonce iteration loop (prefix_28 + nonce) | High | P08-T070, P08-T030 |
-| P08-T090 | Implement address comparison with target address | High | P08-T080 |
-| P08-T100 | Implement result submission on match found (notify Core 0) | High | P08-T090 |
-| P08-T110 | Optimize memory usage (static buffers, no heap fragmentation) | Medium | P08-T070 |
-| P08-T120 | Test checkpoint recovery after power cycle | High | P07-T070, P08-T060 |
+| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` as a **CMake component** (Xtensa optimized). | High | P07-T010 |
+| P08-T020 | Implement `keccak256` hashing (utilizing ESP32 SHA Hardware Acceleration). | High | P08-T010 |
+| P08-T030 | Implement `derive_eth_address()` (secp256k1 point multiplication). | High | P08-T020 |
+| P08-T040 | Spawn **Core 0 Task** (`xTaskCreatePinnedToCore`) for Networking & Watchdog. | High | P07-T040 |
+| P08-T050 | Implement Job Lease logic on Core 0 (Inter-task signaling via **Task Notifications**). | High | P08-T040 |
+| P08-T060 | Set up FreeRTOS Timer for periodic background checkpointing (every 60s). | High | P08-T040 |
+| P08-T070 | Spawn **Core 1 Task** with highest priority for the computational hot loop. | High | P08-T030 |
+| P08-T080 | Implement optimized Nonce loop (direct byte manipulation, avoiding `sprintf`). | High | P08-T070 |
+| P08-T090 | Implement binary address comparison using `memcmp` for zero-overhead validation. | High | P08-T080 |
+| P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 |
+| P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 |
+| P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 |
+
+## Technical Notes
+
+### Dual-Core Logic
+* **Core 0 (System Core):** Handles WiFi, HTTP requests, TCP/IP stack, and NVS writes. This prevents "Watchdog Reset" errors and network dropouts.
+* **Core 1 (Worker Core):** Dedicated 100% to the `while(1)` crypto loop. No network calls should be made here to prevent latency spikes.
+
+### Build System
+* Projects use `CMakeLists.txt` for dependency management.
+* Hardware configuration (Clock speed, Flash mode) is managed via `sdkconfig` generated by `pio run -t menuconfig`.
 
 ---
 
@@ -310,15 +320,15 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| A01-T010 | Implement worker-specific prefix affinity for vertical nonce exhaustion | High | P04-T050, P05-T030 |
-| A01-T020 | Master background cleanup for abandoned leases (stale jobs reassignment) | Medium | A01-T010 |
-| A01-T030 | Worker dynamic batch size adjustment based on target job duration | Medium | None |
-| A01-T040 | Refactor jobs table schema for long-lived job model (macro jobs) | High | None |
-| A01-T050 | Implement worker_history table with configurable retention | High | A01-T040 |
-| A01-T055 | Add WORKER_HISTORY_LIMIT configuration support via env var | Medium | A01-T050 |
-| A01-T060 | Update Master API to record worker statistics on checkpoint/complete | High | A01-T050, A01-T055 |
-| A01-T065 | Update PC Worker client to support long-lived jobs and metrics reporting | High | A01-T060 |
-| A01-T070 | Integration testing and validation of optimized job management | High | A01-T065 |
+| A01-T010 | Implement worker-specific prefix affinity for vertical nonce exhaustion | High | P04-T050, P05-T030 | ✅ Completed |
+| A01-T020 | Master background cleanup for abandoned leases (stale jobs reassignment) | Medium | A01-T010 | ✅ Completed |
+| A01-T030 | Worker dynamic batch size adjustment based on target job duration | Medium | None | ✅ Completed |
+| A01-T040 | Refactor jobs table schema for long-lived job model (macro jobs) | High | None | ✅ Completed |
+| A01-T050 | Implement worker_history table with configurable retention | High | A01-T040 | ✅ Completed |
+| A01-T055 | Add WORKER_HISTORY_LIMIT configuration support via env var | Medium | A01-T050 | ✅ Completed |
+| A01-T060 | Update Master API to record worker statistics on checkpoint/complete | High | A01-T050, A01-T055 | ✅ Completed |
+| A01-T065 | Update PC Worker client to support long-lived jobs and metrics reporting | High | A01-T060 | ✅ Completed |
+| A01-T070 | Integration testing and validation of optimized job management | High | A01-T065 | ✅ Completed |
 
 **Note:** Adhoc tasks (A0X-TXXX) are created on-demand to address performance issues, bugs, or optimizations discovered during development. They follow the same workflow as regular phase tasks but are tracked separately for visibility.
 
