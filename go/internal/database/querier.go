@@ -26,6 +26,7 @@ type Querier interface {
 	GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString) ([]Worker, error)
 	// Get all results (limited)
 	GetAllResults(ctx context.Context, limit int64) ([]Result, error)
+	GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error)
 	// Get a specific job by ID
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	// Get jobs by status
@@ -36,6 +37,7 @@ type Querier interface {
 	GetNextNonceRange(ctx context.Context, prefix28 []byte) (interface{}, error)
 	// Get usage statistics per prefix
 	GetPrefixUsage(ctx context.Context, limit int64) ([]GetPrefixUsageRow, error)
+	GetRecentWorkerHistory(ctx context.Context, arg GetRecentWorkerHistoryParams) ([]WorkerHistory, error)
 	// Find a result by private key
 	GetResultByPrivateKey(ctx context.Context, privateKey string) (Result, error)
 	// Find results by Ethereum address
@@ -44,8 +46,13 @@ type Querier interface {
 	GetStats(ctx context.Context) (StatsSummary, error)
 	// Get worker information by ID
 	GetWorkerByID(ctx context.Context, id string) (Worker, error)
+	// Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
+	// This makes the generated sqlc method usable directly with a Go time.Time value.
+	GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]WorkerStatsDaily, error)
 	// Tracks the last prefix assigned to a worker to enable vertical exhaustion
 	GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error)
+	GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error)
+	GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error)
 	// Get statistics per worker
 	GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerStatsRow, error)
 	// Get all workers of a specific type
@@ -56,6 +63,8 @@ type Querier interface {
 	LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, error)
 	// Lease an existing macro job to a worker (if not completed and available)
 	LeaseMacroJob(ctx context.Context, arg LeaseMacroJobParams) (int64, error)
+	// Insert a raw worker history record (tier 1)
+	RecordWorkerStats(ctx context.Context, arg RecordWorkerStatsParams) error
 	// Update job progress checkpoint
 	UpdateCheckpoint(ctx context.Context, arg UpdateCheckpointParams) error
 	// Update worker's total key count

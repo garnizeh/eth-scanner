@@ -192,6 +192,39 @@ GROUP BY prefix_28
 ORDER BY prefix_28
 LIMIT ?;
 
+-- name: RecordWorkerStats :exec
+-- Insert a raw worker history record (tier 1)
+INSERT INTO worker_history (
+    worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at, error_message
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetRecentWorkerHistory :many
+SELECT * FROM worker_history
+WHERE finished_at > datetime('now', '-' || ? || ' seconds')
+ORDER BY finished_at DESC
+LIMIT ?;
+
+-- name: GetWorkerDailyStats :many
+-- Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
+-- This makes the generated sqlc method usable directly with a Go time.Time value.
+SELECT * FROM worker_stats_daily
+WHERE worker_id = ? AND stats_date >= substr(?, 1, 10)
+ORDER BY stats_date DESC;
+
+-- name: GetWorkerMonthlyStats :many
+SELECT * FROM worker_stats_monthly
+WHERE worker_id = ? AND stats_month >= ?
+ORDER BY stats_month DESC;
+
+-- name: GetWorkerLifetimeStats :one
+SELECT * FROM worker_stats_lifetime
+WHERE worker_id = ? LIMIT 1;
+
+-- name: GetAllWorkerLifetimeStats :many
+SELECT * FROM worker_stats_lifetime
+ORDER BY total_keys_scanned DESC;
+
 -- name: GetWorkerStats :many
 -- Get statistics per worker
 SELECT 

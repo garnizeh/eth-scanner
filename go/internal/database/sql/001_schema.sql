@@ -226,6 +226,202 @@ ON workers(last_seen DESC);
 -- Updated for dynamic batching support.
 -- ============================================================================
 
+-- ---------------------------------------------------------------------------
+-- Worker statistics tables (four-tier architecture)
+-- Tier 1: worker_history (raw detail)
+-- Tier 2: worker_stats_daily (per-worker daily aggregates)
+-- Tier 3: worker_stats_monthly (per-worker monthly aggregates)
+-- Tier 4: worker_stats_lifetime (per-worker lifetime totals)
+-- Triggers perform aggregation and per-worker pruning to keep bounded size.
+-- ---------------------------------------------------------------------------
+
+-- Tier 1: Raw worker history (recent batches / jobs)
+CREATE TABLE IF NOT EXISTS worker_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT NOT NULL,
+    worker_type TEXT,
+    job_id INTEGER,
+    batch_size INTEGER,
+    keys_scanned INTEGER,
+    duration_ms INTEGER,
+    keys_per_second REAL,
+    prefix_28 BLOB,
+    nonce_start BIGINT,
+    nonce_end BIGINT,
+    finished_at DATETIME NOT NULL DEFAULT (datetime('now','utc')),
+    error_message TEXT,
+    FOREIGN KEY (job_id) REFERENCES jobs(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_history_worker_finished ON worker_history(worker_id, finished_at DESC);
+CREATE INDEX IF NOT EXISTS idx_worker_history_finished ON worker_history(finished_at DESC);
+
+-- Tier 2: Daily aggregates (one row per worker per date)
+CREATE TABLE IF NOT EXISTS worker_stats_daily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT NOT NULL,
+    stats_date DATE NOT NULL,
+    total_batches INTEGER DEFAULT 0,
+    total_keys_scanned INTEGER DEFAULT 0,
+    total_duration_ms INTEGER DEFAULT 0,
+    keys_per_second_avg REAL DEFAULT 0,
+    keys_per_second_min REAL DEFAULT NULL,
+    keys_per_second_max REAL DEFAULT NULL,
+    error_count INTEGER DEFAULT 0,
+    UNIQUE(worker_id, stats_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_stats_daily_worker_date ON worker_stats_daily(worker_id, stats_date DESC);
+
+-- Tier 3: Monthly aggregates (one row per worker per month)
+CREATE TABLE IF NOT EXISTS worker_stats_monthly (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT NOT NULL,
+    stats_month TEXT NOT NULL, -- YYYY-MM
+    total_batches INTEGER DEFAULT 0,
+    total_keys_scanned INTEGER DEFAULT 0,
+    total_duration_ms INTEGER DEFAULT 0,
+    keys_per_second_avg REAL DEFAULT 0,
+    keys_per_second_min REAL DEFAULT NULL,
+    keys_per_second_max REAL DEFAULT NULL,
+    error_count INTEGER DEFAULT 0,
+    UNIQUE(worker_id, stats_month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_stats_monthly_worker_month ON worker_stats_monthly(worker_id, stats_month DESC);
+
+-- Tier 4: Lifetime totals (one row per worker)
+CREATE TABLE IF NOT EXISTS worker_stats_lifetime (
+    worker_id TEXT PRIMARY KEY,
+    worker_type TEXT,
+    total_batches INTEGER DEFAULT 0,
+    total_keys_scanned INTEGER DEFAULT 0,
+    total_duration_ms INTEGER DEFAULT 0,
+    keys_per_second_avg REAL DEFAULT 0,
+    keys_per_second_best REAL DEFAULT 0,
+    keys_per_second_worst REAL DEFAULT NULL,
+    first_seen_at DATETIME NOT NULL DEFAULT (datetime('now','utc')),
+    last_seen_at DATETIME NOT NULL DEFAULT (datetime('now','utc'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_worker_stats_lifetime_keys ON worker_stats_lifetime(total_keys_scanned DESC);
+
+-- Trigger: aggregate before pruning history rows
+CREATE TRIGGER IF NOT EXISTS trg_aggregate_before_prune_history
+BEFORE DELETE ON worker_history
+FOR EACH ROW
+BEGIN
+    -- Upsert daily aggregate
+    INSERT INTO worker_stats_daily (
+        worker_id, stats_date, total_batches, total_keys_scanned, total_duration_ms,
+        keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count
+    ) VALUES (
+        OLD.worker_id,
+        substr(OLD.finished_at, 1, 10),
+        1,
+        COALESCE(OLD.keys_scanned, 0),
+        COALESCE(OLD.duration_ms, 0),
+        COALESCE(OLD.keys_per_second, 0),
+        OLD.keys_per_second,
+        OLD.keys_per_second,
+        CASE WHEN OLD.error_message IS NULL OR OLD.error_message = '' THEN 0 ELSE 1 END
+    )
+    ON CONFLICT(worker_id, stats_date) DO UPDATE SET
+        total_batches = worker_stats_daily.total_batches + excluded.total_batches,
+        total_keys_scanned = worker_stats_daily.total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = worker_stats_daily.total_duration_ms + excluded.total_duration_ms,
+        -- approximate avg as rolling mean (simple)
+        keys_per_second_avg = (worker_stats_daily.keys_per_second_avg * worker_stats_daily.total_batches + excluded.keys_per_second_avg) / (worker_stats_daily.total_batches + excluded.total_batches),
+        keys_per_second_min = MIN(IFNULL(worker_stats_daily.keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        keys_per_second_max = MAX(IFNULL(worker_stats_daily.keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        error_count = worker_stats_daily.error_count + excluded.error_count;
+
+    -- Upsert monthly aggregate
+    INSERT INTO worker_stats_monthly (
+        worker_id, stats_month, total_batches, total_keys_scanned, total_duration_ms,
+        keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count
+    ) VALUES (
+        OLD.worker_id,
+        substr(OLD.finished_at, 1, 7),
+        1,
+        COALESCE(OLD.keys_scanned, 0),
+        COALESCE(OLD.duration_ms, 0),
+        COALESCE(OLD.keys_per_second, 0),
+        OLD.keys_per_second,
+        OLD.keys_per_second,
+        CASE WHEN OLD.error_message IS NULL OR OLD.error_message = '' THEN 0 ELSE 1 END
+    )
+    ON CONFLICT(worker_id, stats_month) DO UPDATE SET
+        total_batches = worker_stats_monthly.total_batches + excluded.total_batches,
+        total_keys_scanned = worker_stats_monthly.total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = worker_stats_monthly.total_duration_ms + excluded.total_duration_ms,
+        keys_per_second_avg = (worker_stats_monthly.keys_per_second_avg * worker_stats_monthly.total_batches + excluded.keys_per_second_avg) / (worker_stats_monthly.total_batches + excluded.total_batches),
+        keys_per_second_min = MIN(IFNULL(worker_stats_monthly.keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        keys_per_second_max = MAX(IFNULL(worker_stats_monthly.keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        error_count = worker_stats_monthly.error_count + excluded.error_count;
+
+    -- Upsert lifetime totals
+    INSERT INTO worker_stats_lifetime (
+        worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms,
+        keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at
+    ) VALUES (
+        OLD.worker_id,
+        OLD.worker_type,
+        1,
+        COALESCE(OLD.keys_scanned, 0),
+        COALESCE(OLD.duration_ms, 0),
+        COALESCE(OLD.keys_per_second, 0),
+        OLD.keys_per_second,
+        OLD.keys_per_second,
+        datetime('now','utc'),
+        datetime('now','utc')
+    )
+    ON CONFLICT(worker_id) DO UPDATE SET
+        total_batches = worker_stats_lifetime.total_batches + excluded.total_batches,
+        total_keys_scanned = worker_stats_lifetime.total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = worker_stats_lifetime.total_duration_ms + excluded.total_duration_ms,
+        keys_per_second_avg = (worker_stats_lifetime.keys_per_second_avg * worker_stats_lifetime.total_batches + excluded.keys_per_second_avg) / (worker_stats_lifetime.total_batches + excluded.total_batches),
+        keys_per_second_best = MAX(worker_stats_lifetime.keys_per_second_best, excluded.keys_per_second_avg),
+        keys_per_second_worst = MIN(COALESCE(worker_stats_lifetime.keys_per_second_worst, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        last_seen_at = datetime('now','utc');
+END;
+
+-- Prune daily stats per worker (keep latest 1000 per worker)
+CREATE TRIGGER IF NOT EXISTS trg_prune_daily_stats_per_worker
+AFTER INSERT ON worker_stats_daily
+FOR EACH ROW
+WHEN (SELECT COUNT(*) FROM worker_stats_daily WHERE worker_id = NEW.worker_id) > 1000
+BEGIN
+    DELETE FROM worker_stats_daily
+    WHERE id IN (
+        SELECT id FROM worker_stats_daily WHERE worker_id = NEW.worker_id ORDER BY stats_date ASC LIMIT (
+            SELECT COUNT(*) - 1000 FROM worker_stats_daily WHERE worker_id = NEW.worker_id
+        )
+    );
+END;
+
+-- Prune monthly stats per worker (keep latest 1000 per worker)
+CREATE TRIGGER IF NOT EXISTS trg_prune_monthly_stats_per_worker
+AFTER INSERT ON worker_stats_monthly
+FOR EACH ROW
+WHEN (SELECT COUNT(*) FROM worker_stats_monthly WHERE worker_id = NEW.worker_id) > 1000
+BEGIN
+    DELETE FROM worker_stats_monthly
+    WHERE id IN (
+        SELECT id FROM worker_stats_monthly WHERE worker_id = NEW.worker_id ORDER BY stats_month ASC LIMIT (
+            SELECT COUNT(*) - 1000 FROM worker_stats_monthly WHERE worker_id = NEW.worker_id
+        )
+    );
+END;
+
+-- ============================================================================
+-- Statistics View (Optional - for Dashboard)
+-- ============================================================================
+-- Provides aggregated statistics for monitoring and dashboards.
+-- This is a virtual view, not a physical table.
+-- Updated for dynamic batching support.
+-- ============================================================================
+
 CREATE VIEW IF NOT EXISTS stats_summary AS
 SELECT
     -- Batch statistics
@@ -260,24 +456,53 @@ FROM jobs;
 -- +goose Down
 -- +goose StatementBegin
 
+-- 1. Drop View
 DROP VIEW IF EXISTS stats_summary;
 
+-- 2. Drop Triggers (Created last in Up, so drop first among new objects)
+DROP TRIGGER IF EXISTS trg_prune_monthly_stats_per_worker;
+DROP TRIGGER IF EXISTS trg_prune_daily_stats_per_worker;
+DROP TRIGGER IF EXISTS trg_aggregate_before_prune_history;
+
+-- 3. Drop New Statistics Tables & Indexes (Reverse order of creation)
+
+-- Tier 4: Lifetime
+DROP INDEX IF EXISTS idx_worker_stats_lifetime_keys;
+DROP TABLE IF EXISTS worker_stats_lifetime;
+
+-- Tier 3: Monthly
+DROP INDEX IF EXISTS idx_worker_stats_monthly_worker_month;
+DROP TABLE IF EXISTS worker_stats_monthly;
+
+-- Tier 2: Daily
+DROP INDEX IF EXISTS idx_worker_stats_daily_worker_date;
+DROP TABLE IF EXISTS worker_stats_daily;
+
+-- Tier 1: History
+DROP INDEX IF EXISTS idx_worker_history_finished;
+DROP INDEX IF EXISTS idx_worker_history_worker_finished;
+DROP TABLE IF EXISTS worker_history;
+
+-- 4. Drop Base Tables & Indexes (Reverse order of creation)
+
+-- Workers
 DROP INDEX IF EXISTS idx_workers_last_seen;
 DROP INDEX IF EXISTS idx_workers_type;
+DROP TABLE IF EXISTS workers;
 
+-- Results
 DROP INDEX IF EXISTS idx_results_found_at;
 DROP INDEX IF EXISTS idx_results_worker;
 DROP INDEX IF EXISTS idx_results_address;
+DROP TABLE IF EXISTS results;
 
+-- Jobs
 DROP INDEX IF EXISTS idx_jobs_worker_type;
 DROP INDEX IF EXISTS idx_jobs_prefix;
 DROP INDEX IF EXISTS idx_jobs_created;
 DROP INDEX IF EXISTS idx_jobs_worker;
 DROP INDEX IF EXISTS idx_jobs_status_expires;
-
-DROP TABLE IF EXISTS results;
 DROP TABLE IF EXISTS jobs;
-DROP TABLE IF EXISTS workers;
 
 -- +goose StatementEnd
 
