@@ -16,7 +16,6 @@
 -- ============================================================================
 
 -- +goose Up
--- +goose StatementBegin
 
 -- ============================================================================
 -- Jobs Table
@@ -81,7 +80,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     last_checkpoint_at DATETIME,
 
     -- Cumulative duration (ms) for delta calculation
-    duration_ms BIGINT DEFAULT 0,
+    duration_ms BIGINT DEFAULT 0,    
     
     -- Constraint: status must be one of the allowed values
     CHECK (status IN ('pending', 'processing', 'completed')),
@@ -264,6 +263,7 @@ CREATE INDEX IF NOT EXISTS idx_worker_history_finished ON worker_history(finishe
 
 -- Trigger: increment worker total_keys_scanned whenever a worker_history row is inserted
 -- This keeps workers.total_keys_scanned consistent and atomic with history inserts
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS trg_inc_workers_total_keys
 AFTER INSERT ON worker_history
 FOR EACH ROW
@@ -272,6 +272,7 @@ BEGIN
     SET total_keys_scanned = total_keys_scanned + COALESCE(NEW.keys_scanned, 0)
     WHERE id = NEW.worker_id;
 END;
+-- +goose StatementEnd
 
 -- Tier 2: Daily aggregates (one row per worker per date)
 CREATE TABLE IF NOT EXISTS worker_stats_daily (
@@ -324,6 +325,7 @@ CREATE TABLE IF NOT EXISTS worker_stats_lifetime (
 CREATE INDEX IF NOT EXISTS idx_worker_stats_lifetime_keys ON worker_stats_lifetime(total_keys_scanned DESC);
 
 -- Trigger: aggregate before pruning history rows
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS trg_aggregate_before_prune_history
 BEFORE DELETE ON worker_history
 FOR EACH ROW
@@ -344,14 +346,14 @@ BEGIN
         CASE WHEN OLD.error_message IS NULL OR OLD.error_message = '' THEN 0 ELSE 1 END
     )
     ON CONFLICT(worker_id, stats_date) DO UPDATE SET
-        total_batches = worker_stats_daily.total_batches + excluded.total_batches,
-        total_keys_scanned = worker_stats_daily.total_keys_scanned + excluded.total_keys_scanned,
-        total_duration_ms = worker_stats_daily.total_duration_ms + excluded.total_duration_ms,
+        total_batches = total_batches + excluded.total_batches,
+        total_keys_scanned = total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = total_duration_ms + excluded.total_duration_ms,
         -- approximate avg as rolling mean (simple)
-        keys_per_second_avg = (worker_stats_daily.keys_per_second_avg * worker_stats_daily.total_batches + excluded.keys_per_second_avg) / (worker_stats_daily.total_batches + excluded.total_batches),
-        keys_per_second_min = MIN(IFNULL(worker_stats_daily.keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
-        keys_per_second_max = MAX(IFNULL(worker_stats_daily.keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
-        error_count = worker_stats_daily.error_count + excluded.error_count;
+        keys_per_second_avg = (keys_per_second_avg * total_batches + excluded.keys_per_second_avg) / (total_batches + excluded.total_batches),
+        keys_per_second_min = MIN(IFNULL(keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        keys_per_second_max = MAX(IFNULL(keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        error_count = error_count + excluded.error_count;
 
     -- Upsert monthly aggregate
     INSERT INTO worker_stats_monthly (
@@ -369,13 +371,13 @@ BEGIN
         CASE WHEN OLD.error_message IS NULL OR OLD.error_message = '' THEN 0 ELSE 1 END
     )
     ON CONFLICT(worker_id, stats_month) DO UPDATE SET
-        total_batches = worker_stats_monthly.total_batches + excluded.total_batches,
-        total_keys_scanned = worker_stats_monthly.total_keys_scanned + excluded.total_keys_scanned,
-        total_duration_ms = worker_stats_monthly.total_duration_ms + excluded.total_duration_ms,
-        keys_per_second_avg = (worker_stats_monthly.keys_per_second_avg * worker_stats_monthly.total_batches + excluded.keys_per_second_avg) / (worker_stats_monthly.total_batches + excluded.total_batches),
-        keys_per_second_min = MIN(IFNULL(worker_stats_monthly.keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
-        keys_per_second_max = MAX(IFNULL(worker_stats_monthly.keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
-        error_count = worker_stats_monthly.error_count + excluded.error_count;
+        total_batches = total_batches + excluded.total_batches,
+        total_keys_scanned = total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = total_duration_ms + excluded.total_duration_ms,
+        keys_per_second_avg = (keys_per_second_avg * total_batches + excluded.keys_per_second_avg) / (total_batches + excluded.total_batches),
+        keys_per_second_min = MIN(IFNULL(keys_per_second_min, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        keys_per_second_max = MAX(IFNULL(keys_per_second_max, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        error_count = error_count + excluded.error_count;
 
     -- Upsert lifetime totals
     INSERT INTO worker_stats_lifetime (
@@ -394,16 +396,18 @@ BEGIN
         datetime('now','utc')
     )
     ON CONFLICT(worker_id) DO UPDATE SET
-        total_batches = worker_stats_lifetime.total_batches + excluded.total_batches,
-        total_keys_scanned = worker_stats_lifetime.total_keys_scanned + excluded.total_keys_scanned,
-        total_duration_ms = worker_stats_lifetime.total_duration_ms + excluded.total_duration_ms,
-        keys_per_second_avg = (worker_stats_lifetime.keys_per_second_avg * worker_stats_lifetime.total_batches + excluded.keys_per_second_avg) / (worker_stats_lifetime.total_batches + excluded.total_batches),
-        keys_per_second_best = MAX(worker_stats_lifetime.keys_per_second_best, excluded.keys_per_second_avg),
-        keys_per_second_worst = MIN(COALESCE(worker_stats_lifetime.keys_per_second_worst, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
+        total_batches = total_batches + excluded.total_batches,
+        total_keys_scanned = total_keys_scanned + excluded.total_keys_scanned,
+        total_duration_ms = total_duration_ms + excluded.total_duration_ms,
+        keys_per_second_avg = (keys_per_second_avg * total_batches + excluded.keys_per_second_avg) / (total_batches + excluded.total_batches),
+        keys_per_second_best = MAX(keys_per_second_best, excluded.keys_per_second_avg),
+        keys_per_second_worst = MIN(COALESCE(keys_per_second_worst, excluded.keys_per_second_avg), excluded.keys_per_second_avg),
         last_seen_at = datetime('now','utc');
 END;
+-- +goose StatementEnd
 
 -- Prune daily stats per worker (keep latest 1000 per worker)
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS trg_prune_daily_stats_per_worker
 AFTER INSERT ON worker_stats_daily
 FOR EACH ROW
@@ -416,8 +420,10 @@ BEGIN
         )
     );
 END;
+-- +goose StatementEnd
 
 -- Prune monthly stats per worker (keep latest 1000 per worker)
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS trg_prune_monthly_stats_per_worker
 AFTER INSERT ON worker_stats_monthly
 FOR EACH ROW
@@ -430,6 +436,7 @@ BEGIN
         )
     );
 END;
+-- +goose StatementEnd
 
 -- ============================================================================
 -- Statistics View (Optional - for Dashboard)
@@ -467,11 +474,8 @@ SELECT
     COUNT(DISTINCT prefix_28) AS active_prefixes
 FROM jobs;
 
--- +goose StatementEnd
-
 
 -- +goose Down
--- +goose StatementBegin
 
 -- 1. Drop View
 DROP VIEW IF EXISTS stats_summary;
@@ -521,8 +525,6 @@ DROP INDEX IF EXISTS idx_jobs_created;
 DROP INDEX IF EXISTS idx_jobs_worker;
 DROP INDEX IF EXISTS idx_jobs_status_expires;
 DROP TABLE IF EXISTS jobs;
-
--- +goose StatementEnd
 
 -- ============================================================================
 -- Sample Queries (for sqlc code generation)
