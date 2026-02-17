@@ -98,12 +98,12 @@ $(WORKER_BINARY):
 # Run all tests
 test:
 	@echo "Running tests..."
-	@CGO_ENABLED=1 go test -race -v -cover ./...
+	@CGO_ENABLED=1 go test -race -v -cover ./... -timeout 5m
 
 # Run tests with coverage report
 test-coverage:
 	@echo "Running tests with coverage..."
-	@CGO_ENABLED=1 go -race test -v -coverprofile=coverage.out ./...
+	@CGO_ENABLED=1 go -race test -v -coverprofile=coverage.out ./... -timeout 5m
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report: coverage.html"
 
