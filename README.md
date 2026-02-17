@@ -57,6 +57,7 @@ These variables were added to support adaptive batch sizing implemented in the P
 | `WORKER_MAX_BATCH_SIZE` | Maximum allowed requested batch size (keys) | `10000000` |
 | `WORKER_BATCH_ADJUST_ALPHA` | Smoothing factor in [0,1] for batch-size adjustments (alpha) | `0.5` |
 | `WORKER_INITIAL_BATCH_SIZE` | Optional initial batch size to start with (0 = auto-calc) | `0` (auto) |
+| `WORKER_INTERNAL_BATCH_SIZE` | Internal chunk size (keys) processed between checkpoints by the worker | `1000000` |
 
 Worker Statistics & Performance Monitoring
 

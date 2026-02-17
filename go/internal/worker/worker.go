@@ -13,6 +13,29 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// State represents the worker-local state for a long-lived job assignment.
+type State struct {
+	JobID        string
+	Prefix28     []byte
+	NonceStart   uint32
+	NonceEnd     uint32
+	CurrentNonce uint32
+	BatchStarted time.Time
+	KeysScanned  uint64
+}
+
+// RuntimeConfig exposes runtime-configurable worker knobs used by higher-level
+// orchestration code or tests.
+type RuntimeConfig struct {
+	CheckpointInterval       time.Duration
+	InternalBatchSize        uint32
+	TargetJobDurationSeconds int64
+	MinBatchSize             uint32
+	MaxBatchSize             uint32
+	BatchAdjustAlpha         float64
+	InitialBatchSize         uint32
+}
+
 // Worker orchestrates leasing jobs, scanning and reporting progress.
 type Worker struct {
 	client             *Client
@@ -158,6 +181,11 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		unauthorizedFlag int32
 	)
 
+	// ErrLeaseExpired is returned when the Master API reports the worker's lease
+	// has expired (HTTP 410 Gone) while updating a checkpoint. The worker should
+	// stop processing the current lease and re-request work.
+	var ErrLeaseExpired = errors.New("lease expired")
+
 	// Start checkpoint goroutine
 	ticker := time.NewTicker(w.config.CheckpointInterval)
 	defer ticker.Stop()
@@ -212,20 +240,19 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		}
 	}()
 
-	// Start real scanning using the parallel scanner. Pass a progress callback
-	// that updates atomic counters for checkpointing.
+	// Start real scanning using the parallel scanner in smaller internal
+	// chunks. This allows the worker to checkpoint metrics per chunk while
+	// maintaining a single long-lived lease.
 	numWorkers := runtime.NumCPU()
 	if numWorkers <= 0 {
 		numWorkers = 1
 	}
 	log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
 
-	// Build scanner job
+	// Build scanner job template
 	var job Job
 	copy(job.Prefix28[:], lease.Prefix28)
 	job.ID = 0
-	job.NonceStart = lease.NonceStart
-	job.NonceEnd = lease.NonceEnd
 	job.ExpiresAt = lease.ExpiresAt
 
 	// parse target address from lease
@@ -236,37 +263,109 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		atomic.AddUint64(&totalKeys, keys)
 	}
 
-	result, err := ScanRangeParallel(leaseCtx, job, target, progressFn)
+	// Determine internal chunk size
+	internalBatch := uint32(1000000)
+	if w.config != nil && w.config.InternalBatchSize > 0 {
+		internalBatch = w.config.InternalBatchSize
+	}
 
-	// Compute throughput from atomic totalKeys and elapsed time.
+	// Iterate over the lease range in chunks.
+	start := lease.NonceStart
+	var foundResult *ScanResult
+	stopEarly := false
+	for start <= lease.NonceEnd {
+		// Respect lease/context cancellation
+		select {
+		case <-leaseCtx.Done():
+			// signal outer loop to stop
+			stopEarly = true
+		default:
+		}
+		if stopEarly {
+			break
+		}
+
+		end := start + internalBatch - 1
+		if end < start || end > lease.NonceEnd {
+			end = lease.NonceEnd
+		}
+
+		// Prepare sub-job
+		subJob := job
+		subJob.NonceStart = start
+		subJob.NonceEnd = end
+
+		// Snapshot total keys before scanning this chunk
+		beforeKeys := atomic.LoadUint64(&totalKeys)
+		batchStart := time.Now()
+		res, err := ScanRangeParallel(leaseCtx, subJob, target, progressFn)
+		batchDurationMs := time.Since(batchStart).Milliseconds()
+		afterKeys := atomic.LoadUint64(&totalKeys)
+		keysThisChunk := afterKeys - beforeKeys
+
+		// If scanning returned an error, stop and propagate
+		if err != nil {
+			// Wait for checkpoint goroutine to finish
+			cancel()
+			<-doneCh
+			elapsed := time.Since(startTime)
+			return elapsed, afterKeys, fmt.Errorf("scan failed: %w", err)
+		}
+
+		// If a result was found, submit it
+		if res != nil {
+			if err := w.client.SubmitResult(ctx, res.PrivateKey[:], res.Address.Hex()); err != nil {
+				if errors.Is(err, ErrUnauthorized) {
+					cancel()
+					<-doneCh
+					elapsed := time.Since(startTime)
+					return elapsed, afterKeys, ErrUnauthorized
+				}
+				log.Printf("worker: failed to submit result: %v", err)
+			}
+			atomic.StoreUint32(&currentNonce, res.Nonce)
+			foundResult = res
+		}
+
+		// Send a checkpoint for this chunk (reporting chunk-level metrics).
+		if err := w.client.UpdateCheckpoint(ctx, lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk, batchStart, batchDurationMs); err != nil {
+			if errors.Is(err, ErrUnauthorized) {
+				// fatal: stop processing and propagate
+				cancel()
+				<-doneCh
+				elapsed := time.Since(startTime)
+				return elapsed, afterKeys, ErrUnauthorized
+			}
+			var apiErr *APIError
+			if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
+				// Lease expired on master side: stop and re-request work
+				cancel()
+				<-doneCh
+				elapsed := time.Since(startTime)
+				return elapsed, afterKeys, ErrLeaseExpired
+			}
+			// Non-fatal checkpoint failure: log and continue. The ticker will
+			// continue attempting periodic checkpoints as well.
+			log.Printf("worker: checkpoint failed for chunk [%d,%d]: %v", start, end, err)
+		} else {
+			log.Printf("worker: chunk checkpoint sent job=%s nonce=%d keys_chunk=%d", lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk)
+		}
+
+		// If a result was found we can stop scanning further chunks.
+		if foundResult != nil {
+			break
+		}
+
+		// Advance to next chunk
+		if end == lease.NonceEnd {
+			break
+		}
+		start = end + 1
+	}
+
+	// Compute overall elapsed and totals
 	elapsed := time.Since(startTime)
 	tk := atomic.LoadUint64(&totalKeys)
-	cn := atomic.LoadUint32(&currentNonce)
-	var rate float64
-	if elapsed.Seconds() > 0 {
-		rate = float64(tk) / elapsed.Seconds()
-	}
-	log.Printf("worker: scan completed job=%s final_nonce=%d keys=%d duration=%s rate=%.2f keys/s", lease.JobID, cn, tk, elapsed.Round(time.Millisecond), rate)
-	if err != nil {
-		// Wait for checkpoint goroutine to finish
-		cancel()
-		<-doneCh
-		return elapsed, tk, fmt.Errorf("scan failed: %w", err)
-	}
-
-	// If a result was found, submit it
-	if result != nil {
-		// Submit result to master
-		if err := w.client.SubmitResult(ctx, result.PrivateKey[:], result.Address.Hex()); err != nil {
-			if errors.Is(err, ErrUnauthorized) {
-				return elapsed, tk, ErrUnauthorized
-			}
-			log.Printf("worker: failed to submit result: %v", err)
-		}
-		// Update atomics to final values for completion
-		atomic.StoreUint32(&currentNonce, result.Nonce)
-		// totalKeys already updated by progressFn
-	}
 
 	// Stop checkpoint goroutine and wait for it
 	cancel()
@@ -278,10 +377,15 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		return elapsed, tk, ErrUnauthorized
 	}
 
-	// Complete the batch
-	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys, startTime, elapsed.Milliseconds()); err != nil {
+	// If we exited early due to lease expiry, the caller will handle re-request.
+	// Otherwise, complete the batch on master with overall metrics.
+	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, tk, startTime, elapsed.Milliseconds()); err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			return elapsed, tk, ErrUnauthorized
+		}
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
+			return elapsed, tk, ErrLeaseExpired
 		}
 		return elapsed, tk, fmt.Errorf("failed to complete batch: %w", err)
 	}

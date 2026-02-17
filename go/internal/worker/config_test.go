@@ -51,6 +51,10 @@ func TestLoadConfig_Valid(t *testing.T) {
 	if cfg.InitialBatchSize != 0 {
 		t.Fatalf("unexpected InitialBatchSize default: %d", cfg.InitialBatchSize)
 	}
+	// internal batch default
+	if cfg.InternalBatchSize != 1000000 {
+		t.Fatalf("unexpected InternalBatchSize default: %d", cfg.InternalBatchSize)
+	}
 }
 
 func TestLoadConfig_AutoGenerateID(t *testing.T) {
@@ -89,6 +93,8 @@ func TestLoadConfig_AdaptiveEnvOverrides(t *testing.T) {
 	defer os.Unsetenv("WORKER_BATCH_ADJUST_ALPHA")
 	os.Setenv("WORKER_INITIAL_BATCH_SIZE", "77777")
 	defer os.Unsetenv("WORKER_INITIAL_BATCH_SIZE")
+	os.Setenv("WORKER_INTERNAL_BATCH_SIZE", "250000")
+	defer os.Unsetenv("WORKER_INTERNAL_BATCH_SIZE")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -108,6 +114,9 @@ func TestLoadConfig_AdaptiveEnvOverrides(t *testing.T) {
 	}
 	if cfg.InitialBatchSize != 77777 {
 		t.Fatalf("expected InitialBatchSize 77777, got %d", cfg.InitialBatchSize)
+	}
+	if cfg.InternalBatchSize != 250000 {
+		t.Fatalf("expected InternalBatchSize 250000, got %d", cfg.InternalBatchSize)
 	}
 }
 

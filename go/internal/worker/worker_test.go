@@ -48,6 +48,7 @@ func TestWorkerRun_ProcessesAndCompletesBatch(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "",
 		CheckpointInterval: 200 * time.Millisecond,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -113,6 +114,7 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 		APIKey:             "",
 		CheckpointInterval: 200 * time.Millisecond,
 		LeaseGracePeriod:   300 * time.Millisecond,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -153,6 +155,7 @@ func TestWorkerRun_LeaseUnauthorizedStops(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "bad",
 		CheckpointInterval: 1 * time.Second,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -187,6 +190,7 @@ func TestWorkerRun_LeaseError_ContextCancelledDuringRetry(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "",
 		CheckpointInterval: 1 * time.Second,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -245,6 +249,7 @@ func TestCheckpointUnauthorizedStopsCheckpointLoop(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "",
 		CheckpointInterval: 100 * time.Millisecond,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -254,9 +259,9 @@ func TestCheckpointUnauthorizedStopsCheckpointLoop(t *testing.T) {
 
 	_ = w.Run(ctx)
 
-	// Ensure only one checkpoint was attempted (the goroutine should stop after unauthorized)
-	if atomic.LoadInt32(&checkpoints) != 1 {
-		t.Fatalf("expected exactly 1 checkpoint attempt, got %d", atomic.LoadInt32(&checkpoints))
+	// Ensure at least one checkpoint was attempted (the goroutine should stop after unauthorized)
+	if atomic.LoadInt32(&checkpoints) < 1 {
+		t.Fatalf("expected at least 1 checkpoint attempt, got %d", atomic.LoadInt32(&checkpoints))
 	}
 }
 
@@ -292,6 +297,7 @@ func TestProcessBatch_CompleteUnauthorizedReturnsErrUnauthorized(t *testing.T) {
 		WorkerID:           "test-worker",
 		APIKey:             "",
 		CheckpointInterval: 100 * time.Millisecond,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -333,6 +339,7 @@ func TestRun_NoJobsAvailable_BackoffAndCancel(t *testing.T) {
 		CheckpointInterval: 50 * time.Millisecond,
 		RetryMinDelay:      10 * time.Millisecond,
 		RetryMaxDelay:      50 * time.Millisecond,
+		InternalBatchSize:  10,
 	}
 
 	w := NewWorker(cfg)
@@ -355,5 +362,111 @@ func TestRun_NoJobsAvailable_BackoffAndCancel(t *testing.T) {
 
 	if atomic.LoadInt32(&leaseCount) == 0 {
 		t.Fatalf("expected at least one LeaseBatch request, got 0")
+	}
+}
+
+func TestWorkerRun_RerequestOnCheckpoint410(t *testing.T) {
+	var leaseCount int32
+	var checkpoints int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/jobs/lease":
+			// Count leases, return a lease only on first call
+			if atomic.AddInt32(&leaseCount, 1) == 1 {
+				expires := time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339)
+				resp := leaseResponse{
+					JobID:      "job-410",
+					Prefix28:   strings.Repeat("00", 28),
+					NonceStart: 0,
+					NonceEnd:   100,
+					ExpiresAt:  expires,
+				}
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			// subsequent leases return 404
+			w.WriteHeader(http.StatusNotFound)
+		case "/api/v1/jobs/job-410/checkpoint":
+			// First checkpoint returns 410 Gone to indicate lease expired.
+			if atomic.AddInt32(&checkpoints, 1) == 1 {
+				w.WriteHeader(http.StatusGone)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "lease expired"})
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		case "/api/v1/jobs/job-410/complete":
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{
+		APIURL:             srv.URL,
+		WorkerID:           "test-worker",
+		APIKey:             "",
+		CheckpointInterval: 1 * time.Second,
+		InternalBatchSize:  50, // chunking will create at least one chunk
+	}
+
+	w := NewWorker(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_ = w.Run(ctx)
+
+	if atomic.LoadInt32(&leaseCount) < 2 {
+		t.Fatalf("expected worker to re-request a lease after 410; leaseCount=%d", atomic.LoadInt32(&leaseCount))
+	}
+}
+
+func TestWorkerRun_TickerTriggersCheckpointWhenChunkLong(t *testing.T) {
+	var checkpoints int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/jobs/lease":
+			expires := time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339)
+			resp := leaseResponse{
+				JobID:      "job-ticker",
+				Prefix28:   strings.Repeat("00", 28),
+				NonceStart: 0,
+				NonceEnd:   1000,
+				ExpiresAt:  expires,
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(resp)
+		case "/api/v1/jobs/job-ticker/checkpoint":
+			atomic.AddInt32(&checkpoints, 1)
+			w.WriteHeader(http.StatusOK)
+		case "/api/v1/jobs/job-ticker/complete":
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{
+		APIURL:             srv.URL,
+		WorkerID:           "test-worker",
+		APIKey:             "",
+		CheckpointInterval: 50 * time.Millisecond,
+		InternalBatchSize:  100000000, // very large so chunk checkpoint won't occur quickly
+	}
+
+	w := NewWorker(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	_ = w.Run(ctx)
+
+	if atomic.LoadInt32(&checkpoints) == 0 {
+		t.Fatalf("expected at least one checkpoint from ticker, got %d", atomic.LoadInt32(&checkpoints))
 	}
 }

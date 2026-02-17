@@ -29,6 +29,10 @@ type Config struct {
 	MaxBatchSize             uint32  // default 10000000
 	BatchAdjustAlpha         float64 // smoothing factor 0..1, default 0.5
 	InitialBatchSize         uint32  // optional initial batch size; 0 means use calculated default
+	// InternalBatchSize controls how many keys the worker processes locally
+	// per internal chunk before sending a checkpoint. This is independent of
+	// the requested lease size returned by the Master API.
+	InternalBatchSize uint32
 }
 
 // LoadConfig reads configuration from environment variables and validates them.
@@ -120,6 +124,15 @@ func LoadConfig() (*Config, error) {
 		initialBatch = uint32(n)
 	}
 
+	internalBatch := uint32(1000000)
+	if v := os.Getenv("WORKER_INTERNAL_BATCH_SIZE"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_INTERNAL_BATCH_SIZE: %w", err)
+		}
+		internalBatch = uint32(n)
+	}
+
 	return &Config{
 		APIURL:                   apiURL,
 		WorkerID:                 workerID,
@@ -133,6 +146,7 @@ func LoadConfig() (*Config, error) {
 		MaxBatchSize:             maxBatch,
 		BatchAdjustAlpha:         alpha,
 		InitialBatchSize:         initialBatch,
+		InternalBatchSize:        internalBatch,
 	}, nil
 }
 

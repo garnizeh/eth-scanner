@@ -26,6 +26,7 @@ func main() {
 	log.Printf("  API URL: %s", cfg.APIURL)
 	log.Printf("  Worker ID: %s", cfg.WorkerID)
 	log.Printf("  Checkpoint Interval: %v", cfg.CheckpointInterval)
+	log.Printf("  Internal Batch Size: %d", cfg.InternalBatchSize)
 
 	// Create worker
 	w := worker.NewWorker(cfg)
