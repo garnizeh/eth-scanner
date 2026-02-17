@@ -175,7 +175,9 @@ The multi-tier statistics architecture is designed to power a comprehensive web-
   - [x] Worker-specific prefix affinity (vertical exhaustion)
   - [x] Master background cleanup for stale jobs
   - [x] Adaptive batch sizing based on throughput
-  - [ ] Database storage optimization with multi-tier statistics (A01-T040 to A01-T070)
+   - [x] Database storage optimization with multi-tier statistics (A01-T040 to A01-T070) — completed; see `docs/tasks/done/A01-T070.md` for details
+
+**A01 Summary:** Tasks A01-T010 through A01-T070 have been implemented and validated (integration tests, load tests, benchmarks, and documentation). The system now uses long-lived jobs and a four-tier statistics architecture to bound DB growth while preserving analytics.
 
 ## Development Commands (Go)
 Within the `go/` directory:
