@@ -1,0 +1,28 @@
+menu "EthScanner Configuration"
+
+    config ETHSCANNER_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the ESP32 to connect to.
+
+    config ETHSCANNER_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the network.
+
+    config ETHSCANNER_API_URL
+        string "Master API URL"
+        default "http://192.168.1.100:8080"
+        help
+            Base URL for the Master API server (without trailing slash).
+            Example: http://192.168.1.100:8080
+
+    config ETHSCANNER_WORKER_ID
+        string "Worker ID"
+        default "esp32-001"
+        help
+            Unique identifier for this worker device.
+
+endmenu

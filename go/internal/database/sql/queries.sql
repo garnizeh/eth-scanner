@@ -81,6 +81,7 @@ UPDATE jobs
 SET 
     current_nonce = ?,
     keys_scanned = ?,
+    duration_ms = ?,
     last_checkpoint_at = datetime('now', 'utc')
 WHERE id = ? AND worker_id = ? AND status = 'processing';
 
@@ -91,6 +92,7 @@ SET
     status = 'completed',
     completed_at = datetime('now', 'utc'),
     keys_scanned = ?,
+    duration_ms = ?,
     current_nonce = nonce_end
 WHERE id = ? AND worker_id = ?;
 

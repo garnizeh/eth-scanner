@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     
     -- Last checkpoint timestamp (UTC)
     last_checkpoint_at DATETIME,
+
+    -- Cumulative duration (ms) for delta calculation
+    duration_ms BIGINT DEFAULT 0,
     
     -- Constraint: status must be one of the allowed values
     CHECK (status IN ('pending', 'processing', 'completed')),

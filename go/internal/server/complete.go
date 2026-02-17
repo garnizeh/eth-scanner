@@ -68,6 +68,18 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate deltas for worker_history before updating job state
+	deltaKeys := req.KeysScanned - job.KeysScanned.Int64
+	deltaDuration := req.DurationMs - job.DurationMs.Int64
+
+	// Sanity check: if deltas are negative, fallback to full reported values
+	if deltaKeys < 0 {
+		deltaKeys = req.KeysScanned
+	}
+	if deltaDuration < 0 {
+		deltaDuration = req.DurationMs
+	}
+
 	// Validate final nonce equals job's nonce_end (enforced here)
 	if req.FinalNonce != job.NonceEnd {
 		http.Error(w, "final_nonce does not match job nonce_end", http.StatusBadRequest)
@@ -76,6 +88,7 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 
 	params := database.CompleteBatchParams{
 		KeysScanned: sql.NullInt64{Int64: req.KeysScanned, Valid: true},
+		DurationMs:  sql.NullInt64{Int64: req.DurationMs, Valid: true},
 		ID:          id,
 		WorkerID:    sql.NullString{String: req.WorkerID, Valid: true},
 	}
@@ -110,17 +123,17 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		CompletedAt: ca,
 	}
 	// Record worker history asynchronously (best-effort)
-	go func() {
+	go func(dk, dd int64) {
 		var kps float64
-		if req.DurationMs > 0 {
-			kps = float64(req.KeysScanned) / (float64(req.DurationMs) / 1000.0)
+		if dd > 0 {
+			kps = float64(dk) / (float64(dd) / 1000.0)
 		}
 
 		var batchSize interface{}
 		if updated.RequestedBatchSize.Valid {
 			batchSize = updated.RequestedBatchSize.Int64
 		} else {
-			batchSize = req.KeysScanned
+			batchSize = dk
 		}
 
 		_, err := s.db.ExecContext(context.Background(), `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
@@ -128,8 +141,8 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 			updated.WorkerType.String,
 			updated.ID,
 			batchSize,
-			req.KeysScanned,
-			req.DurationMs,
+			dk, // delta keys
+			dd, // delta duration
 			kps,
 			updated.Prefix28,
 			updated.NonceStart,
@@ -138,7 +151,7 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on complete: %v", err)
 		}
-	}()
+	}(deltaKeys, deltaDuration)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }

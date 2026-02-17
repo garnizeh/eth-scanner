@@ -24,6 +24,7 @@ type Job struct {
 	KeysScanned        sql.NullInt64  `json:"keys_scanned"`
 	RequestedBatchSize sql.NullInt64  `json:"requested_batch_size"`
 	LastCheckpointAt   sql.NullTime   `json:"last_checkpoint_at"`
+	DurationMs         sql.NullInt64  `json:"duration_ms"`
 }
 
 type Result struct {
