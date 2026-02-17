@@ -12,7 +12,7 @@ func TestDashboardQueryPerf(t *testing.T) {
 	db, q := setupDBForTests(t)
 
 	// Insert some jobs to make stats non-trivial
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		start := i * 10
 		end := start + 9
 		_, err := db.ExecContext(ctx, `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status, requested_batch_size, created_at) VALUES (?, ?, ?, 'pending', ?, datetime('now','utc'))`, []byte{0x01}, start, end, 10)
@@ -24,7 +24,7 @@ func TestDashboardQueryPerf(t *testing.T) {
 	// Run GetStats a few times and measure
 	runs := 5
 	var total time.Duration
-	for i := 0; i < runs; i++ {
+	for range runs {
 		start := time.Now()
 		_, err := q.GetStats(ctx)
 		if err != nil {

@@ -22,13 +22,13 @@ func TestPerWorkerDailyRetention_Load(t *testing.T) {
 	workerB := "worker-load-B"
 
 	// Insert 1500 daily rows for workerA and 800 for workerB
-	for i := 0; i < 1500; i++ {
+	for i := range 1500 {
 		d := time.Now().UTC().AddDate(0, 0, -i).Format("2006-01-02")
 		if _, err := db.ExecContext(ctx, "INSERT INTO worker_stats_daily (worker_id, stats_date, total_batches) VALUES (?, ?, 1)", workerA, d); err != nil {
 			t.Fatalf("insert daily workerA: %v", err)
 		}
 	}
-	for i := 0; i < 800; i++ {
+	for i := range 800 {
 		d := time.Now().UTC().AddDate(0, 0, -i).Format("2006-01-02")
 		if _, err := db.ExecContext(ctx, "INSERT INTO worker_stats_daily (worker_id, stats_date, total_batches) VALUES (?, ?, 1)", workerB, d); err != nil {
 			t.Fatalf("insert daily workerB: %v", err)
@@ -64,7 +64,7 @@ func TestPerWorkerMonthlyRetention_Load(t *testing.T) {
 	worker := "worker-month-load"
 
 	// Insert 1500 monthly rows (unique months)
-	for i := 0; i < 1500; i++ {
+	for i := range 1500 {
 		dt := time.Now().UTC().AddDate(0, -i, 0)
 		m := dt.Format("2006-01")
 		if _, err := db.ExecContext(ctx, "INSERT INTO worker_stats_monthly (worker_id, stats_month, total_batches) VALUES (?, ?, 1)", worker, m); err != nil {
@@ -91,7 +91,7 @@ func TestAutomaticAggregationFromHistory(t *testing.T) {
 	finished := time.Now().UTC()
 
 	// Insert 100 history rows
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if err := q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      workerID,
 			WorkerType:    sql.NullString{String: "pc", Valid: true},
@@ -149,8 +149,8 @@ func BenchmarkRecordWorkerStats(b *testing.B) {
 	ctx := context.Background()
 	_, q := setupDBForBench(b)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	
+	for i := 0; b.Loop(); i++ {
 		_ = q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "bench-worker",
 			WorkerType:    sql.NullString{String: "pc", Valid: true},

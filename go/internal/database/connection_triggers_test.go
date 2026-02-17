@@ -170,7 +170,7 @@ func TestRetention_RecreateHistoryLimit(t *testing.T) {
 	defer func() { _ = CloseDB(db2) }()
 
 	// Insert 50 history rows and expect final count = 10
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if _, err := db2.ExecContext(ctx, "INSERT INTO worker_history (worker_id) VALUES (?)", "worker-h"); err != nil {
 			t.Fatalf("insert worker_history failed at %d: %v", i, err)
 		}
