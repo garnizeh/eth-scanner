@@ -207,51 +207,52 @@ func (m *Manager) FindOrCreateMacroJob(ctx context.Context, prefix28 []byte, wor
 
 	// Try to find an existing incomplete macro job for this prefix
 	job, err := m.db.FindIncompleteMacroJob(ctx, prefix28)
-	if err == nil {
-		// Attempt to lease it to the caller
-		p := database.LeaseMacroJobParams{
-			WorkerID:     sql.NullString{String: workerID, Valid: true},
-			WorkerType:   sql.NullString{Valid: false},
-			LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-			ID:           job.ID,
-		}
-		rowsAffected, err := m.db.LeaseMacroJob(ctx, p)
-		if err != nil {
-			return nil, fmt.Errorf("lease macro job: %w", err)
-		}
-		if rowsAffected == 0 {
-			// Race: someone else holds the lease — reload and return
-			updated, err := m.db.GetJobByID(ctx, job.ID)
-			if err != nil {
-				return nil, fmt.Errorf("get job after lease race: %w", err)
-			}
-			return &updated, nil
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("find incomplete macro job: %w", err)
 		}
 
+		// No existing macro job — create one that spans the full 32-bit nonce space
+		params := database.CreateMacroJobParams{
+			Prefix28:           prefix28,
+			NonceStart:         int64(0),
+			NonceEnd:           int64(math.MaxUint32),
+			CurrentNonce:       sql.NullInt64{Int64: 0, Valid: true},
+			WorkerID:           sql.NullString{String: workerID, Valid: true},
+			WorkerType:         sql.NullString{Valid: false},
+			LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+			RequestedBatchSize: sql.NullInt64{Valid: false},
+		}
+		created, err := m.db.CreateMacroJob(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("create macro job: %w", err)
+		}
+		return &created, nil
+	}
+
+	// Existing job found — attempt to lease it to the caller
+	p := database.LeaseMacroJobParams{
+		WorkerID:     sql.NullString{String: workerID, Valid: true},
+		WorkerType:   sql.NullString{Valid: false},
+		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+		ID:           job.ID,
+	}
+	rowsAffected, err := m.db.LeaseMacroJob(ctx, p)
+	if err != nil {
+		return nil, fmt.Errorf("lease macro job: %w", err)
+	}
+	if rowsAffected == 0 {
+		// Race: someone else holds the lease — reload and return
 		updated, err := m.db.GetJobByID(ctx, job.ID)
 		if err != nil {
-			return nil, fmt.Errorf("get job after lease: %w", err)
+			return nil, fmt.Errorf("get job after lease race: %w", err)
 		}
 		return &updated, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("find incomplete macro job: %w", err)
-	}
 
-	// No existing macro job — create one that spans the full 32-bit nonce space
-	params := database.CreateMacroJobParams{
-		Prefix28:           prefix28,
-		NonceStart:         int64(0),
-		NonceEnd:           int64(math.MaxUint32),
-		CurrentNonce:       sql.NullInt64{Int64: 0, Valid: true},
-		WorkerID:           sql.NullString{String: workerID, Valid: true},
-		WorkerType:         sql.NullString{Valid: false},
-		LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
-		RequestedBatchSize: sql.NullInt64{Valid: false},
-	}
-	created, err := m.db.CreateMacroJob(ctx, params)
+	updated, err := m.db.GetJobByID(ctx, job.ID)
 	if err != nil {
-		return nil, fmt.Errorf("create macro job: %w", err)
+		return nil, fmt.Errorf("get job after lease: %w", err)
 	}
-	return &created, nil
+	return &updated, nil
 }
