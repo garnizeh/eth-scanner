@@ -103,7 +103,12 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to begin transaction: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		err := tx.Rollback()
+		if err != nil && err != sql.ErrTxDone {
+			t.Fatalf("transaction rollback failed: %v", err)
+		}
+	}()
 	qtx := q.WithTx(tx)
 
 	total := 15000
