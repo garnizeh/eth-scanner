@@ -23,9 +23,17 @@ func TestDatabaseFileSizeAfterLoad(t *testing.T) {
 	t.Cleanup(func() { _ = CloseDB(db) })
 
 	// Insert many history records (more than retention limit)
+	// Use a transaction for bulk inserts to speed up the test and avoid timeouts
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := q.WithTx(tx)
+
 	total := 20000
-	for i := 0; i < total; i++ {
-		if err := q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
+	for i := range total {
+		if err := qtx.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "size-worker",
 			WorkerType:    sqlNullString("pc"),
 			JobID:         sql.NullInt64{Valid: false},
@@ -40,6 +48,10 @@ func TestDatabaseFileSizeAfterLoad(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("RecordWorkerStats failed at %d: %v", i, err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit failed: %v", err)
 	}
 
 	// Give SQLite a moment to flush
