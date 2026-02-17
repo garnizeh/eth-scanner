@@ -251,19 +251,13 @@ func TestLoad_MissingDBPath(t *testing.T) {
 }
 
 func TestLoad_InvalidStaleJobThreshold(t *testing.T) {
-	t.Parallel()
+	// This test manipulates environment variables via t.Setenv and therefore
+	// must not run in parallel with other tests.
 
-	// preserve env
-	origDB := os.Getenv("MASTER_DB_PATH")
-	origStale := os.Getenv("MASTER_STALE_JOB_THRESHOLD")
-	defer func() {
-		_ = os.Setenv("MASTER_DB_PATH", origDB)
-		_ = os.Setenv("MASTER_STALE_JOB_THRESHOLD", origStale)
-	}()
-
-	// ensure DBPath is set so Load progresses to parsing the threshold
-	_ = os.Setenv("MASTER_DB_PATH", "dummy")
-	_ = os.Setenv("MASTER_STALE_JOB_THRESHOLD", "not-an-int")
+	// Use t.Setenv to avoid races with parallel tests modifying environment.
+	// Ensure DBPath is set so Load progresses to parsing the threshold.
+	t.Setenv("MASTER_DB_PATH", "dummy")
+	t.Setenv("MASTER_STALE_JOB_THRESHOLD", "not-an-int")
 
 	_, err := Load()
 	if err == nil {
