@@ -1,0 +1,58 @@
+#ifndef API_CLIENT_H
+#define API_CLIENT_H
+
+#include <stdint.h>
+#include "esp_err.h"
+
+/**
+ * @brief Job information structure
+ */
+typedef struct
+{
+    int64_t job_id;
+    uint8_t prefix_28[28];
+    uint32_t nonce_start;
+    uint32_t nonce_end;
+    char target_address[43]; // 0x... format
+} job_info_t;
+
+/**
+ * @brief Request a new job lease from the Master API
+ *
+ * @param worker_id Unique worker identifier
+ * @param batch_size Requested number of keys to scan
+ * @param out_job Pointer to store the leased job information
+ * @return ESP_OK on success, appropriate error code otherwise
+ */
+esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
+                        job_info_t *out_job);
+
+/**
+ * @brief Update job progress (checkpoint) to the Master API
+ *
+ * @param job_id ID of the job being processed
+ * @param worker_id Unique worker identifier
+ * @param current_nonce Current nonce reached in scanning
+ * @param keys_scanned Total keys scanned in this session
+ * @param duration_ms Time spent scanning in milliseconds
+ * @return ESP_OK on success, appropriate error code otherwise
+ */
+esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
+                         uint32_t current_nonce, uint64_t keys_scanned,
+                         uint64_t duration_ms);
+
+/**
+ * @brief Mark a job as completed in the Master API
+ *
+ * @param job_id ID of the job being completed
+ * @param worker_id Unique worker identifier
+ * @param final_nonce Final nonce reached
+ * @param keys_scanned Total keys scanned
+ * @param duration_ms Total time spent in milliseconds
+ * @return ESP_OK on success, appropriate error code otherwise
+ */
+esp_err_t api_complete(int64_t job_id, const char *worker_id,
+                       uint32_t final_nonce, uint64_t keys_scanned,
+                       uint64_t duration_ms);
+
+#endif // API_CLIENT_H
