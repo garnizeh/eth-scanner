@@ -105,6 +105,65 @@ func (q *Queries) CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, 
 	return i, err
 }
 
+const createMacroJob = `-- name: CreateMacroJob :one
+INSERT INTO jobs (
+        prefix_28,
+        nonce_start,
+        nonce_end,
+        current_nonce,
+        status,
+        worker_id,
+        worker_type,
+        expires_at,
+        requested_batch_size
+)
+VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
+RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at
+`
+
+type CreateMacroJobParams struct {
+	Prefix28           []byte         `json:"prefix_28"`
+	NonceStart         int64          `json:"nonce_start"`
+	NonceEnd           int64          `json:"nonce_end"`
+	CurrentNonce       sql.NullInt64  `json:"current_nonce"`
+	WorkerID           sql.NullString `json:"worker_id"`
+	WorkerType         sql.NullString `json:"worker_type"`
+	LeaseSeconds       sql.NullString `json:"lease_seconds"`
+	RequestedBatchSize sql.NullInt64  `json:"requested_batch_size"`
+}
+
+// Create a long-lived macro job covering the full nonce space for a prefix
+func (q *Queries) CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, createMacroJob,
+		arg.Prefix28,
+		arg.NonceStart,
+		arg.NonceEnd,
+		arg.CurrentNonce,
+		arg.WorkerID,
+		arg.WorkerType,
+		arg.LeaseSeconds,
+		arg.RequestedBatchSize,
+	)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Prefix28,
+		&i.NonceStart,
+		&i.NonceEnd,
+		&i.CurrentNonce,
+		&i.Status,
+		&i.WorkerID,
+		&i.WorkerType,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.CompletedAt,
+		&i.KeysScanned,
+		&i.RequestedBatchSize,
+		&i.LastCheckpointAt,
+	)
+	return i, err
+}
+
 const findAvailableBatch = `-- name: FindAvailableBatch :one
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
 WHERE status = 'pending' 
@@ -116,6 +175,37 @@ LIMIT 1
 // Find an available batch (pending or expired lease)
 func (q *Queries) FindAvailableBatch(ctx context.Context) (Job, error) {
 	row := q.db.QueryRowContext(ctx, findAvailableBatch)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.Prefix28,
+		&i.NonceStart,
+		&i.NonceEnd,
+		&i.CurrentNonce,
+		&i.Status,
+		&i.WorkerID,
+		&i.WorkerType,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.CompletedAt,
+		&i.KeysScanned,
+		&i.RequestedBatchSize,
+		&i.LastCheckpointAt,
+	)
+	return i, err
+}
+
+const findIncompleteMacroJob = `-- name: FindIncompleteMacroJob :one
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+WHERE prefix_28 = ?
+    AND status != 'completed'
+ORDER BY created_at ASC
+LIMIT 1
+`
+
+// Find an existing non-completed (macro) job for a given prefix
+func (q *Queries) FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (Job, error) {
+	row := q.db.QueryRowContext(ctx, findIncompleteMacroJob, prefix28)
 	var i Job
 	err := row.Scan(
 		&i.ID,
@@ -680,6 +770,38 @@ type LeaseBatchParams struct {
 // Lease an existing batch to a worker
 func (q *Queries) LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, leaseBatch,
+		arg.WorkerID,
+		arg.WorkerType,
+		arg.LeaseSeconds,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const leaseMacroJob = `-- name: LeaseMacroJob :execrows
+UPDATE jobs
+SET status = 'processing',
+        worker_id = ?,
+        worker_type = ?,
+        expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
+WHERE id = ?
+    AND status != 'completed'
+    AND (worker_id IS NULL OR expires_at < datetime('now', 'utc'))
+`
+
+type LeaseMacroJobParams struct {
+	WorkerID     sql.NullString `json:"worker_id"`
+	WorkerType   sql.NullString `json:"worker_type"`
+	LeaseSeconds sql.NullString `json:"lease_seconds"`
+	ID           int64          `json:"id"`
+}
+
+// Lease an existing macro job to a worker (if not completed and available)
+func (q *Queries) LeaseMacroJob(ctx context.Context, arg LeaseMacroJobParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, leaseMacroJob,
 		arg.WorkerID,
 		arg.WorkerType,
 		arg.LeaseSeconds,

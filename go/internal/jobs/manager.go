@@ -190,3 +190,68 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 	}
 	return &job, nil
 }
+
+// FindOrCreateMacroJob finds an existing long-lived (macro) job for the given
+// prefix and leases it to the provided workerID. If no such job exists, a new
+// macro job covering the full nonce space is created and returned.
+// Lease duration defaults to 1 hour.
+func (m *Manager) FindOrCreateMacroJob(ctx context.Context, prefix28 []byte, workerID string) (*database.Job, error) {
+	if m == nil || m.db == nil {
+		return nil, fmt.Errorf("manager or db is nil")
+	}
+	if len(prefix28) != 28 {
+		return nil, fmt.Errorf("prefix_28 must be 28 bytes")
+	}
+
+	leaseSeconds := int64((1 * time.Hour).Seconds())
+
+	// Try to find an existing incomplete macro job for this prefix
+	job, err := m.db.FindIncompleteMacroJob(ctx, prefix28)
+	if err == nil {
+		// Attempt to lease it to the caller
+		p := database.LeaseMacroJobParams{
+			WorkerID:     sql.NullString{String: workerID, Valid: true},
+			WorkerType:   sql.NullString{Valid: false},
+			LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+			ID:           job.ID,
+		}
+		rowsAffected, err := m.db.LeaseMacroJob(ctx, p)
+		if err != nil {
+			return nil, fmt.Errorf("lease macro job: %w", err)
+		}
+		if rowsAffected == 0 {
+			// Race: someone else holds the lease — reload and return
+			updated, err := m.db.GetJobByID(ctx, job.ID)
+			if err != nil {
+				return nil, fmt.Errorf("get job after lease race: %w", err)
+			}
+			return &updated, nil
+		}
+
+		updated, err := m.db.GetJobByID(ctx, job.ID)
+		if err != nil {
+			return nil, fmt.Errorf("get job after lease: %w", err)
+		}
+		return &updated, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("find incomplete macro job: %w", err)
+	}
+
+	// No existing macro job — create one that spans the full 32-bit nonce space
+	params := database.CreateMacroJobParams{
+		Prefix28:           prefix28,
+		NonceStart:         int64(0),
+		NonceEnd:           int64(math.MaxUint32),
+		CurrentNonce:       sql.NullInt64{Int64: 0, Valid: true},
+		WorkerID:           sql.NullString{String: workerID, Valid: true},
+		WorkerType:         sql.NullString{Valid: false},
+		LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+		RequestedBatchSize: sql.NullInt64{Valid: false},
+	}
+	created, err := m.db.CreateMacroJob(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("create macro job: %w", err)
+	}
+	return &created, nil
+}
