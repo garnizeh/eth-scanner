@@ -25,7 +25,7 @@ func TestJobsTableBoundedStorage(t *testing.T) {
 	}
 
 	// Record many checkpoints (worker_history rows) referencing the same job
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		if err := q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "worker-A",
 			WorkerType:    sql.NullString{String: "pc", Valid: true},
@@ -65,7 +65,7 @@ func TestWorkerHistoryGlobalRetention_SmallLimit(t *testing.T) {
 
 	// Insert more rows than the limit and verify trimming
 	total := 150
-	for i := 0; i < total; i++ {
+	for i := range total {
 		if err := q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "worker-glob",
 			WorkerType:    sql.NullString{String: "pc", Valid: true},
@@ -98,9 +98,17 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 	ctx := context.Background()
 	db, q := setupDBForTests(t)
 
+	// Use a transaction for bulk inserts to avoid timeout
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+	qtx := q.WithTx(tx)
+
 	total := 15000
-	for i := 0; i < total; i++ {
-		if err := q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
+	for i := range total {
+		if err := qtx.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "worker-load",
 			WorkerType:    sql.NullString{String: "pc", Valid: true},
 			JobID:         sql.NullInt64{Valid: false},
@@ -115,6 +123,10 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("RecordWorkerStats failed at %d: %v", i, err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit failed: %v", err)
 	}
 
 	var cnt int
