@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -40,6 +41,15 @@ type Config struct {
 	// CleanupIntervalSeconds controls how often the master runs the cleanup
 	// background task (default: 6 hours = 21600 seconds).
 	CleanupIntervalSeconds int64
+
+	// WorkerHistoryLimit is the global cap for raw history rows (worker_history)
+	WorkerHistoryLimit int
+
+	// WorkerDailyStatsLimit is the per-worker cap for daily aggregation
+	WorkerDailyStatsLimit int
+
+	// WorkerMonthlyStatsLimit is the per-worker cap for monthly aggregation
+	WorkerMonthlyStatsLimit int
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -110,5 +120,99 @@ func Load() (*Config, error) {
 		cfg.CleanupIntervalSeconds = n
 	}
 
+	// Retention limits for worker statistics (can be set independently)
+	// Defaults: 10000, 1000, 1000
+	if v := strings.TrimSpace(os.Getenv("WORKER_HISTORY_LIMIT")); v == "" {
+		cfg.WorkerHistoryLimit = 10000
+	} else {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_HISTORY_LIMIT: %w", err)
+		}
+		cfg.WorkerHistoryLimit = n
+	}
+
+	if v := strings.TrimSpace(os.Getenv("WORKER_DAILY_STATS_LIMIT")); v == "" {
+		cfg.WorkerDailyStatsLimit = 1000
+	} else {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_DAILY_STATS_LIMIT: %w", err)
+		}
+		cfg.WorkerDailyStatsLimit = n
+	}
+
+	if v := strings.TrimSpace(os.Getenv("WORKER_MONTHLY_STATS_LIMIT")); v == "" {
+		cfg.WorkerMonthlyStatsLimit = 1000
+	} else {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_MONTHLY_STATS_LIMIT: %w", err)
+		}
+		cfg.WorkerMonthlyStatsLimit = n
+	}
+
+	// Validate retention values and warn for low sizes
+	if cfg.WorkerHistoryLimit <= 0 {
+		log.Printf("WARNING: WORKER_HISTORY_LIMIT must be > 0, using default 10000")
+		cfg.WorkerHistoryLimit = 10000
+	}
+	if cfg.WorkerHistoryLimit < 100 {
+		log.Printf("WARNING: WORKER_HISTORY_LIMIT is very low (%d), may lose recent history quickly", cfg.WorkerHistoryLimit)
+	}
+	if cfg.WorkerDailyStatsLimit <= 0 {
+		log.Printf("WARNING: WORKER_DAILY_STATS_LIMIT must be > 0, using default 1000")
+		cfg.WorkerDailyStatsLimit = 1000
+	}
+	if cfg.WorkerMonthlyStatsLimit <= 0 {
+		log.Printf("WARNING: WORKER_MONTHLY_STATS_LIMIT must be > 0, using default 1000")
+		cfg.WorkerMonthlyStatsLimit = 1000
+	}
+
 	return cfg, nil
+}
+
+// GetRetentionLimits reads only the worker retention related environment
+// variables and returns concrete values with defaults. This helper avoids
+// requiring a full Config load when callers only need retention limits.
+func GetRetentionLimits() (history int, daily int, monthly int) {
+	// Defaults
+	history = 10000
+	daily = 1000
+	monthly = 1000
+
+	if v := strings.TrimSpace(os.Getenv("WORKER_HISTORY_LIMIT")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			history = n
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("WORKER_DAILY_STATS_LIMIT")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			daily = n
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("WORKER_MONTHLY_STATS_LIMIT")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			monthly = n
+		}
+	}
+
+	// Basic validation and warnings
+	if history <= 0 {
+		log.Printf("WARNING: WORKER_HISTORY_LIMIT must be > 0, using default 10000")
+		history = 10000
+	}
+	if history < 100 {
+		log.Printf("WARNING: WORKER_HISTORY_LIMIT is very low (%d), may lose recent history quickly", history)
+	}
+	if daily <= 0 {
+		log.Printf("WARNING: WORKER_DAILY_STATS_LIMIT must be > 0, using default 1000")
+		daily = 1000
+	}
+	if monthly <= 0 {
+		log.Printf("WARNING: WORKER_MONTHLY_STATS_LIMIT must be > 0, using default 1000")
+		monthly = 1000
+	}
+
+	return history, daily, monthly
 }

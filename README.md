@@ -70,6 +70,8 @@ These variables control the multi-tier statistics architecture for dashboard ana
 
 **Note:** Worker lifetime statistics (Tier 4) have no cap—one permanent record per worker for leaderboards and cumulative totals.
 
+Warning on very small limits: setting any of the `WORKER_*_LIMIT` values below `100` is supported but will emit a runtime warning and may cause rapid churn of historical data; values <= 0 are ignored and defaults are used.
+
 See [Database Optimization Proposal](docs/architecture/db-optimization-proposal.md) for architecture details.
 
 ### Running the Master API

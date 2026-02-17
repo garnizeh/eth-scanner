@@ -107,6 +107,67 @@ func TestLoad_CustomCleanupEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_RetentionDefaults(t *testing.T) {
+	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	// ensure retention envs unset
+	t.Setenv("WORKER_HISTORY_LIMIT", "")
+	t.Setenv("WORKER_DAILY_STATS_LIMIT", "")
+	t.Setenv("WORKER_MONTHLY_STATS_LIMIT", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	if cfg.WorkerHistoryLimit != 10000 {
+		t.Fatalf("expected default WorkerHistoryLimit 10000, got %d", cfg.WorkerHistoryLimit)
+	}
+	if cfg.WorkerDailyStatsLimit != 1000 {
+		t.Fatalf("expected default WorkerDailyStatsLimit 1000, got %d", cfg.WorkerDailyStatsLimit)
+	}
+	if cfg.WorkerMonthlyStatsLimit != 1000 {
+		t.Fatalf("expected default WorkerMonthlyStatsLimit 1000, got %d", cfg.WorkerMonthlyStatsLimit)
+	}
+}
+
+func TestGetRetentionLimits_Custom(t *testing.T) {
+	t.Setenv("WORKER_HISTORY_LIMIT", "50")
+	t.Setenv("WORKER_DAILY_STATS_LIMIT", "20")
+	t.Setenv("WORKER_MONTHLY_STATS_LIMIT", "15")
+
+	h, d, m := GetRetentionLimits()
+	if h != 50 {
+		t.Fatalf("expected history 50, got %d", h)
+	}
+	if d != 20 {
+		t.Fatalf("expected daily 20, got %d", d)
+	}
+	if m != 15 {
+		t.Fatalf("expected monthly 15, got %d", m)
+	}
+}
+
+func TestLoad_RetentionZeroUsesDefaults(t *testing.T) {
+	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	// set zero/negative values which should be replaced by defaults
+	t.Setenv("WORKER_HISTORY_LIMIT", "0")
+	t.Setenv("WORKER_DAILY_STATS_LIMIT", "0")
+	t.Setenv("WORKER_MONTHLY_STATS_LIMIT", "-5")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	if cfg.WorkerHistoryLimit != 10000 {
+		t.Fatalf("expected WorkerHistoryLimit default 10000, got %d", cfg.WorkerHistoryLimit)
+	}
+	if cfg.WorkerDailyStatsLimit != 1000 {
+		t.Fatalf("expected WorkerDailyStatsLimit default 1000, got %d", cfg.WorkerDailyStatsLimit)
+	}
+	if cfg.WorkerMonthlyStatsLimit != 1000 {
+		t.Fatalf("expected WorkerMonthlyStatsLimit default 1000, got %d", cfg.WorkerMonthlyStatsLimit)
+	}
+}
+
 func TestLoad_DefaultsAndRequired(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", ":memory:")
 	// ensure other vars unset
