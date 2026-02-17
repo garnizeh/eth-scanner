@@ -140,7 +140,8 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM worker_history").Scan(&cnt); err != nil {
 		t.Fatalf("count worker_history failed: %v", err)
 	}
-	if cnt != 10000 {
-		t.Fatalf("expected worker_history count 10000 after load prune, got %d", cnt)
+	expected := min(total, 10000)
+	if cnt != expected {
+		t.Fatalf("expected worker_history count %d after load prune, got %d", expected, cnt)
 	}
 }
