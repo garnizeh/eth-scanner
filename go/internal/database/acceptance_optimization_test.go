@@ -149,7 +149,6 @@ func BenchmarkRecordWorkerStats(b *testing.B) {
 	ctx := context.Background()
 	_, q := setupDBForBench(b)
 
-	
 	for i := 0; b.Loop(); i++ {
 		_ = q.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "bench-worker",
