@@ -1,18 +1,21 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
 	"github.com/garnizeh/eth-scanner/internal/database"
 )
 
 // handleJobCheckpoint handles PATCH /api/v1/jobs/{id}/checkpoint
-// Request JSON: {"worker_id":"...","current_nonce":1234,"keys_scanned":100}
+// Request JSON: {"worker_id":"...","current_nonce":1234,"keys_scanned":100, "started_at":"2024-01-01T12:00:00Z","duration_ms":5000}
 func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	// Expect path like /api/v1/jobs/{id}/checkpoint
 	// Trim prefix handled by ServeMux and parse remaining segments
@@ -33,9 +36,11 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type reqBody struct {
-		WorkerID     string `json:"worker_id"`
-		CurrentNonce int64  `json:"current_nonce"`
-		KeysScanned  int64  `json:"keys_scanned"`
+		WorkerID     string    `json:"worker_id"`
+		CurrentNonce int64     `json:"current_nonce"`
+		KeysScanned  int64     `json:"keys_scanned"`
+		StartedAt    time.Time `json:"started_at"`
+		DurationMs   int64     `json:"duration_ms"`
 	}
 	var req reqBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -103,6 +108,39 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		KeysScanned:  updated.KeysScanned.Int64,
 		UpdatedAt:    up,
 	}
+	// Record worker history (best-effort; do not fail the request on error)
+	go func() {
+		// compute keys per second
+		var kps float64
+		if req.DurationMs > 0 {
+			kps = float64(req.KeysScanned) / (float64(req.DurationMs) / 1000.0)
+		}
+
+		// choose batch size: prefer requested_batch_size if present
+		var batchSize interface{}
+		if updated.RequestedBatchSize.Valid {
+			batchSize = updated.RequestedBatchSize.Int64
+		} else {
+			batchSize = req.KeysScanned
+		}
+
+		// Insert into worker_history (finished_at uses UTC now)
+		_, err := s.db.ExecContext(context.Background(), `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
+			req.WorkerID,
+			updated.WorkerType.String,
+			updated.ID,
+			batchSize,
+			req.KeysScanned,
+			req.DurationMs,
+			kps,
+			updated.Prefix28,
+			updated.NonceStart,
+			req.CurrentNonce,
+		)
+		if err != nil {
+			log.Printf("WARNING: failed to record worker stats on checkpoint: %v", err)
+		}
+	}()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }

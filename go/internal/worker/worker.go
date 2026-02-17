@@ -162,6 +162,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	ticker := time.NewTicker(w.config.CheckpointInterval)
 	defer ticker.Stop()
 
+	// Track start time to compute throughput (keys/sec) for the scanned range.
+	startTime := time.Now()
+
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
@@ -173,7 +176,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 				cn := atomic.LoadUint32(&currentNonce)
 				tk := atomic.LoadUint64(&totalKeys)
 				bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				if err := w.client.UpdateCheckpoint(bgCtx, lease.JobID, cn, tk); err != nil {
+				durationMs := time.Since(startTime).Milliseconds()
+				if err := w.client.UpdateCheckpoint(bgCtx, lease.JobID, cn, tk, startTime, durationMs); err != nil {
 					if errors.Is(err, ErrUnauthorized) {
 						// mark unauthorized so main flow returns ErrUnauthorized
 						atomic.StoreInt32(&unauthorizedFlag, 1)
@@ -191,7 +195,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 				// Snapshot atomically to avoid data races
 				cn := atomic.LoadUint32(&currentNonce)
 				tk := atomic.LoadUint64(&totalKeys)
-				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, cn, tk); err != nil {
+				durationMs := time.Since(startTime).Milliseconds()
+				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, cn, tk, startTime, durationMs); err != nil {
 					if errors.Is(err, ErrUnauthorized) {
 						// fatal: mark flag and cancel lease context so scanning stops.
 						atomic.StoreInt32(&unauthorizedFlag, 1)
@@ -214,9 +219,6 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		numWorkers = 1
 	}
 	log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
-
-	// Track start time to compute throughput (keys/sec) for the scanned range.
-	startTime := time.Now()
 
 	// Build scanner job
 	var job Job
@@ -277,7 +279,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	}
 
 	// Complete the batch
-	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys); err != nil {
+	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, totalKeys, startTime, elapsed.Milliseconds()); err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			return elapsed, tk, ErrUnauthorized
 		}
