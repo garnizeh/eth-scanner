@@ -32,7 +32,7 @@ func TestHandleResultSubmit_Success(t *testing.T) {
 	}
 	var out struct {
 		ID         int64  `json:"id"`
-		PrivateKey string `json:"private_key"`
+		PrivateKey string `json:"private_key"` //nolint:gosec // false positive
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode resp: %v", err)

@@ -125,6 +125,7 @@ func TestAPIKeyMiddleware_NoConfig_Allows(t *testing.T) {
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
 	cli := &http.Client{}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := cli.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -145,6 +146,7 @@ func TestAPIKeyMiddleware_RejectsMissingOrInvalid(t *testing.T) {
 	// missing header
 	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
 	cli := &http.Client{}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := cli.Do(req1)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -157,6 +159,7 @@ func TestAPIKeyMiddleware_RejectsMissingOrInvalid(t *testing.T) {
 	// invalid header
 	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
 	req2.Header.Set("X-API-KEY", "wrong")
+	//nolint:gosec // false positive: SSRF in test
 	resp2, err := cli.Do(req2)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -177,6 +180,7 @@ func TestAPIKeyMiddleware_AllowsValid(t *testing.T) {
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
 	req.Header.Set("X-API-KEY", "secret")
 	cli := &http.Client{}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := cli.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -198,6 +202,7 @@ func TestAPIKeyMiddleware_AllowsOptions(t *testing.T) {
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, ts.URL+"/health", nil)
 	cli := &http.Client{}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := cli.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

@@ -50,7 +50,9 @@ func Logger(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		log.Printf("%s method=%s path=%s status=%d duration=%s",
+		// Use %q for method and path to avoid log injection (quotes and escapes unsafe chars)
+		//nolint:gosec // false positive: using %q which sanitizes strings
+		log.Printf("%s method=%q path=%q status=%d duration=%s",
 			start.Format(time.RFC3339), r.Method, r.URL.Path, status, duration)
 	})
 }

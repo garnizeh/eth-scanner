@@ -87,6 +87,8 @@ This aims to prevent regressions where lines (for example lines 18, 23, 37, 40 i
 - **Database:** Use `sqlc` to generate code from raw SQL. Avoid heavy ORMs.
 - **Testing:** Use `t.TempDir()` for temporary directories in all tests that need to create files.
 - **Error Handling:** Never ignore or discard errors returned by functions; the linter will complain. Always add context to errors using `fmt.Errorf` with `%w` for wrapping, e.g., `return fmt.Errorf("failed to set goose dialect: %w", err)`.
+- **Use `any` for empty interface:** Prefer the `any` alias instead of `interface{}` in Go code for clarity and to follow modern Go idioms (Go 1.18+). Example: `var v any` instead of `var v interface{}`.
+- **Use `for range n` with n being a integer for loops:** When iterating a fixed number of times, use `for range n` syntax instead of traditional `for i := 0; i < n; i++` to improve readability. Example: `for range 5 { ... }` instead of `for i := 0; i < 5; i++ { ... }`; if you need to use the index inside the loop, use `for i := range n`.
 
 ## 3. Worker Specifications
 

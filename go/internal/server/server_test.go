@@ -173,6 +173,7 @@ startedListening:
 			reqDone <- err
 			return
 		}
+		//nolint:gosec // false positive: SSRF in test
 		resp, err := client.Do(req)
 		if err != nil {
 			reqDone <- err
@@ -258,6 +259,7 @@ func TestShutdownRespectsTimeout(t *testing.T) {
 			reqDone <- err
 			return
 		}
+		//nolint:gosec // false positive: SSRF in test
 		resp, err := client.Do(req)
 		if resp != nil {
 			defer resp.Body.Close()

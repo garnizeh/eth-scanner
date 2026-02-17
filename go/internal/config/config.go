@@ -27,7 +27,7 @@ type Config struct {
 
 	// APIKey is the secret API key required for requests when set. If empty,
 	// API key enforcement is disabled (useful for local testing).
-	APIKey string
+	APIKey string //nolint:gosec // false positive: this is a config field name, not a hardcoded secret
 
 	// TargetAddress is the Ethereum address that workers should search for.
 	// Defaults to 0x000000000000000000000000000000000000dEaD if not specified.
@@ -203,6 +203,7 @@ func GetRetentionLimits() (history int, daily int, monthly int) {
 		history = 10000
 	}
 	if history < 100 {
+		//nolint:gosec // false positive: history is an integer
 		log.Printf("WARNING: WORKER_HISTORY_LIMIT is very low (%d), may lose recent history quickly", history)
 	}
 	if daily <= 0 {

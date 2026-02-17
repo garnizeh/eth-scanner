@@ -14,7 +14,7 @@ import (
 type Config struct {
 	APIURL             string
 	WorkerID           string
-	APIKey             string
+	APIKey             string //nolint:gosec // false positive
 	CheckpointInterval time.Duration
 	// LeaseGracePeriod is subtracted from lease expiry to create a scanning
 	// deadline so the worker can checkpoint and shut down gracefully before
