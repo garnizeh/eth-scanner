@@ -246,14 +246,18 @@ type checkpointRequest struct {
 	WorkerID     string `json:"worker_id"`
 	CurrentNonce uint32 `json:"current_nonce"`
 	KeysScanned  uint64 `json:"keys_scanned"`
+	StartedAt    string `json:"started_at"`
+	DurationMs   int64  `json:"duration_ms"`
 }
 
 // UpdateCheckpoint reports progress for a job to the Master API.
-func (c *Client) UpdateCheckpoint(ctx context.Context, jobID string, currentNonce uint32, keysScanned uint64) error {
+func (c *Client) UpdateCheckpoint(ctx context.Context, jobID string, currentNonce uint32, keysScanned uint64, startedAt time.Time, durationMs int64) error {
 	req := checkpointRequest{
 		WorkerID:     c.workerID,
 		CurrentNonce: currentNonce,
 		KeysScanned:  keysScanned,
+		StartedAt:    startedAt.UTC().Format(time.RFC3339),
+		DurationMs:   durationMs,
 	}
 
 	path := fmt.Sprintf("/api/v1/jobs/%s/checkpoint", jobID)
@@ -272,14 +276,18 @@ type completeRequest struct {
 	WorkerID    string `json:"worker_id"`
 	FinalNonce  uint32 `json:"final_nonce"`
 	KeysScanned uint64 `json:"keys_scanned"`
+	StartedAt   string `json:"started_at"`
+	DurationMs  int64  `json:"duration_ms"`
 }
 
 // CompleteBatch marks a job as completed on the Master API.
-func (c *Client) CompleteBatch(ctx context.Context, jobID string, finalNonce uint32, totalKeysScanned uint64) error {
+func (c *Client) CompleteBatch(ctx context.Context, jobID string, finalNonce uint32, totalKeysScanned uint64, startedAt time.Time, durationMs int64) error {
 	req := completeRequest{
 		WorkerID:    c.workerID,
 		FinalNonce:  finalNonce,
 		KeysScanned: totalKeysScanned,
+		StartedAt:   startedAt.UTC().Format(time.RFC3339),
+		DurationMs:  durationMs,
 	}
 
 	path := fmt.Sprintf("/api/v1/jobs/%s/complete", jobID)

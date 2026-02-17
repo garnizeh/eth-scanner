@@ -373,7 +373,7 @@ func TestUpdateCheckpoint_Success(t *testing.T) {
 	defer server.Close()
 
 	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
-	if err := c.UpdateCheckpoint(context.Background(), "test-job-123", 12345, 12345); err != nil {
+	if err := c.UpdateCheckpoint(context.Background(), "test-job-123", 12345, 12345, time.Now(), 1000); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -390,7 +390,7 @@ func TestUpdateCheckpoint_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
 	c := NewClient(cfg)
 
-	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0)
+	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0, time.Now(), 0)
 	if err == nil {
 		t.Fatalf("expected ErrUnauthorized")
 	}
@@ -411,7 +411,7 @@ func TestUpdateCheckpoint_APIErrorWrapped(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
 	c := NewClient(cfg)
 
-	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0)
+	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0, time.Now(), 0)
 	if err == nil {
 		t.Fatalf("expected wrapped API error")
 	}
@@ -458,7 +458,7 @@ func TestCompleteBatch_Success(t *testing.T) {
 	defer server.Close()
 
 	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
-	if err := c.CompleteBatch(context.Background(), "test-job-456", 4294967295, 4294967296); err != nil {
+	if err := c.CompleteBatch(context.Background(), "test-job-456", 4294967295, 4294967296, time.Now(), 1000); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -475,7 +475,7 @@ func TestCompleteBatch_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
 	c := NewClient(cfg)
 
-	err := c.CompleteBatch(context.Background(), "job-1", 0, 0)
+	err := c.CompleteBatch(context.Background(), "job-1", 0, 0, time.Now(), 0)
 	if err == nil {
 		t.Fatalf("expected ErrUnauthorized")
 	}
@@ -496,7 +496,7 @@ func TestCompleteBatch_APIErrorWrapped(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
 	c := NewClient(cfg)
 
-	err := c.CompleteBatch(context.Background(), "job-1", 0, 0)
+	err := c.CompleteBatch(context.Background(), "job-1", 0, 0, time.Now(), 0)
 	if err == nil {
 		t.Fatalf("expected wrapped API error")
 	}
