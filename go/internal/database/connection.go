@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"time"
 
+	"github.com/garnizeh/eth-scanner/internal/config"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
@@ -69,6 +70,15 @@ func InitDB(ctx context.Context, dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to apply database schema: %w", err)
 	}
 
+	// Create retention triggers based on configured limits (reads env vars)
+	hist, daily, monthly := config.GetRetentionLimits()
+	if err := createRetentionTriggers(ctx, db, hist, daily, monthly); err != nil {
+		if cerr := db.Close(); cerr != nil {
+			return nil, fmt.Errorf("failed to create retention triggers: %w", errors.Join(err, cerr))
+		}
+		return nil, fmt.Errorf("failed to create retention triggers: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -105,6 +115,83 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	// Run all up migrations
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("failed to apply schema migrations: %w", err)
+	}
+
+	return nil
+}
+
+// createRetentionTriggers creates or recreates SQLite triggers that prune
+// worker history and per-worker daily/monthly stats according to configured limits.
+func createRetentionTriggers(ctx context.Context, db *sql.DB, historyLimit, dailyLimit, monthlyLimit int) error {
+	// Drop both the original schema trigger names (prefixed with trg_) and
+	// any previously created runtime triggers to ensure a single set of
+	// retention triggers exist with the configured limits.
+	dropTriggers := []string{
+		"DROP TRIGGER IF EXISTS prune_worker_history",
+		"DROP TRIGGER IF EXISTS prune_daily_stats_per_worker",
+		"DROP TRIGGER IF EXISTS prune_monthly_stats_per_worker",
+		"DROP TRIGGER IF EXISTS trg_prune_daily_stats_per_worker",
+		"DROP TRIGGER IF EXISTS trg_prune_monthly_stats_per_worker",
+	}
+	for _, stmt := range dropTriggers {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("drop trigger: %w", err)
+		}
+	}
+
+	historyTrigger := fmt.Sprintf(`
+	CREATE TRIGGER prune_worker_history
+	AFTER INSERT ON worker_history
+	WHEN (SELECT COUNT(*) FROM worker_history) > %d
+	BEGIN
+		DELETE FROM worker_history
+		WHERE id IN (
+			SELECT id FROM worker_history
+			ORDER BY id ASC
+			LIMIT (SELECT COUNT(*) - %d FROM worker_history)
+		);
+	END;
+	`, historyLimit, historyLimit)
+
+	dailyTrigger := fmt.Sprintf(`
+	CREATE TRIGGER prune_daily_stats_per_worker
+	AFTER INSERT ON worker_stats_daily
+	FOR EACH ROW
+	WHEN (SELECT COUNT(*) FROM worker_stats_daily WHERE worker_id = NEW.worker_id) > %d
+	BEGIN
+		DELETE FROM worker_stats_daily
+		WHERE worker_id = NEW.worker_id
+		AND id IN (
+			SELECT id FROM worker_stats_daily
+			WHERE worker_id = NEW.worker_id
+			ORDER BY stats_date ASC
+			LIMIT (SELECT COUNT(*) - %d FROM worker_stats_daily WHERE worker_id = NEW.worker_id)
+		);
+	END;
+	`, dailyLimit, dailyLimit)
+
+	monthlyTrigger := fmt.Sprintf(`
+	CREATE TRIGGER prune_monthly_stats_per_worker
+	AFTER INSERT ON worker_stats_monthly
+	FOR EACH ROW
+	WHEN (SELECT COUNT(*) FROM worker_stats_monthly WHERE worker_id = NEW.worker_id) > %d
+	BEGIN
+		DELETE FROM worker_stats_monthly
+		WHERE worker_id = NEW.worker_id
+		AND id IN (
+			SELECT id FROM worker_stats_monthly
+			WHERE worker_id = NEW.worker_id
+			ORDER BY stats_month ASC
+			LIMIT (SELECT COUNT(*) - %d FROM worker_stats_monthly WHERE worker_id = NEW.worker_id)
+		);
+	END;
+	`, monthlyLimit, monthlyLimit)
+
+	triggers := []string{historyTrigger, dailyTrigger, monthlyTrigger}
+	for _, t := range triggers {
+		if _, err := db.ExecContext(ctx, t); err != nil {
+			return fmt.Errorf("create trigger: %w", err)
+		}
 	}
 
 	return nil
