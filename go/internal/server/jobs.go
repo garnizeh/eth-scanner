@@ -6,9 +6,12 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/garnizeh/eth-scanner/internal/database"
@@ -168,16 +171,41 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 	}
 
 	// If still no prefix, generate a new random one.
-	if prefix28 == nil {
-		prefix28 = make([]byte, 28)
-		if _, err := rand.Read(prefix28); err != nil {
-			return nil, fmt.Errorf("failed to generate prefix: %w", err)
+	var created *database.Job
+	var createErr error
+	// Retry on transient constraint violations (concurrent allocs) a few times
+	for attempt := range 3 {
+		// If no prefix, generate a new random one.
+		if prefix28 == nil {
+			prefix28 = make([]byte, 28)
+			if _, err := rand.Read(prefix28); err != nil {
+				return nil, fmt.Errorf("failed to generate prefix: %w", err)
+			}
 		}
-	}
 
-	created, err := m.CreateBatch(ctx, prefix28, batchSize)
-	if err != nil {
-		return nil, fmt.Errorf("create batch: %w", err)
+		created, createErr = m.CreateBatch(ctx, prefix28, batchSize)
+		if createErr == nil {
+			break
+		}
+
+		log.Printf("create batch attempt %d failed: %v", attempt+1, createErr)
+
+		// If prefix is exhausted, don't retry with same prefix; switch to random immediately
+		if errors.Is(createErr, jobs.ErrPrefixExhausted) {
+			prefix28 = nil
+			continue
+		}
+
+		// If error looks like a constraint/unique conflict, retry after a tiny backoff
+		if strings.Contains(createErr.Error(), "UNIQUE constraint") || strings.Contains(createErr.Error(), "constraint failed") {
+			time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+			continue
+		}
+		// Non-retriable error
+		return nil, fmt.Errorf("create batch: %w", createErr)
+	}
+	if createErr != nil {
+		return nil, fmt.Errorf("create batch: %w", createErr)
 	}
 
 	leaseSeconds := int64(leaseDuration.Seconds())
@@ -188,10 +216,12 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 		ID:           created.ID,
 	}
 	if _, err := q.LeaseBatch(ctx, lb); err != nil {
+		log.Printf("lease created batch failed: %v", err)
 		return nil, fmt.Errorf("lease created batch: %w", err)
 	}
 	updated, err := q.GetJobByID(ctx, created.ID)
 	if err != nil {
+		log.Printf("get job by id failed after create: %v", err)
 		return nil, fmt.Errorf("get job by id: %w", err)
 	}
 	// Register or heartbeat this worker in workers table

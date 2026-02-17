@@ -3,17 +3,29 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
+#include "wifi_handler.h"
 
 static const char *TAG = "eth-scanner";
 
 void app_main(void)
 {
+    // Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
     ESP_LOGI(TAG, "EthScanner ESP32 Worker starting...");
 
-    // Initialization will be added in subsequent tasks
+    // Initialize WiFi
+    wifi_init_sta();
 
-    while (1)
-    {
+    ESP_LOGI(TAG, "WiFi connected, starting worker tasks...");
+
+    while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
