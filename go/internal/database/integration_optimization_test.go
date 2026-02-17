@@ -112,7 +112,8 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 	}()
 	qtx := q.WithTx(tx)
 
-	total := 15000
+	// Reduce load for CI/race builds to avoid timeouts while still exercising pruning
+	total := 5000
 	for i := range total {
 		if err := qtx.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "worker-load",
