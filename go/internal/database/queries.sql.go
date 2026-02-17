@@ -227,7 +227,7 @@ func (q *Queries) FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (
 }
 
 const getActiveWorkers = `-- name: GetActiveWorkers :many
-SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at FROM workers
+SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at, updated_at FROM workers
 WHERE last_seen > datetime('now', '-' || ? || ' minutes')
 ORDER BY last_seen DESC
 `
@@ -249,6 +249,7 @@ func (q *Queries) GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString)
 			&i.TotalKeysScanned,
 			&i.Metadata,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -665,7 +666,7 @@ func (q *Queries) GetStats(ctx context.Context) (StatsSummary, error) {
 }
 
 const getWorkerByID = `-- name: GetWorkerByID :one
-SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at FROM workers
+SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at, updated_at FROM workers
 WHERE id = ?
 `
 
@@ -680,6 +681,7 @@ func (q *Queries) GetWorkerByID(ctx context.Context, id string) (Worker, error) 
 		&i.TotalKeysScanned,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -880,7 +882,7 @@ func (q *Queries) GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerS
 }
 
 const getWorkersByType = `-- name: GetWorkersByType :many
-SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at FROM workers
+SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at, updated_at FROM workers
 WHERE worker_type = ?
 ORDER BY last_seen DESC
 `
@@ -902,6 +904,7 @@ func (q *Queries) GetWorkersByType(ctx context.Context, workerType string) ([]Wo
 			&i.TotalKeysScanned,
 			&i.Metadata,
 			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1102,11 +1105,12 @@ func (q *Queries) UpdateWorkerKeyCount(ctx context.Context, arg UpdateWorkerKeyC
 }
 
 const upsertWorker = `-- name: UpsertWorker :exec
-INSERT INTO workers (id, worker_type, last_seen, metadata)
-VALUES (?, ?, datetime('now', 'utc'), ?)
+INSERT INTO workers (id, worker_type, last_seen, metadata, updated_at)
+VALUES (?, ?, datetime('now', 'utc'), ?, datetime('now','utc'))
 ON CONFLICT(id) DO UPDATE SET
     last_seen = datetime('now', 'utc'),
-    metadata = excluded.metadata
+    metadata = excluded.metadata,
+    updated_at = datetime('now','utc')
 `
 
 type UpsertWorkerParams struct {

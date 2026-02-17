@@ -59,6 +59,7 @@ type Worker struct {
 	TotalKeysScanned sql.NullInt64  `json:"total_keys_scanned"`
 	Metadata         sql.NullString `json:"metadata"`
 	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
 type WorkerHistory struct {

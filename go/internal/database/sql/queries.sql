@@ -146,11 +146,12 @@ LIMIT 1;
 
 -- name: UpsertWorker :exec
 -- Insert or update worker heartbeat
-INSERT INTO workers (id, worker_type, last_seen, metadata)
-VALUES (?, ?, datetime('now', 'utc'), ?)
+INSERT INTO workers (id, worker_type, last_seen, metadata, updated_at)
+VALUES (?, ?, datetime('now', 'utc'), ?, datetime('now','utc'))
 ON CONFLICT(id) DO UPDATE SET
     last_seen = datetime('now', 'utc'),
-    metadata = excluded.metadata;
+    metadata = excluded.metadata,
+    updated_at = datetime('now','utc');
 
 -- name: UpdateWorkerKeyCount :exec
 -- Update worker's total key count

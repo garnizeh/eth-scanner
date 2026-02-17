@@ -24,7 +24,7 @@ func New(db *database.Queries) *Manager {
 // LeaseExistingJob attempts to find an available (pending or expired) job
 // and lease it to the provided workerID. If no job is available, returns (nil, nil).
 // Lease duration defaults to 1 hour.
-func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*database.Job, error) {
+func (m *Manager) LeaseExistingJob(ctx context.Context, workerID, workerType string) (*database.Job, error) {
 	if m == nil || m.db == nil {
 		return nil, fmt.Errorf("manager or db is nil")
 	}
@@ -46,7 +46,7 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID string) (*datab
 		// Lease the batch (update worker_id, status, expires_at)
 		p := database.LeaseBatchParams{
 			WorkerID:     sql.NullString{String: workerID, Valid: true},
-			WorkerType:   sql.NullString{Valid: false},
+			WorkerType:   sql.NullString{String: workerType, Valid: workerType != ""},
 			LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
 			ID:           job.ID,
 		}

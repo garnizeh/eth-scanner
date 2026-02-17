@@ -27,6 +27,7 @@ const (
 func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 	type reqBody struct {
 		WorkerID           string  `json:"worker_id"`
+		WorkerType         string  `json:"worker_type,omitempty"`
 		RequestedBatchSize uint32  `json:"requested_batch_size"`
 		Prefix28           *string `json:"prefix_28,omitempty"`
 	}
@@ -54,8 +55,9 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 	q := database.NewQueries(s.db)
 	m := jobs.New(q)
 
-	// Try to lease an existing available job first
-	job, err := m.LeaseExistingJob(ctx, req.WorkerID)
+	// Try to lease an existing available job first (pass worker type so the
+	// database record can be annotated).
+	job, err := m.LeaseExistingJob(ctx, req.WorkerID, req.WorkerType)
 	if err != nil {
 		http.Error(w, "failed to lease existing job", http.StatusInternalServerError)
 		return
@@ -64,7 +66,7 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 	// If none available, create and lease a new batch (extracted to helper to
 	// reduce nesting and cyclomatic complexity).
 	if job == nil {
-		job, err = s.createAndLeaseBatch(ctx, m, q, req.WorkerID, req.Prefix28, req.RequestedBatchSize)
+		job, err = s.createAndLeaseBatch(ctx, m, q, req.WorkerID, req.WorkerType, req.Prefix28, req.RequestedBatchSize)
 		if err != nil {
 			http.Error(w, "failed to create and lease batch", http.StatusInternalServerError)
 			return
@@ -112,7 +114,7 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 
 // createAndLeaseBatch encapsulates the logic to create a new batch for the
 // given prefix (optionally provided as base64) and lease it to workerID.
-func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *database.Queries, workerID string, prefixOpt *string, batchSize uint32) (*database.Job, error) {
+func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *database.Queries, workerID, workerType string, prefixOpt *string, batchSize uint32) (*database.Job, error) {
 	var prefix28 []byte
 
 	// If client provided a prefix, validate and use it.
@@ -181,7 +183,7 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 	leaseSeconds := int64(leaseDuration.Seconds())
 	lb := database.LeaseBatchParams{
 		WorkerID:     sql.NullString{String: workerID, Valid: true},
-		WorkerType:   sql.NullString{Valid: false},
+		WorkerType:   sql.NullString{String: workerType, Valid: workerType != ""},
 		LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
 		ID:           created.ID,
 	}
@@ -191,6 +193,10 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 	updated, err := q.GetJobByID(ctx, created.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get job by id: %w", err)
+	}
+	// Register or heartbeat this worker in workers table
+	if workerType != "" {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{ID: workerID, WorkerType: workerType, Metadata: sql.NullString{Valid: false}})
 	}
 	return &updated, nil
 }
