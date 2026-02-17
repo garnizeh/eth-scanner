@@ -49,10 +49,16 @@ func InitDB(ctx context.Context, dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool to deal with concurrent access patterns (single writer, multiple readers)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(time.Hour)
+	// Configure connection pool. For in-memory databases, we must restrict to 1 connection
+	// to ensure all callers see the same schema and data (unless cache=shared is used).
+	// For file-based WAL mode, we allow a small pool for concurrent reads.
+	if dbPath == ":memory:" {
+		db.SetMaxOpenConns(1)
+	} else {
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(10)
+		db.SetConnMaxLifetime(time.Hour)
+	}
 
 	// Test connection
 	if err := db.PingContext(ctx); err != nil {
