@@ -60,3 +60,58 @@ type Worker struct {
 	Metadata         sql.NullString `json:"metadata"`
 	CreatedAt        time.Time      `json:"created_at"`
 }
+
+type WorkerHistory struct {
+	ID            int64           `json:"id"`
+	WorkerID      string          `json:"worker_id"`
+	WorkerType    sql.NullString  `json:"worker_type"`
+	JobID         sql.NullInt64   `json:"job_id"`
+	BatchSize     sql.NullInt64   `json:"batch_size"`
+	KeysScanned   sql.NullInt64   `json:"keys_scanned"`
+	DurationMs    sql.NullInt64   `json:"duration_ms"`
+	KeysPerSecond sql.NullFloat64 `json:"keys_per_second"`
+	Prefix28      []byte          `json:"prefix_28"`
+	NonceStart    sql.NullInt64   `json:"nonce_start"`
+	NonceEnd      sql.NullInt64   `json:"nonce_end"`
+	FinishedAt    time.Time       `json:"finished_at"`
+	ErrorMessage  sql.NullString  `json:"error_message"`
+}
+
+type WorkerStatsDaily struct {
+	ID               int64           `json:"id"`
+	WorkerID         string          `json:"worker_id"`
+	StatsDate        time.Time       `json:"stats_date"`
+	TotalBatches     sql.NullInt64   `json:"total_batches"`
+	TotalKeysScanned sql.NullInt64   `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullInt64   `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	KeysPerSecondMin sql.NullFloat64 `json:"keys_per_second_min"`
+	KeysPerSecondMax sql.NullFloat64 `json:"keys_per_second_max"`
+	ErrorCount       sql.NullInt64   `json:"error_count"`
+}
+
+type WorkerStatsLifetime struct {
+	WorkerID           string          `json:"worker_id"`
+	WorkerType         sql.NullString  `json:"worker_type"`
+	TotalBatches       sql.NullInt64   `json:"total_batches"`
+	TotalKeysScanned   sql.NullInt64   `json:"total_keys_scanned"`
+	TotalDurationMs    sql.NullInt64   `json:"total_duration_ms"`
+	KeysPerSecondAvg   sql.NullFloat64 `json:"keys_per_second_avg"`
+	KeysPerSecondBest  sql.NullFloat64 `json:"keys_per_second_best"`
+	KeysPerSecondWorst sql.NullFloat64 `json:"keys_per_second_worst"`
+	FirstSeenAt        time.Time       `json:"first_seen_at"`
+	LastSeenAt         time.Time       `json:"last_seen_at"`
+}
+
+type WorkerStatsMonthly struct {
+	ID               int64           `json:"id"`
+	WorkerID         string          `json:"worker_id"`
+	StatsMonth       string          `json:"stats_month"`
+	TotalBatches     sql.NullInt64   `json:"total_batches"`
+	TotalKeysScanned sql.NullInt64   `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullInt64   `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	KeysPerSecondMin sql.NullFloat64 `json:"keys_per_second_min"`
+	KeysPerSecondMax sql.NullFloat64 `json:"keys_per_second_max"`
+	ErrorCount       sql.NullInt64   `json:"error_count"`
+}

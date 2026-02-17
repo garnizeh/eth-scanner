@@ -301,6 +301,45 @@ func (q *Queries) GetAllResults(ctx context.Context, limit int64) ([]Result, err
 	return items, nil
 }
 
+const getAllWorkerLifetimeStats = `-- name: GetAllWorkerLifetimeStats :many
+SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at FROM worker_stats_lifetime
+ORDER BY total_keys_scanned DESC
+`
+
+func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error) {
+	rows, err := q.db.QueryContext(ctx, getAllWorkerLifetimeStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkerStatsLifetime{}
+	for rows.Next() {
+		var i WorkerStatsLifetime
+		if err := rows.Scan(
+			&i.WorkerID,
+			&i.WorkerType,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.KeysPerSecondBest,
+			&i.KeysPerSecondWorst,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobByID = `-- name: GetJobByID :one
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
 WHERE id = ?
@@ -491,6 +530,55 @@ func (q *Queries) GetPrefixUsage(ctx context.Context, limit int64) ([]GetPrefixU
 	return items, nil
 }
 
+const getRecentWorkerHistory = `-- name: GetRecentWorkerHistory :many
+SELECT id, worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at, error_message FROM worker_history
+WHERE finished_at > datetime('now', '-' || ? || ' seconds')
+ORDER BY finished_at DESC
+LIMIT ?
+`
+
+type GetRecentWorkerHistoryParams struct {
+	Column1 sql.NullString `json:"column_1"`
+	Limit   int64          `json:"limit"`
+}
+
+func (q *Queries) GetRecentWorkerHistory(ctx context.Context, arg GetRecentWorkerHistoryParams) ([]WorkerHistory, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentWorkerHistory, arg.Column1, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkerHistory{}
+	for rows.Next() {
+		var i WorkerHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerID,
+			&i.WorkerType,
+			&i.JobID,
+			&i.BatchSize,
+			&i.KeysScanned,
+			&i.DurationMs,
+			&i.KeysPerSecond,
+			&i.Prefix28,
+			&i.NonceStart,
+			&i.NonceEnd,
+			&i.FinishedAt,
+			&i.ErrorMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getResultByPrivateKey = `-- name: GetResultByPrivateKey :one
 SELECT id, private_key, address, worker_id, job_id, nonce_found, found_at FROM results
 WHERE private_key = ?
@@ -596,6 +684,53 @@ func (q *Queries) GetWorkerByID(ctx context.Context, id string) (Worker, error) 
 	return i, err
 }
 
+const getWorkerDailyStats = `-- name: GetWorkerDailyStats :many
+SELECT id, worker_id, stats_date, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count FROM worker_stats_daily
+WHERE worker_id = ? AND stats_date >= substr(?, 1, 10)
+ORDER BY stats_date DESC
+`
+
+type GetWorkerDailyStatsParams struct {
+	WorkerID string      `json:"worker_id"`
+	SUBSTR   interface{} `json:"SUBSTR"`
+}
+
+// Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
+// This makes the generated sqlc method usable directly with a Go time.Time value.
+func (q *Queries) GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]WorkerStatsDaily, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkerDailyStats, arg.WorkerID, arg.SUBSTR)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkerStatsDaily{}
+	for rows.Next() {
+		var i WorkerStatsDaily
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerID,
+			&i.StatsDate,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.KeysPerSecondMin,
+			&i.KeysPerSecondMax,
+			&i.ErrorCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWorkerLastPrefix = `-- name: GetWorkerLastPrefix :one
 SELECT prefix_28, MAX(nonce_end) as highest_nonce
 FROM jobs
@@ -616,6 +751,74 @@ func (q *Queries) GetWorkerLastPrefix(ctx context.Context, workerID sql.NullStri
 	var i GetWorkerLastPrefixRow
 	err := row.Scan(&i.Prefix28, &i.HighestNonce)
 	return i, err
+}
+
+const getWorkerLifetimeStats = `-- name: GetWorkerLifetimeStats :one
+SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at FROM worker_stats_lifetime
+WHERE worker_id = ? LIMIT 1
+`
+
+func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error) {
+	row := q.db.QueryRowContext(ctx, getWorkerLifetimeStats, workerID)
+	var i WorkerStatsLifetime
+	err := row.Scan(
+		&i.WorkerID,
+		&i.WorkerType,
+		&i.TotalBatches,
+		&i.TotalKeysScanned,
+		&i.TotalDurationMs,
+		&i.KeysPerSecondAvg,
+		&i.KeysPerSecondBest,
+		&i.KeysPerSecondWorst,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const getWorkerMonthlyStats = `-- name: GetWorkerMonthlyStats :many
+SELECT id, worker_id, stats_month, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count FROM worker_stats_monthly
+WHERE worker_id = ? AND stats_month >= ?
+ORDER BY stats_month DESC
+`
+
+type GetWorkerMonthlyStatsParams struct {
+	WorkerID   string `json:"worker_id"`
+	StatsMonth string `json:"stats_month"`
+}
+
+func (q *Queries) GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkerMonthlyStats, arg.WorkerID, arg.StatsMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkerStatsMonthly{}
+	for rows.Next() {
+		var i WorkerStatsMonthly
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerID,
+			&i.StatsMonth,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.KeysPerSecondMin,
+			&i.KeysPerSecondMax,
+			&i.ErrorCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getWorkerStats = `-- name: GetWorkerStats :many
@@ -811,6 +1014,47 @@ func (q *Queries) LeaseMacroJob(ctx context.Context, arg LeaseMacroJobParams) (i
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const recordWorkerStats = `-- name: RecordWorkerStats :exec
+INSERT INTO worker_history (
+    worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at, error_message
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type RecordWorkerStatsParams struct {
+	WorkerID      string          `json:"worker_id"`
+	WorkerType    sql.NullString  `json:"worker_type"`
+	JobID         sql.NullInt64   `json:"job_id"`
+	BatchSize     sql.NullInt64   `json:"batch_size"`
+	KeysScanned   sql.NullInt64   `json:"keys_scanned"`
+	DurationMs    sql.NullInt64   `json:"duration_ms"`
+	KeysPerSecond sql.NullFloat64 `json:"keys_per_second"`
+	Prefix28      []byte          `json:"prefix_28"`
+	NonceStart    sql.NullInt64   `json:"nonce_start"`
+	NonceEnd      sql.NullInt64   `json:"nonce_end"`
+	FinishedAt    time.Time       `json:"finished_at"`
+	ErrorMessage  sql.NullString  `json:"error_message"`
+}
+
+// Insert a raw worker history record (tier 1)
+func (q *Queries) RecordWorkerStats(ctx context.Context, arg RecordWorkerStatsParams) error {
+	_, err := q.db.ExecContext(ctx, recordWorkerStats,
+		arg.WorkerID,
+		arg.WorkerType,
+		arg.JobID,
+		arg.BatchSize,
+		arg.KeysScanned,
+		arg.DurationMs,
+		arg.KeysPerSecond,
+		arg.Prefix28,
+		arg.NonceStart,
+		arg.NonceEnd,
+		arg.FinishedAt,
+		arg.ErrorMessage,
+	)
+	return err
 }
 
 const updateCheckpoint = `-- name: UpdateCheckpoint :exec
