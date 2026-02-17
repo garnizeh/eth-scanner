@@ -76,6 +76,7 @@ func TestServerE2E(t *testing.T) {
 	ok := false
 	for range 20 {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		//nolint:gosec // false positive: SSRF in test
 		resp, err = client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			if err := json.NewDecoder(resp.Body).Decode(&body); err == nil {

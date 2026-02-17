@@ -15,7 +15,7 @@ func (s *Server) handleResultSubmit(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		WorkerID   string `json:"worker_id"`
 		JobID      int64  `json:"job_id"`
-		PrivateKey string `json:"private_key"`
+		PrivateKey string `json:"private_key"` //nolint:gosec // false positive: descriptive field name, not a hardcoded secret
 		Address    string `json:"address"`
 		Nonce      int64  `json:"nonce"`
 	}

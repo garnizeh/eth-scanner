@@ -62,6 +62,7 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	for range 20 {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+		//nolint:gosec // false positive: SSRF in test
 		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			_ = resp.Body.Close()
@@ -84,8 +85,11 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 			defer wg.Done()
 			// create distinct 28-byte prefix
 			p := make([]byte, 28)
+			//nolint:gosec // false positive: id is small in test
+			val := byte(id)
+			val++
 			for i := range p {
-				p[i] = byte(id + 1)
+				p[i] = val
 			}
 			encoded := base64.StdEncoding.EncodeToString(p)
 
@@ -93,6 +97,7 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 			b, _ := json.Marshal(leaseReq)
 			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(b))
 			req.Header.Set("Content-Type", "application/json")
+			//nolint:gosec // false positive: SSRF in test
 			resp, err := client.Do(req)
 			if err != nil {
 				t.Errorf("worker %d lease failed: %v", id, err)
@@ -116,6 +121,7 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 			cb, _ := json.Marshal(chk)
 			r2, _ := http.NewRequestWithContext(context.Background(), http.MethodPatch, chkURL, bytes.NewReader(cb))
 			r2.Header.Set("Content-Type", "application/json")
+			//nolint:gosec // false positive: SSRF in test
 			resp2, err := client.Do(r2)
 			if err != nil {
 				t.Errorf("worker %d checkpoint failed: %v", id, err)
@@ -128,6 +134,7 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 			cb2, _ := json.Marshal(compReq)
 			r3, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, completeURL, bytes.NewReader(cb2))
 			r3.Header.Set("Content-Type", "application/json")
+			//nolint:gosec // false positive: SSRF in test
 			resp3, err := client.Do(r3)
 			if err != nil {
 				t.Errorf("worker %d complete failed: %v", id, err)

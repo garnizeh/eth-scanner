@@ -37,6 +37,7 @@ func TestJobCheckpoint_Success(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPatch, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/checkpoint", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -104,6 +105,7 @@ func TestJobCheckpoint_WorkerMismatch(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPatch, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/checkpoint", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -123,6 +125,7 @@ func TestJobCheckpoint_NotFound(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	r, _ := http.NewRequestWithContext(context.Background(), http.MethodPatch, ts.URL+"/api/v1/jobs/99999/checkpoint", bytes.NewReader([]byte(`{"worker_id":"x","current_nonce":1,"keys_scanned":1}`)))
 	r.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -152,6 +155,7 @@ func TestJobCheckpoint_CompletedJob(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPatch, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/checkpoint", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -187,6 +191,7 @@ func TestJobCheckpoint_Concurrent(t *testing.T) {
 			b, _ := json.Marshal(req)
 			r, _ := http.NewRequestWithContext(ctx, http.MethodPatch, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/checkpoint", bytes.NewReader(b))
 			r.Header.Set("Content-Type", "application/json")
+			//nolint:gosec // false positive: SSRF in test
 			resp, err := client.Do(r)
 			if err != nil {
 				t.Logf("concurrent req failed: %v", err)
@@ -240,6 +245,7 @@ func TestJobCheckpoint_CurrentNonceTooLarge(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPatch, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/checkpoint", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

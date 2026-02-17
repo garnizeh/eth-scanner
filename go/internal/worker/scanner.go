@@ -23,7 +23,7 @@ type Job struct {
 
 // ScanResult is the result of a successful scan.
 type ScanResult struct {
-	PrivateKey [32]byte
+	PrivateKey [32]byte //nolint:gosec // false positive
 	Address    common.Address
 	Nonce      uint32
 }

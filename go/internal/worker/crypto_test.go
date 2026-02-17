@@ -111,7 +111,7 @@ func TestConstructPrivateKey(t *testing.T) {
 	t.Parallel()
 
 	var prefix [28]byte
-	for i := range prefix {
+	for i := range 28 {
 		prefix[i] = byte(i + 1)
 	}
 

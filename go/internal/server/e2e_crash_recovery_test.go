@@ -67,6 +67,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	for range 20 {
 		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+		//nolint:gosec // false positive: SSRF in test
 		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			_ = resp.Body.Close()
@@ -85,6 +86,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 	b, _ := json.Marshal(leaseReq)
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("lease request failed: %v", err)
@@ -129,6 +131,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 		t.Fatalf("direct UpdateCheckpoint failed: %v", err)
 	}
 
+	//nolint:gosec // false positive: SSRF in test
 	resp2, err := client.Do(r2)
 	if err != nil {
 		t.Fatalf("checkpoint request failed: %v", err)
@@ -196,6 +199,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 	bb, _ := json.Marshal(leaseReqB)
 	reqB, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(bb))
 	reqB.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	respB, err := client.Do(reqB)
 	if err != nil {
 		t.Fatalf("lease request B failed: %v", err)

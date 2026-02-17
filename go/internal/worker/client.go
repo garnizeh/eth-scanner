@@ -306,7 +306,7 @@ func (c *Client) CompleteBatch(ctx context.Context, jobID string, finalNonce uin
 // resultRequest is the payload sent to submit a found private key match.
 type resultRequest struct {
 	WorkerID        string `json:"worker_id"`
-	PrivateKey      string `json:"private_key"`      // hex-encoded 32-byte private key
+	PrivateKey      string `json:"private_key"`      //nolint:gosec // false positive - hex-encoded private key, not a hardcoded secret
 	EthereumAddress string `json:"ethereum_address"` // checksummed
 	FoundAt         string `json:"found_at"`         // RFC3339 UTC
 }

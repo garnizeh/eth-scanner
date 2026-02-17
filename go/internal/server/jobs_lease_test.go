@@ -49,6 +49,7 @@ func postLease(t *testing.T, serverURL string, body any) (int, map[string]any) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("post lease failed: %v", err)

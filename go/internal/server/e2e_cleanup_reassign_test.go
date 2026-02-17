@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -66,10 +67,12 @@ func TestCleanupAndReassign(t *testing.T) {
 
 	// wait for /health
 	client := &http.Client{Timeout: 2 * time.Second}
-	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	portStr := strconv.Itoa(port)
+	healthURL := "http://127.0.0.1:" + portStr + "/health"
 	ok := false
 	for range 20 {
-		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+		//nolint:gosec // false positive: SSRF in test using local server
 		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
@@ -134,6 +137,7 @@ func TestCleanupAndReassign(t *testing.T) {
 	b, _ := json.Marshal(leaseReq)
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("lease request failed: %v", err)
@@ -206,6 +210,7 @@ func TestCleanupAndReassign(t *testing.T) {
 	b2, _ := json.Marshal(leaseReq2)
 	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(b2))
 	req2.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp2, err := client.Do(req2)
 	if err != nil {
 		t.Fatalf("lease request 2 failed: %v", err)

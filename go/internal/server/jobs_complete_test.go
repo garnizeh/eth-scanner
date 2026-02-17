@@ -35,6 +35,7 @@ func TestJobComplete_Success(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/complete", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -81,6 +82,7 @@ func TestJobComplete_WorkerMismatch(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/complete", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -109,6 +111,7 @@ func TestJobComplete_FinalNonceMismatch(t *testing.T) {
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id, 10)+"/complete", bytes.NewReader(b))
 	r.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -127,6 +130,7 @@ func TestJobComplete_NotFound(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	r, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+"/api/v1/jobs/99999/complete", bytes.NewReader([]byte(`{"worker_id":"x","final_nonce":1,"keys_scanned":1}`)))
 	r.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp, err := client.Do(r)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -166,6 +170,7 @@ func TestJobComplete_AlreadyCompletedAndPending(t *testing.T) {
 	b1, _ := json.Marshal(req1)
 	r1, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id1, 10)+"/complete", bytes.NewReader(b1))
 	r1.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp1, err := client.Do(r1)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
@@ -180,6 +185,7 @@ func TestJobComplete_AlreadyCompletedAndPending(t *testing.T) {
 	b2, _ := json.Marshal(req2)
 	r2, _ := http.NewRequestWithContext(ctx, http.MethodPost, ts.URL+"/api/v1/jobs/"+strconv.FormatInt(id2, 10)+"/complete", bytes.NewReader(b2))
 	r2.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive: SSRF in test
 	resp2, err := client.Do(r2)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

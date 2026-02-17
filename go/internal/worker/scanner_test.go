@@ -14,7 +14,7 @@ func TestScanRange_NoMatch(t *testing.T) {
 	t.Parallel()
 
 	var prefix [28]byte
-	for i := range prefix {
+	for i := range 28 {
 		prefix[i] = byte(i + 1)
 	}
 
@@ -124,7 +124,7 @@ func TestScanRange_ContextCancelled(t *testing.T) {
 	t.Parallel()
 
 	var prefix [28]byte
-	for i := range prefix {
+	for i := range 28 {
 		prefix[i] = byte(i)
 	}
 
