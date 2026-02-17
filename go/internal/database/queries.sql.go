@@ -30,19 +30,26 @@ SET
     status = 'completed',
     completed_at = datetime('now', 'utc'),
     keys_scanned = ?,
+    duration_ms = ?,
     current_nonce = nonce_end
 WHERE id = ? AND worker_id = ?
 `
 
 type CompleteBatchParams struct {
 	KeysScanned sql.NullInt64  `json:"keys_scanned"`
+	DurationMs  sql.NullInt64  `json:"duration_ms"`
 	ID          int64          `json:"id"`
 	WorkerID    sql.NullString `json:"worker_id"`
 }
 
 // Mark a batch as completed
 func (q *Queries) CompleteBatch(ctx context.Context, arg CompleteBatchParams) error {
-	_, err := q.db.ExecContext(ctx, completeBatch, arg.KeysScanned, arg.ID, arg.WorkerID)
+	_, err := q.db.ExecContext(ctx, completeBatch,
+		arg.KeysScanned,
+		arg.DurationMs,
+		arg.ID,
+		arg.WorkerID,
+	)
 	return err
 }
 
@@ -59,7 +66,7 @@ INSERT INTO jobs (
     requested_batch_size
 )
 VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
-RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at
+RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms
 `
 
 type CreateBatchParams struct {
@@ -101,6 +108,7 @@ func (q *Queries) CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, 
 		&i.KeysScanned,
 		&i.RequestedBatchSize,
 		&i.LastCheckpointAt,
+		&i.DurationMs,
 	)
 	return i, err
 }
@@ -118,7 +126,7 @@ INSERT INTO jobs (
         requested_batch_size
 )
 VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
-RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at
+RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms
 `
 
 type CreateMacroJobParams struct {
@@ -160,12 +168,13 @@ func (q *Queries) CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) 
 		&i.KeysScanned,
 		&i.RequestedBatchSize,
 		&i.LastCheckpointAt,
+		&i.DurationMs,
 	)
 	return i, err
 }
 
 const findAvailableBatch = `-- name: FindAvailableBatch :one
-SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE status = 'pending' 
    OR (status = 'processing' AND expires_at < datetime('now', 'utc'))
 ORDER BY created_at ASC
@@ -191,12 +200,13 @@ func (q *Queries) FindAvailableBatch(ctx context.Context) (Job, error) {
 		&i.KeysScanned,
 		&i.RequestedBatchSize,
 		&i.LastCheckpointAt,
+		&i.DurationMs,
 	)
 	return i, err
 }
 
 const findIncompleteMacroJob = `-- name: FindIncompleteMacroJob :one
-SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE prefix_28 = ?
     AND status != 'completed'
 ORDER BY created_at ASC
@@ -222,6 +232,7 @@ func (q *Queries) FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (
 		&i.KeysScanned,
 		&i.RequestedBatchSize,
 		&i.LastCheckpointAt,
+		&i.DurationMs,
 	)
 	return i, err
 }
@@ -342,7 +353,7 @@ func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsL
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE id = ?
 `
 
@@ -365,12 +376,13 @@ func (q *Queries) GetJobByID(ctx context.Context, id int64) (Job, error) {
 		&i.KeysScanned,
 		&i.RequestedBatchSize,
 		&i.LastCheckpointAt,
+		&i.DurationMs,
 	)
 	return i, err
 }
 
 const getJobsByStatus = `-- name: GetJobsByStatus :many
-SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE status = ?
 ORDER BY created_at DESC
 LIMIT ?
@@ -406,6 +418,7 @@ func (q *Queries) GetJobsByStatus(ctx context.Context, arg GetJobsByStatusParams
 			&i.KeysScanned,
 			&i.RequestedBatchSize,
 			&i.LastCheckpointAt,
+			&i.DurationMs,
 		); err != nil {
 			return nil, err
 		}
@@ -421,7 +434,7 @@ func (q *Queries) GetJobsByStatus(ctx context.Context, arg GetJobsByStatusParams
 }
 
 const getJobsByWorker = `-- name: GetJobsByWorker :many
-SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at FROM jobs
+SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE worker_id = ?
 ORDER BY created_at DESC
 `
@@ -451,6 +464,7 @@ func (q *Queries) GetJobsByWorker(ctx context.Context, workerID sql.NullString) 
 			&i.KeysScanned,
 			&i.RequestedBatchSize,
 			&i.LastCheckpointAt,
+			&i.DurationMs,
 		); err != nil {
 			return nil, err
 		}
@@ -1065,6 +1079,7 @@ UPDATE jobs
 SET 
     current_nonce = ?,
     keys_scanned = ?,
+    duration_ms = ?,
     last_checkpoint_at = datetime('now', 'utc')
 WHERE id = ? AND worker_id = ? AND status = 'processing'
 `
@@ -1072,6 +1087,7 @@ WHERE id = ? AND worker_id = ? AND status = 'processing'
 type UpdateCheckpointParams struct {
 	CurrentNonce sql.NullInt64  `json:"current_nonce"`
 	KeysScanned  sql.NullInt64  `json:"keys_scanned"`
+	DurationMs   sql.NullInt64  `json:"duration_ms"`
 	ID           int64          `json:"id"`
 	WorkerID     sql.NullString `json:"worker_id"`
 }
@@ -1081,6 +1097,7 @@ func (q *Queries) UpdateCheckpoint(ctx context.Context, arg UpdateCheckpointPara
 	_, err := q.db.ExecContext(ctx, updateCheckpoint,
 		arg.CurrentNonce,
 		arg.KeysScanned,
+		arg.DurationMs,
 		arg.ID,
 		arg.WorkerID,
 	)

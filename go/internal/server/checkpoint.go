@@ -74,9 +74,22 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate deltas for worker_history before updating job state
+	deltaKeys := req.KeysScanned - job.KeysScanned.Int64
+	deltaDuration := req.DurationMs - job.DurationMs.Int64
+
+	// Sanity check: if deltas are negative, fallback to full reported values
+	if deltaKeys < 0 {
+		deltaKeys = req.KeysScanned
+	}
+	if deltaDuration < 0 {
+		deltaDuration = req.DurationMs
+	}
+
 	params := database.UpdateCheckpointParams{
 		CurrentNonce: sql.NullInt64{Int64: req.CurrentNonce, Valid: true},
 		KeysScanned:  sql.NullInt64{Int64: req.KeysScanned, Valid: true},
+		DurationMs:   sql.NullInt64{Int64: req.DurationMs, Valid: true},
 		ID:           id,
 		WorkerID:     sql.NullString{String: req.WorkerID, Valid: true},
 	}
@@ -109,19 +122,19 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:    up,
 	}
 	// Record worker history (best-effort; do not fail the request on error)
-	go func() {
-		// compute keys per second
+	go func(dk, dd int64) {
+		// compute keys per second based on delta
 		var kps float64
-		if req.DurationMs > 0 {
-			kps = float64(req.KeysScanned) / (float64(req.DurationMs) / 1000.0)
+		if dd > 0 {
+			kps = float64(dk) / (float64(dd) / 1000.0)
 		}
 
-		// choose batch size: prefer requested_batch_size if present
+		// choose batch size: prefers requested_batch_size if present
 		var batchSize interface{}
 		if updated.RequestedBatchSize.Valid {
 			batchSize = updated.RequestedBatchSize.Int64
 		} else {
-			batchSize = req.KeysScanned
+			batchSize = dk
 		}
 
 		// Insert into worker_history (finished_at uses UTC now)
@@ -130,8 +143,8 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 			updated.WorkerType.String,
 			updated.ID,
 			batchSize,
-			req.KeysScanned,
-			req.DurationMs,
+			dk, // delta keys
+			dd, // delta duration
 			kps,
 			updated.Prefix28,
 			updated.NonceStart,
@@ -140,7 +153,7 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on checkpoint: %v", err)
 		}
-	}()
+	}(deltaKeys, deltaDuration)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
 }
