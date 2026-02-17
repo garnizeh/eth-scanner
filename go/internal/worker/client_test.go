@@ -427,6 +427,31 @@ func TestUpdateCheckpoint_APIErrorWrapped(t *testing.T) {
 	}
 }
 
+func TestUpdateCheckpoint_LeaseExpired(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusGone)
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "lease expired", "message": "lease not found or expired"}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
+	c := NewClient(cfg)
+
+	err := c.UpdateCheckpoint(context.Background(), "job-1", 0, 0, time.Now(), 0)
+	if err == nil {
+		t.Fatalf("expected wrapped API error for 410")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected underlying APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusGone {
+		t.Fatalf("expected status 410 inside APIError, got %d", apiErr.StatusCode)
+	}
+}
+
 func TestCompleteBatch_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
