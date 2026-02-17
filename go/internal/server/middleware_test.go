@@ -94,7 +94,7 @@ func TestLoggerMiddleware(t *testing.T) {
 	wrapped.ServeHTTP(rr, req)
 
 	out := buf.String()
-	if !strings.Contains(out, "method=GET") {
+	if !strings.Contains(out, "method=\"GET\"") {
 		t.Fatalf("log output missing method: %q", out)
 	}
 	if !strings.Contains(out, "status=201") {
