@@ -16,8 +16,12 @@ type Querier interface {
 	CompleteBatch(ctx context.Context, arg CompleteBatchParams) error
 	// Create a new batch (job) for a worker
 	CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, error)
+	// Create a long-lived macro job covering the full nonce space for a prefix
+	CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) (Job, error)
 	// Find an available batch (pending or expired lease)
 	FindAvailableBatch(ctx context.Context) (Job, error)
+	// Find an existing non-completed (macro) job for a given prefix
+	FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (Job, error)
 	// Get workers active in the last N minutes
 	GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString) ([]Worker, error)
 	// Get all results (limited)
@@ -50,6 +54,8 @@ type Querier interface {
 	InsertResult(ctx context.Context, arg InsertResultParams) (Result, error)
 	// Lease an existing batch to a worker
 	LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, error)
+	// Lease an existing macro job to a worker (if not completed and available)
+	LeaseMacroJob(ctx context.Context, arg LeaseMacroJobParams) (int64, error)
 	// Update job progress checkpoint
 	UpdateCheckpoint(ctx context.Context, arg UpdateCheckpointParams) error
 	// Update worker's total key count

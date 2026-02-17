@@ -301,3 +301,106 @@ func TestCreateBatch_ExpiresAtIsUTC(t *testing.T) {
 		t.Fatalf("expected expires_at to be UTC, got %v", job.ExpiresAt.Time.Location())
 	}
 }
+
+func TestFindOrCreateMacroJob_NilManagerReceiver(t *testing.T) {
+	ctx := t.Context()
+	var m *Manager // nil receiver
+
+	prefix := make([]byte, 28)
+	job, err := m.FindOrCreateMacroJob(ctx, prefix, "worker-1")
+	if err == nil {
+		t.Fatal("expected error when manager receiver is nil")
+	}
+	if job != nil {
+		t.Fatalf("expected nil job when manager is nil, got %+v", job)
+	}
+}
+
+func TestFindOrCreateMacroJob_NilDB(t *testing.T) {
+	ctx := t.Context()
+	m := New(nil) // manager with nil db
+
+	prefix := make([]byte, 28)
+	job, err := m.FindOrCreateMacroJob(ctx, prefix, "worker-1")
+	if err == nil {
+		t.Fatal("expected error when manager.db is nil")
+	}
+	if job != nil {
+		t.Fatalf("expected nil job when manager.db is nil, got %+v", job)
+	}
+}
+
+func TestFindOrCreateMacroJob_InvalidPrefixLength(t *testing.T) {
+	ctx := t.Context()
+	_, q := setupInMemoryDB(t)
+	m := New(q)
+
+	// invalid prefix length
+	job, err := m.FindOrCreateMacroJob(ctx, []byte{1, 2, 3}, "worker-1")
+	if err == nil {
+		t.Fatal("expected error for invalid prefix length")
+	}
+	if job != nil {
+		t.Fatalf("expected nil job for invalid prefix length, got %+v", job)
+	}
+}
+
+func TestFindOrCreateMacroJob_CreateAndReuse(t *testing.T) {
+	ctx := t.Context()
+	_, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+
+	// First call should create and lease a macro job to worker-1
+	j1, err := m.FindOrCreateMacroJob(ctx, prefix, "worker-1")
+	if err != nil {
+		t.Fatalf("FindOrCreateMacroJob error: %v", err)
+	}
+	if j1 == nil {
+		t.Fatal("expected job to be created, got nil")
+	}
+	if !j1.WorkerID.Valid || j1.WorkerID.String != "worker-1" {
+		t.Fatalf("expected worker_id worker-1, got %+v", j1.WorkerID)
+	}
+
+	// Second call by same worker should return the same job ID
+	j2, err := m.FindOrCreateMacroJob(ctx, prefix, "worker-1")
+	if err != nil {
+		t.Fatalf("FindOrCreateMacroJob second call error: %v", err)
+	}
+	if j2 == nil {
+		t.Fatal("expected job on second call, got nil")
+	}
+	if j2.ID != j1.ID {
+		t.Fatalf("expected same job ID reused, got %d and %d", j1.ID, j2.ID)
+	}
+}
+
+func TestFindOrCreateMacroJob_LeaseExpiration(t *testing.T) {
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
+
+	// Insert a processing job with an expired lease and a checkpoint
+	prefix := make([]byte, 28)
+	past := time.Now().UTC().Add(-2 * time.Hour).Format("2006-01-02 15:04:05")
+	if _, err := db.ExecContext(ctx, `INSERT INTO jobs (prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, expires_at, requested_batch_size) VALUES (?, ?, ?, ?, 'processing', ?, ?, ?)`, prefix, 0, 4294967295, 12345, "old-worker", past, 1000); err != nil {
+		t.Fatalf("insert expired macro job: %v", err)
+	}
+
+	// Now request the macro job as a new worker; the manager should re-lease it
+	j, err := m.FindOrCreateMacroJob(ctx, prefix, "worker-2")
+	if err != nil {
+		t.Fatalf("FindOrCreateMacroJob error: %v", err)
+	}
+	if j == nil {
+		t.Fatal("expected job to be returned, got nil")
+	}
+	if !j.WorkerID.Valid || j.WorkerID.String != "worker-2" {
+		t.Fatalf("expected worker_id worker-2, got %+v", j.WorkerID)
+	}
+	if j.CurrentNonce.Int64 != 12345 {
+		t.Fatalf("expected current_nonce to be preserved (12345), got %v", j.CurrentNonce)
+	}
+}

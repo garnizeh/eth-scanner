@@ -29,6 +29,41 @@ INSERT INTO jobs (
 VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
 RETURNING *;
 
+-- name: FindIncompleteMacroJob :one
+-- Find an existing non-completed (macro) job for a given prefix
+SELECT * FROM jobs
+WHERE prefix_28 = ?
+    AND status != 'completed'
+ORDER BY created_at ASC
+LIMIT 1;
+
+-- name: CreateMacroJob :one
+-- Create a long-lived macro job covering the full nonce space for a prefix
+INSERT INTO jobs (
+        prefix_28,
+        nonce_start,
+        nonce_end,
+        current_nonce,
+        status,
+        worker_id,
+        worker_type,
+        expires_at,
+        requested_batch_size
+)
+VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
+RETURNING *;
+
+-- name: LeaseMacroJob :execrows
+-- Lease an existing macro job to a worker (if not completed and available)
+UPDATE jobs
+SET status = 'processing',
+        worker_id = ?,
+        worker_type = ?,
+        expires_at = datetime('now', 'utc', '+' || :lease_seconds || ' seconds')
+WHERE id = ?
+    AND status != 'completed'
+    AND (worker_id IS NULL OR expires_at < datetime('now', 'utc'));
+
 -- name: LeaseBatch :execrows
 -- Lease an existing batch to a worker
 UPDATE jobs
