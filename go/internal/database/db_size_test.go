@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,10 +29,17 @@ func TestDatabaseFileSizeAfterLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to begin transaction: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		err := tx.Rollback()
+		if err != nil && !errors.Is(err, sql.ErrTxDone) {
+			t.Fatalf("transaction rollback failed: %v", err)
+		}
+	}()
 	qtx := q.WithTx(tx)
 
-	total := 20000
+	// Reduce load for CI/race builds to keep test time reasonable while still
+	// exercising retention and file-size behavior.
+	total := 5000
 	for i := range total {
 		if err := qtx.RecordWorkerStats(ctx, RecordWorkerStatsParams{
 			WorkerID:      "size-worker",
