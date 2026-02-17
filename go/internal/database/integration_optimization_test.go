@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -105,7 +106,7 @@ func TestWorkerHistoryGlobalRetention_Load15000(t *testing.T) {
 	}
 	defer func() {
 		err := tx.Rollback()
-		if err != nil && err != sql.ErrTxDone {
+		if err != nil && !errors.Is(err, sql.ErrTxDone) {
 			t.Fatalf("transaction rollback failed: %v", err)
 		}
 	}()
