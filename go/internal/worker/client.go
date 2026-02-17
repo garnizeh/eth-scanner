@@ -140,6 +140,7 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 	req := leaseRequest{
 		WorkerID:           c.workerID,
 		RequestedBatchSize: requestedBatchSize,
+		WorkerType:         "pc",
 	}
 
 	var resp leaseResponse
@@ -194,6 +195,7 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 type leaseRequest struct {
 	WorkerID           string `json:"worker_id"`
 	RequestedBatchSize uint32 `json:"requested_batch_size"`
+	WorkerType         string `json:"worker_type,omitempty"`
 }
 
 type leaseResponse struct {

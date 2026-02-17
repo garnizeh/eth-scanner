@@ -157,7 +157,7 @@ func TestCreateAndLeaseBatch_InvalidBase64(t *testing.T) {
 	m := jobs.New(q)
 
 	invalid := "!!!not_base64!!!"
-	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-x", &invalid, 100)
+	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-x", "pc", &invalid, 100)
 	if err == nil {
 		t.Fatalf("expected error for invalid base64, got job: %+v", job)
 	}
@@ -170,7 +170,7 @@ func TestCreateAndLeaseBatch_WrongLength(t *testing.T) {
 
 	// base64 of 10 bytes (not 28)
 	short := base64.StdEncoding.EncodeToString(make([]byte, 10))
-	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-y", &short, 100)
+	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-y", "pc", &short, 100)
 	if err == nil {
 		t.Fatalf("expected error for wrong length prefix, got job: %+v", job)
 	}
@@ -184,7 +184,7 @@ func TestCreateAndLeaseBatch_Success(t *testing.T) {
 	prefix := make([]byte, 28)
 	// deterministic zeros are fine for test
 	enc := base64.StdEncoding.EncodeToString(prefix)
-	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-z", &enc, 200)
+	job, err := s.createAndLeaseBatch(ctx, m, q, "worker-z", "pc", &enc, 200)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

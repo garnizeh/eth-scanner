@@ -42,7 +42,7 @@ func TestLeaseExistingJob_NoJobsAvailable(t *testing.T) {
 	_, q := setupInMemoryDB(t)
 	m := New(q)
 
-	job, err := m.LeaseExistingJob(ctx, "worker-1")
+	job, err := m.LeaseExistingJob(ctx, "worker-1", "pc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestLeaseExistingJob_PendingJob(t *testing.T) {
 		t.Fatalf("insert pending job: %v", err)
 	}
 
-	leased, err := m.LeaseExistingJob(ctx, "worker-1")
+	leased, err := m.LeaseExistingJob(ctx, "worker-1", "pc")
 	if err != nil {
 		t.Fatalf("LeaseExistingJob error: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestLeaseExistingJob_ExpiredJob(t *testing.T) {
 		t.Fatalf("insert expired job: %v", err)
 	}
 
-	leased, err := m.LeaseExistingJob(ctx, "worker-2")
+	leased, err := m.LeaseExistingJob(ctx, "worker-2", "pc")
 	if err != nil {
 		t.Fatalf("LeaseExistingJob error: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestLeaseExistingJob_NilManager(t *testing.T) {
 	ctx := t.Context()
 	m := New(nil)
 
-	job, err := m.LeaseExistingJob(ctx, "worker-1")
+	job, err := m.LeaseExistingJob(ctx, "worker-1", "pc")
 	if err == nil {
 		t.Fatal("expected error when manager is nil")
 	}

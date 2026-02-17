@@ -201,6 +201,9 @@ CREATE TABLE IF NOT EXISTS workers (
     
     -- First time this worker was seen (UTC, auto-set)
     created_at DATETIME NOT NULL DEFAULT (datetime('now', 'utc')),
+
+    -- Last time worker metadata was updated (UTC)
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now','utc')),    
     
     -- Constraint: worker_type must be one of the allowed values
     CHECK (worker_type IN ('pc', 'esp32'))
@@ -255,6 +258,17 @@ CREATE TABLE IF NOT EXISTS worker_history (
 
 CREATE INDEX IF NOT EXISTS idx_worker_history_worker_finished ON worker_history(worker_id, finished_at DESC);
 CREATE INDEX IF NOT EXISTS idx_worker_history_finished ON worker_history(finished_at DESC);
+
+-- Trigger: increment worker total_keys_scanned whenever a worker_history row is inserted
+-- This keeps workers.total_keys_scanned consistent and atomic with history inserts
+CREATE TRIGGER IF NOT EXISTS trg_inc_workers_total_keys
+AFTER INSERT ON worker_history
+FOR EACH ROW
+BEGIN
+    UPDATE workers
+    SET total_keys_scanned = total_keys_scanned + COALESCE(NEW.keys_scanned, 0)
+    WHERE id = NEW.worker_id;
+END;
 
 -- Tier 2: Daily aggregates (one row per worker per date)
 CREATE TABLE IF NOT EXISTS worker_stats_daily (
@@ -463,6 +477,7 @@ DROP VIEW IF EXISTS stats_summary;
 DROP TRIGGER IF EXISTS trg_prune_monthly_stats_per_worker;
 DROP TRIGGER IF EXISTS trg_prune_daily_stats_per_worker;
 DROP TRIGGER IF EXISTS trg_aggregate_before_prune_history;
+DROP TRIGGER IF EXISTS trg_inc_workers_total_keys;
 
 -- 3. Drop New Statistics Tables & Indexes (Reverse order of creation)
 
