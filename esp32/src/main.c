@@ -24,7 +24,12 @@ static const char *TAG = "eth-scanner";
 
 // Task prototypes
 void core0_system_task(void *pvParameters);
-void core1_computation_task(void *pvParameters);
+void core1_worker_task(void *pvParameters);
+
+// Static task buffers for Core 1 (computational hot loop)
+#define CORE1_STACK_SIZE 8192
+static StackType_t core1_stack[CORE1_STACK_SIZE];
+static StaticTask_t core1_task_buffer;
 
 // Timer callback for periodic checkpoints
 static void checkpoint_timer_callback(TimerHandle_t xTimer)
@@ -167,9 +172,10 @@ void core0_system_task(void *pvParameters)
 }
 
 // Computation Task (The "Hot Loop") - Core 1
-void core1_computation_task(void *pvParameters)
+void core1_worker_task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "Starting Computation Task on Core %d", xPortGetCoreID());
+    ESP_LOGI(TAG, "Starting Computation Task on Core %d with priority %d",
+             xPortGetCoreID(), uxTaskPriorityGet(NULL));
 
     uint32_t notifications = 0;
 
@@ -279,20 +285,27 @@ void app_main(void)
         "core0_system",
         4096,
         NULL,
-        5, // Priority must be lower than Core 1 to avoid interference?
+        5, // Priority must be lower than Core 1 to avoid interference
         &g_state.core0_task_handle,
         0 // Core 0
     );
 
-    xTaskCreatePinnedToCore(
-        core1_computation_task,
-        "core1_compute",
-        8192,
+    // Create Core 1 task statically for maximum stability and priority
+    g_state.core1_task_handle = xTaskCreateStaticPinnedToCore(
+        core1_worker_task,
+        "core1_worker",
+        CORE1_STACK_SIZE,
         NULL,
-        10, // Higher priority for the compute task
-        &g_state.core1_task_handle,
-        1 // Core 1
+        configMAX_PRIORITIES - 1, // Highest priority for the computational hot-loop
+        core1_stack,
+        &core1_task_buffer,
+        1 // APP_CPU (Core 1)
     );
+
+    if (g_state.core1_task_handle == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create Core 1 worker task!");
+    }
 
     ESP_LOGI(TAG, "All tasks spawned.");
 
