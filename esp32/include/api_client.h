@@ -44,4 +44,16 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
                        uint64_t final_nonce, uint64_t keys_scanned,
                        uint64_t duration_ms);
 
+/**
+ * @brief Submit a discovered private key to the Master API
+ *
+ * @param job_id ID of the job that yielded the result
+ * @param worker_id Unique worker identifier
+ * @param private_key The 32-byte private key found
+ * @param address The derived 20-byte address (for verification)
+ * @return ESP_OK on success, appropriate error code otherwise
+ */
+esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
+                            const uint8_t *private_key, const uint8_t *address);
+
 #endif // API_CLIENT_H

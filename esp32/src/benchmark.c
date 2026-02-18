@@ -22,6 +22,10 @@ uint32_t benchmark_key_generation(void)
     for (int i = 0; i < 100; i++)
     {
         derive_eth_address(privkey, address);
+        if (i > 0 && (i % 20) == 0)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
     }
 
     // Benchmark loop
@@ -34,8 +38,8 @@ uint32_t benchmark_key_generation(void)
         derive_eth_address(privkey, address);
         nonce++;
 
-        // Feed watchdog periodically (every 10 iterations)
-        if (i > 0 && (i % 10) == 0)
+        // Feed watchdog periodically (every 20 iterations to be safer and faster)
+        if (i > 0 && (i % 20) == 0)
         {
             vTaskDelay(pdMS_TO_TICKS(1)); // Yield for at least 1 tick
         }

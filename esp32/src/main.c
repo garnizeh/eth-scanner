@@ -11,6 +11,7 @@
 #include "benchmark.h"
 #include "batch_calculator.h"
 #include "api_client.h"
+#include "eth_crypto.h"
 #include <string.h>
 #include <time.h>
 
@@ -145,6 +146,24 @@ void core0_system_task(void *pvParameters)
             }
         }
 
+        // Handle Result Found Signal
+        if (notifications & NOTIFY_BIT_RESULT_FOUND)
+        {
+            ESP_LOGI(TAG, "!!! MATCH FOUND Signal received from Core 1 !!!");
+            g_state.job_active = false;
+
+            if (g_state.wifi_connected)
+            {
+                uint8_t derived_addr[20];
+                derive_eth_address(g_state.found_private_key, derived_addr);
+                api_submit_result(g_state.current_job.job_id, g_state.worker_id, g_state.found_private_key, derived_addr);
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Match found but WiFi disconnected. Result stored in memory.");
+            }
+        }
+
         if (g_state.wifi_connected && !g_state.job_active)
         {
             ESP_LOGI(TAG, "Device idle, requesting new job lease...");
@@ -228,8 +247,18 @@ void core1_worker_task(void *pvParameters)
                     // Optimized byte-level nonce manipulation (P08-T080)
                     update_nonce_in_buffer(priv_key, current);
 
-                    // HOT LOOP: Placeholder for derivation/scanning (To be added in P08-T090)
-                    // Currently simulating one key scan with fixed overhead
+                    // Derive Ethereum address from the current private key (P08-T100)
+                    uint8_t derived_addr[20];
+                    derive_eth_address(priv_key, derived_addr);
+
+                    // Binary comparison using memcmp for zero-overhead validation (P08-T090)
+                    if (memcmp(derived_addr, g_state.current_job.target_address, 20) == 0)
+                    {
+                        ESP_LOGI(TAG, "Core 1: MATCH FOUND at nonce %lu", (unsigned long)current);
+                        memcpy(g_state.found_private_key, priv_key, 32);
+                        xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_RESULT_FOUND, eSetBits);
+                        break;
+                    }
 
                     // Increment and update global progress
                     current++;
