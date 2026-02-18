@@ -26,6 +26,23 @@ static const char *TAG = "eth-scanner";
 void core0_system_task(void *pvParameters);
 void core1_worker_task(void *pvParameters);
 
+/**
+ * @brief Optimally updates the 4-byte nonce at the end of a 32-byte private key.
+ *
+ * This function performs direct byte manipulation to avoid expensive sprintf/memcpy.
+ * The nonce is placed at offset 28 in little-endian format.
+ *
+ * @param buffer 32-byte private key buffer.
+ * @param nonce  4-byte nonce to set.
+ */
+static inline void update_nonce_in_buffer(uint8_t *buffer, uint32_t nonce)
+{
+    buffer[28] = (uint8_t)(nonce & 0xFF);
+    buffer[29] = (uint8_t)((nonce >> 8) & 0xFF);
+    buffer[30] = (uint8_t)((nonce >> 16) & 0xFF);
+    buffer[31] = (uint8_t)((nonce >> 24) & 0xFF);
+}
+
 // Static task buffers for Core 1 (computational hot loop)
 #define CORE1_STACK_SIZE 8192
 static StackType_t core1_stack[CORE1_STACK_SIZE];
@@ -178,6 +195,7 @@ void core1_worker_task(void *pvParameters)
              xPortGetCoreID(), uxTaskPriorityGet(NULL));
 
     uint32_t notifications = 0;
+    uint8_t priv_key[32] __attribute__((aligned(4))) = {0};
 
     while (1)
     {
@@ -188,33 +206,54 @@ void core1_worker_task(void *pvParameters)
             {
                 ESP_LOGI(TAG, "Core 1: New job signaled! Starting scan for job %lld...", g_state.current_job.job_id);
 
-                // SCAN LOOP PLACEHOLDER (To be implemented in P08-T060)
-                // For now, we simulate work by incrementing counters and waiting
+                // Initialize job-specific state
+                memcpy(priv_key, g_state.current_job.prefix_28, 28);
+                uint32_t start = (uint32_t)g_state.current_job.nonce_start;
+                uint32_t end = (uint32_t)g_state.current_job.nonce_end;
+                uint32_t current = start;
+
+                // Reset atomic progress trackers for the new job session
+                atomic_store(&g_state.current_nonce, start);
+                atomic_store(&g_state.keys_scanned, 0);
+
+                ESP_LOGI(TAG, "Core 1: Scan loop starting: %lu -> %lu", (unsigned long)start, (unsigned long)end);
+
                 while (g_state.job_active && !g_state.should_stop)
                 {
-                    uint64_t current = atomic_load(&g_state.current_nonce);
-                    if (current >= g_state.current_job.nonce_end)
+                    if (current > end)
                     {
                         break;
                     }
 
-                    // Simulate scanning 1000 keys
-                    atomic_fetch_add(&g_state.current_nonce, 1000);
-                    atomic_fetch_add(&g_state.keys_scanned, 1000);
+                    // Optimized byte-level nonce manipulation (P08-T080)
+                    update_nonce_in_buffer(priv_key, current);
 
-                    // Yield to system tasks
-                    vTaskDelay(pdMS_TO_TICKS(10));
+                    // HOT LOOP: Placeholder for derivation/scanning (To be added in P08-T090)
+                    // Currently simulating one key scan with fixed overhead
+
+                    // Increment and update global progress
+                    current++;
+                    atomic_fetch_add(&g_state.current_nonce, 1);
+                    atomic_fetch_add(&g_state.keys_scanned, 1);
+
+                    // Periodically yield to avoid triggering task watchdogs on other cores
+                    // or starving high-level maintenance tasks on this core.
+                    // Every 256 keys (~0.7s at peak throughput) is a balanced yielding period.
+                    if ((current & 0xFF) == 0)
+                    {
+                        vTaskDelay(pdMS_TO_TICKS(1));
+                    }
                 }
 
-                if (atomic_load(&g_state.current_nonce) >= g_state.current_job.nonce_end)
+                if (current > end)
                 {
-                    ESP_LOGI(TAG, "Core 1: Job complete.");
+                    ESP_LOGI(TAG, "Core 1: Job range completed successfully.");
                     xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_JOB_COMPLETE, eSetBits);
                 }
             }
         }
 
-        // Feed the watchdog by yielding
+        // Feed the watchdog by yielding when idle
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
