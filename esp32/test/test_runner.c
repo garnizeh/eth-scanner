@@ -10,6 +10,7 @@ extern void test_api_lease_success(void);
 extern void test_api_checkpoint(void);
 extern void test_api_complete(void);
 extern void test_api_submit_result(void);
+extern void test_result_queue_flow(void);
 
 extern void test_crypto_secp256k1_point_multiplication(void);
 extern void test_crypto_keccak256(void);
@@ -133,6 +134,7 @@ void app_main(void)
         RUN_TEST(test_api_checkpoint);
         RUN_TEST(test_api_complete);
         RUN_TEST(test_api_submit_result);
+        RUN_TEST(test_result_queue_flow);
     }
     else
     {

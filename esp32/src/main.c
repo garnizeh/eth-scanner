@@ -150,18 +150,29 @@ void core0_system_task(void *pvParameters)
         if (notifications & NOTIFY_BIT_RESULT_FOUND)
         {
             ESP_LOGI(TAG, "!!! MATCH FOUND Signal received from Core 1 !!!");
-            g_state.job_active = false;
 
-            if (g_state.wifi_connected)
+            found_result_t res;
+            while (xQueueReceive(g_state.found_results_queue, &res, 0) == pdTRUE)
             {
-                uint8_t derived_addr[20];
-                derive_eth_address(g_state.found_private_key, derived_addr);
-                api_submit_result(g_state.current_job.job_id, g_state.worker_id, g_state.found_private_key, derived_addr);
+                ESP_LOGI(TAG, "Processing result from queue for job %lld", res.job_id);
+
+                if (g_state.wifi_connected)
+                {
+                    uint8_t derived_addr[20];
+                    derive_eth_address(res.private_key, derived_addr);
+                    api_submit_result(res.job_id, g_state.worker_id, res.private_key, derived_addr);
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Match found for job %lld but WiFi disconnected. Result dropped (not persisted in MVP).", res.job_id);
+                }
             }
-            else
-            {
-                ESP_LOGW(TAG, "Match found but WiFi disconnected. Result stored in memory.");
-            }
+
+            // For now, let's keep the existing logic that one match stops the CURRENT job session
+            // if you found YOUR target. But wait, if it continues scanning, it just reports more.
+            // Let's keep job_active as it is for now (not setting it false here immediately)
+            // OR we can decide to stop.
+            // In the SDD, we usually lease one range per worker.
         }
 
         if (g_state.wifi_connected && !g_state.job_active)
@@ -255,9 +266,25 @@ void core1_worker_task(void *pvParameters)
                     if (memcmp(derived_addr, g_state.current_job.target_address, 20) == 0)
                     {
                         ESP_LOGI(TAG, "Core 1: MATCH FOUND at nonce %lu", (unsigned long)current);
-                        memcpy(g_state.found_private_key, priv_key, 32);
-                        xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_RESULT_FOUND, eSetBits);
-                        break;
+
+                        found_result_t res;
+                        res.job_id = g_state.current_job.job_id;
+                        memcpy(res.private_key, priv_key, 32);
+
+                        if (xQueueSend(g_state.found_results_queue, &res, 0) == pdTRUE)
+                        {
+                            xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_RESULT_FOUND, eSetBits);
+                        }
+                        else
+                        {
+                            ESP_LOGE(TAG, "Core 1: FAILED TO QUEUE RESULT! Queue full.");
+                        }
+
+                        // According to P08-T100, Core 1 can continue scanning.
+                        // However, for this MVP we usually stop after one match per range.
+                        // We will just break here to keep it simple, or we can keep it running.
+                        // The requirement says "Core 1 can continue scanning", so let's keep it running.
+                        // break;
                     }
 
                     // Increment and update global progress
@@ -305,7 +332,15 @@ void app_main(void)
     atomic_init(&g_state.current_nonce, 0);
     atomic_init(&g_state.keys_scanned, 0);
 
-    ESP_LOGI(TAG, "Global state initialized for worker: %s", g_state.worker_id);
+    // Create result submission queue
+    g_state.found_results_queue = xQueueCreate(5, sizeof(found_result_t));
+    if (g_state.found_results_queue == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create result queue!");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Global state initialized (Queue created) for worker: %s", g_state.worker_id);
 
     // Initialize NVS
     esp_err_t ret = nvs_init_with_retry();

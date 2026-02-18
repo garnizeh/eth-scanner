@@ -47,3 +47,39 @@ void test_api_submit_result()
     esp_err_t err = api_submit_result(42, "test-worker", priv_key, address);
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
+
+extern global_state_t g_state;
+
+void test_result_queue_flow()
+{
+    // Initialize queue if not done
+    if (g_state.found_results_queue == NULL)
+    {
+        g_state.found_results_queue = xQueueCreate(5, sizeof(found_result_t));
+    }
+    TEST_ASSERT_NOT_NULL(g_state.found_results_queue);
+
+    // Clear queue
+    found_result_t dummy;
+    while (xQueueReceive(g_state.found_results_queue, &dummy, 0) == pdTRUE)
+        ;
+
+    // Push test result
+    found_result_t res;
+    res.job_id = 1234;
+    memset(res.private_key, 0xDD, 32);
+
+    BaseType_t q_ret = xQueueSend(g_state.found_results_queue, &res, 0);
+    TEST_ASSERT_EQUAL(pdTRUE, q_ret);
+
+    // Simulate what Core 0 does: read from queue and verify
+    found_result_t read_res;
+    q_ret = xQueueReceive(g_state.found_results_queue, &read_res, 0);
+    TEST_ASSERT_EQUAL(pdTRUE, q_ret);
+    TEST_ASSERT_EQUAL(1234, read_res.job_id);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(res.private_key, read_res.private_key, 32);
+
+    // Since we are in simulation, we don't call api_submit_result here to avoid
+    // actually sending matching-result packets in a generic unit test
+    // (it would fail without IP or mock server).
+}

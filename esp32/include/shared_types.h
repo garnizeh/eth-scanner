@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "freertos/queue.h"
 
 // Constants
 #define PREFIX_28_SIZE 28
@@ -34,6 +35,13 @@ typedef struct
     uint8_t target_address[ETH_ADDRESS_SIZE];
     int64_t expires_at; // Unix timestamp
 } job_info_t;
+
+// Found result structure for the queue
+typedef struct
+{
+    int64_t job_id;
+    uint8_t private_key[32];
+} found_result_t;
 
 // Checkpoint structure (for NVS persistence)
 typedef struct
@@ -84,13 +92,12 @@ typedef struct
     // Checkpoint timer
     TimerHandle_t checkpoint_timer;
 
+    // Found results queue
+    QueueHandle_t found_results_queue;
+
     // State flags
     volatile bool wifi_connected;
     volatile bool should_stop; // Signal worker to stop
-
-    // Match reporting
-    uint8_t found_private_key[32];
-
 } global_state_t;
 
 // Global state instance (defined in main.c)
