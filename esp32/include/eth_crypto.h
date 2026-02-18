@@ -14,12 +14,11 @@
 void keccak256(const uint8_t *input, size_t len, uint8_t *output);
 
 /**
- * Derives the Ethereum address from an uncompressed 65-byte public key.
- * (Note: This might be implemented in a future task if not needed here.)
+ * Derives the Ethereum address from a 32-byte private key.
  *
- * @param pub_key Uncompressed public key (65 bytes, starting with 0x04).
- * @param address Pointer to the 20-byte output buffer for the Ethereum address.
+ * @param priv_key 32-byte private key.
+ * @param address  Pointer to the 20-byte output buffer for the Ethereum address.
  */
-void derive_eth_address(const uint8_t *pub_key, uint8_t *address);
+void derive_eth_address(const uint8_t *priv_key, uint8_t *address);
 
 #endif // ETH_CRYPTO_H

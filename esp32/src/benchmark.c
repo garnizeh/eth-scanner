@@ -1,33 +1,14 @@
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "eth_crypto.h"
 #include <string.h>
 #include <stdint.h>
 
-#define BENCHMARK_ITERATIONS 10000
+#define BENCHMARK_ITERATIONS 100 // Reduced iterations for real crypto
 
 static const char *TAG = "benchmark";
-
-/**
- * @brief Derive Ethereum address from private key.
- * This is a stub for benchmarking. The full implementation will be in P08.
- * It does some basic computations to simulate a crypto operation.
- */
-void __attribute__((weak)) derive_eth_address(const uint8_t *privkey, uint8_t *address)
-{
-    uint8_t hash = 0;
-    for (int i = 0; i < 32; i++)
-    {
-        hash ^= privkey[i] + i;
-    }
-    // Simulate some "work" that is roughly proportional to what we'd expect
-    // but lightweight for now so tests aren't too slow.
-    // Real secp256k1 + keccak is much heavier.
-    for (volatile int i = 0; i < 1000; i++)
-    {
-        hash += (hash * 31) + 17;
-    }
-    memset(address, hash, 20);
-}
 
 uint32_t benchmark_key_generation(void)
 {
@@ -52,6 +33,12 @@ uint32_t benchmark_key_generation(void)
         memcpy(&privkey[28], &nonce, sizeof(nonce));
         derive_eth_address(privkey, address);
         nonce++;
+
+        // Feed watchdog periodically (every 10 iterations)
+        if (i > 0 && (i % 10) == 0)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1)); // Yield for at least 1 tick
+        }
     }
 
     int64_t end = esp_timer_get_time();
