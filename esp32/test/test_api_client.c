@@ -5,8 +5,6 @@
 #include "nvs_flash.h"
 #include <string.h>
 
-static const char *TAG = "test_api_client";
-
 void test_api_lease_success()
 {
     job_info_t job;
@@ -33,18 +31,4 @@ void test_api_complete()
 {
     esp_err_t err = api_complete(42, "test-worker", 2000, 1000, 20000);
     TEST_ASSERT_EQUAL(ESP_OK, err);
-}
-
-void app_main(void)
-{
-    ESP_LOGI(TAG, "Starting API Client tests...");
-    // Initial hardware init
-    nvs_flash_init();
-    wifi_init_sta();
-
-    UNITY_BEGIN();
-    RUN_TEST(test_api_lease_success);
-    RUN_TEST(test_api_checkpoint);
-    RUN_TEST(test_api_complete);
-    UNITY_END();
 }
