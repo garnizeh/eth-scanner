@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/timers.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -16,47 +17,61 @@
 
 static const char *TAG = "wifi_handler";
 
-/* The event group allows multiple bits for each event, but we only care about two events:
- * - we are connected to the AP with an IP
- * - we failed to connect after the maximum amount of retries */
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
 static EventGroupHandle_t s_wifi_event_group;
+static TimerHandle_t s_wifi_retry_timer = NULL;
 
 static int s_retry_num = 0;
 static const int MAX_RETRY = 10;
 static const int backoff_delays[] = {1, 2, 5, 10, 30}; // seconds
 static const int num_backoff_delays = sizeof(backoff_delays) / sizeof(backoff_delays[0]);
 
+/**
+ * @brief Timer callback that triggers the actual connection attempt.
+ * This runs in the Timer Service Task, keeping the Event Loop free.
+ */
+void retry_timer_callback(TimerHandle_t xTimer)
+{
+    ESP_LOGI(TAG, "Retry timer expired. Attempting to connect...");
+    esp_wifi_connect();
+}
+
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
+        ESP_LOGI(TAG, "STA Started. Connecting...");
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         if (s_retry_num < MAX_RETRY)
         {
-            int delay_index = s_retry_num;
-            if (delay_index >= num_backoff_delays)
-            {
-                delay_index = num_backoff_delays - 1;
-            }
-            int delay_sec = backoff_delays[delay_index];
-
-            ESP_LOGW(TAG, "Disconnected from AP, retrying in %d seconds... (%d/%d)", delay_sec, s_retry_num + 1, MAX_RETRY);
-
-            vTaskDelay(pdMS_TO_TICKS(delay_sec * 1000));
-            esp_wifi_connect();
+            int delay_sec = backoff_delays[s_retry_num % num_backoff_delays];
             s_retry_num++;
+
+            ESP_LOGW(TAG, "Disconnected. Retry %d/%d scheduled in %d seconds...",
+                     s_retry_num, MAX_RETRY, delay_sec);
+
+            /* Professional approach: Change the period and start the existing timer.
+               xTimerChangePeriod also starts the timer if it was idle. */
+            if (s_wifi_retry_timer != NULL)
+            {
+                xTimerChangePeriod(s_wifi_retry_timer, pdMS_TO_TICKS(delay_sec * 1000), 0);
+            }
+            else
+            {
+                // Fallback if timer wasn't initialized
+                esp_wifi_connect();
+            }
         }
         else
         {
-            ESP_LOGE(TAG, "Max retries reached, restarting...");
-            esp_restart();
+            ESP_LOGE(TAG, "Max retries reached.");
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
@@ -68,15 +83,32 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
+void heartbeat_task(void *pvParameters) {
+    while(1) {
+        ESP_LOGI("HEARTBEAT", "System is still alive...");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void wifi_init_sta(void)
 {
+    ESP_LOGI(TAG, "Entering wifi_init_sta...");
     s_wifi_event_group = xEventGroupCreate();
+
+    /* Create the timer once during initialization.
+       We set an initial dummy period; it will be changed during retries. */
+    s_wifi_retry_timer = xTimerCreate("WiFiRetryTimer",
+                                      pdMS_TO_TICKS(1000),
+                                      pdFALSE,
+                                      (void *)0,
+                                      retry_timer_callback);
 
     ESP_ERROR_CHECK(esp_netif_init());
 
     esp_err_t err = esp_event_loop_create_default();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
     {
+        ESP_LOGE(TAG, "Failed to create event loop: %s", esp_err_to_name(err));
         ESP_ERROR_CHECK(err);
     }
 
@@ -87,6 +119,7 @@ void wifi_init_sta(void)
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
                                                         &event_handler,
@@ -105,26 +138,35 @@ void wifi_init_sta(void)
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+    ESP_LOGI(TAG, "Connecting to SSID: %s", (char *)wifi_config.sta.ssid);
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+
+    xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 1, NULL);
+    
+    ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "wifi_init_sta finished, waiting for connection...");
+    ESP_LOGI(TAG, "Waiting for connection bit...");
 
-    /* Waiting 100ms to start event. */
-    xEventGroupWaitBits(s_wifi_event_group,
-                        WIFI_CONNECTED_BIT,
-                        pdFALSE,
-                        pdFALSE,
-                        pdMS_TO_TICKS(5000));
+    /* Note: If you are in a test environment, you might need a longer timeout
+       than 5s if your backoff delay is high.
+    */
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+                                           WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+                                           pdFALSE,
+                                           pdFALSE,
+                                           pdMS_TO_TICKS(10000)); // Increased to 10s for stability
 
-    if (is_wifi_connected())
+    if (bits & WIFI_CONNECTED_BIT)
     {
-        ESP_LOGI(TAG, "Connected to SSID:%s", CONFIG_ETHSCANNER_WIFI_SSID);
+        ESP_LOGI(TAG, "Success! Connected.");
     }
     else
     {
-        ESP_LOGE(TAG, "Failed to connect to WiFi within timeout");
+        ESP_LOGE(TAG, "Failed to connect within timeout.");
     }
 }
 
@@ -132,7 +174,6 @@ bool is_wifi_connected(void)
 {
     if (s_wifi_event_group == NULL)
         return false;
-
     EventBits_t uxBits = xEventGroupGetBits(s_wifi_event_group);
     return (uxBits & WIFI_CONNECTED_BIT) != 0;
 }
