@@ -20,6 +20,11 @@ extern void test_save_checkpoint_null_arg(void);
 extern void test_save_checkpoint_set_blob_error(void);
 extern void test_save_checkpoint_commit_error(void);
 
+extern void test_load_checkpoint_success(void);
+extern void test_load_checkpoint_not_found(void);
+extern void test_load_checkpoint_invalid_magic(void);
+extern void test_load_checkpoint_stale(void);
+
 static const char *TAG = "test_runner";
 
 void app_main(void)
@@ -54,6 +59,10 @@ void app_main(void)
     RUN_TEST(test_save_checkpoint_null_arg);
     RUN_TEST(test_save_checkpoint_set_blob_error);
     RUN_TEST(test_save_checkpoint_commit_error);
+    RUN_TEST(test_load_checkpoint_success);
+    RUN_TEST(test_load_checkpoint_not_found);
+    RUN_TEST(test_load_checkpoint_invalid_magic);
+    RUN_TEST(test_load_checkpoint_stale);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.

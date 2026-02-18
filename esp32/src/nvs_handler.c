@@ -75,3 +75,49 @@ esp_err_t save_checkpoint(nvs_handle_t handle, const job_checkpoint_t *checkpoin
 
     return ESP_OK;
 }
+#define CHECKPOINT_MAX_AGE_SEC (3600 * 2) // 2 hours staleness limit
+
+esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint)
+{
+    if (out_checkpoint == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    size_t required_size = sizeof(job_checkpoint_t);
+    esp_err_t err = nvs_get_blob_wr(handle, NVS_CHECKPOINT_KEY,
+                                    out_checkpoint, &required_size);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        ESP_LOGI(TAG, "No checkpoint found in NVS");
+        return ESP_ERR_NOT_FOUND;
+    }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Error reading checkpoint: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // Validate magic number
+    if (out_checkpoint->magic != CHECKPOINT_MAGIC)
+    {
+        ESP_LOGW(TAG, "Invalid checkpoint magic: 0x%08X", (unsigned int)out_checkpoint->magic);
+        return ESP_ERR_INVALID_CRC;
+    }
+
+    // Check staleness (prevent resuming very old jobs)
+    uint64_t now = esp_timer_get_time() / 1000000ULL;
+    if (out_checkpoint->timestamp > now || (now - out_checkpoint->timestamp) > CHECKPOINT_MAX_AGE_SEC)
+    {
+        uint64_t age = (out_checkpoint->timestamp > now) ? 0 : (now - out_checkpoint->timestamp);
+        ESP_LOGW(TAG, "Checkpoint stale or from future (age: %llu sec, now: %llu, ts: %llu), discarding",
+                 (unsigned long long)age, (unsigned long long)now, (unsigned long long)out_checkpoint->timestamp);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Checkpoint loaded: job_id=%lld, current_nonce=%llu",
+             out_checkpoint->job_id, (unsigned long long)out_checkpoint->current_nonce);
+
+    return ESP_OK;
+}

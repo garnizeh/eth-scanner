@@ -55,7 +55,7 @@ esp_err_t nvs_flash_erase_wr(void)
 
 // Memory-based NVS blob for testing
 static uint8_t g_test_nvs_blob[512];
-static size_t g_test_nvs_blob_len = 0;
+size_t g_test_nvs_blob_len = 0;
 int stub_nvs_set_blob_error = 0;
 int stub_nvs_commit_error = 0;
 int nvs_commit_count = 0;
