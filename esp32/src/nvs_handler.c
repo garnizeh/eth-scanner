@@ -1,7 +1,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs_handler.h"
-#include "global_state.h"
+#include "shared_types.h"
 #include "nvs_compat.h"
 #include <string.h>
 
@@ -9,8 +9,6 @@ static const char *TAG = "nvs-handler";
 
 #define NVS_CHECKPOINT_KEY "job_ckpt"
 #define CHECKPOINT_MAGIC 0xDEADBEEF
-
-global_state_t g_state = {0};
 
 esp_err_t nvs_handler_init(void)
 {

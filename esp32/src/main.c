@@ -5,11 +5,15 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "wifi_handler.h"
-#include "global_state.h"
+#include "shared_types.h"
 #include "nvs_handler.h"
 #include "nvs_compat.h"
 #include "benchmark.h"
 #include "batch_calculator.h"
+#include <string.h>
+
+// Define global state instance and initialize
+global_state_t g_state = {0};
 
 static const char *TAG = "eth-scanner";
 
@@ -38,6 +42,22 @@ esp_err_t nvs_init_with_retry(void)
 void app_main(void) __attribute__((weak));
 void app_main(void)
 {
+    // Initialize global state
+    memset(&g_state, 0, sizeof(global_state_t));
+
+    // Set worker ID from config
+#ifdef CONFIG_ETHSCANNER_WORKER_ID
+    strncpy(g_state.worker_id, CONFIG_ETHSCANNER_WORKER_ID, WORKER_ID_MAX_LEN - 1);
+#else
+    strncpy(g_state.worker_id, "esp32-default", WORKER_ID_MAX_LEN - 1);
+#endif
+
+    // Initialize atomic counters
+    atomic_init(&g_state.current_nonce, 0);
+    atomic_init(&g_state.keys_scanned, 0);
+
+    ESP_LOGI(TAG, "Global state initialized for worker: %s", g_state.worker_id);
+
     // Initialize NVS
     esp_err_t ret = nvs_init_with_retry();
     ESP_ERROR_CHECK(ret);
@@ -55,7 +75,7 @@ void app_main(void)
     // Run startup benchmark for throughput calculation
     ESP_LOGI(TAG, "Running startup benchmark...");
     uint32_t throughput = benchmark_key_generation();
-    g_state.keys_per_second = throughput;
+    g_state.stats.keys_per_second = throughput;
     ESP_LOGI(TAG, "Device throughput: %lu keys/sec", (unsigned long)throughput);
 
     // Initial batch size calculation based on TARGET_DURATION_SEC (3600s)
