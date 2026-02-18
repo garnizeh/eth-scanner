@@ -165,38 +165,38 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 ### Phase 07: ESP32 Worker - Core Infrastructure
 **Goal:** Set up ESP32 firmware with WiFi, HTTP client, and NVS persistence.
 
-| Task ID | Description | Priority | Dependencies |
-|---------|-------------|----------|--------------|
-| P07-T010 | Initialize PlatformIO project with `framework = espidf` and define `src/main.c`. | High | None |
-| P07-T020 | Configure `Kconfig.projbuild` for **Menuconfig** integration (WiFi/API URL setup). | High | P07-T010 |
-| P07-T030 | Implement **ESP-NETIF** WiFi handler with Event Loop (Auto-reconnect & Backoff). | High | P07-T020 |
-| P07-T040 | Implement `esp_http_client` wrapper for Master API communication (POST/PATCH). | High | P07-T030 |
-| P07-T050 | Initialize **NVS (Non-Volatile Storage)** and obtain partition handles. | High | P07-T010 |
-| P07-T060 | Implement `save_checkpoint()` using `nvs_set_blob` for atomic job persistence. | High | P07-T050 |
-| P07-T070 | Implement `load_checkpoint()` to restore state during `app_main` boot sequence. | High | P07-T050 |
-| P07-T080 | Implement startup benchmark using `esp_timer_get_time()` for µs precision. | High | P07-T010 |
-| P07-T090 | Implement Batch Size Calculator (Keys/sec logic for 1-hour lease windows). | High | P07-T080 |
-| P07-T100 | Define Global State `struct` (prefix, nonce range, targets) in `shared_types.h`. | High | P07-T010 |
+| Task ID | Description | Priority | Dependencies | Status |
+|---------|-------------|----------|--------------|--------|
+| P07-T010 | Initialize PlatformIO project with `framework = espidf` and define `src/main.c`. | High | None | ✅ Completed |
+| P07-T020 | Configure `Kconfig.projbuild` for **Menuconfig** integration (WiFi/API URL setup). | High | P07-T010 | ✅ Completed |
+| P07-T030 | Implement **ESP-NETIF** WiFi handler with Event Loop (Auto-reconnect & Backoff). | High | P07-T020 | ✅ Completed |
+| P07-T040 | Implement `esp_http_client` wrapper for Master API communication (POST/PATCH). | High | P07-T030 | ✅ Completed |
+| P07-T050 | Initialize **NVS (Non-Volatile Storage)** and obtain partition handles. | High | P07-T010 | ✅ Completed |
+| P07-T060 | Implement `save_checkpoint()` using `nvs_set_blob` for atomic job persistence. | High | P07-T050 | ✅ Completed |
+| P07-T070 | Implement `load_checkpoint()` to restore state during `app_main` boot sequence. | High | P07-T050 | ✅ Completed |
+| P07-T080 | Implement startup benchmark using `esp_timer_get_time()` for µs precision. | High | P07-T010 | ✅ Completed |
+| P07-T090 | Implement Batch Size Calculator (Keys/sec logic for 1-hour lease windows). | High | P07-T080 | ✅ Completed |
+| P07-T100 | Define Global State `struct` (prefix, nonce range, targets) in `shared_types.h`. | High | P07-T010 | ✅ Completed |
 
 ---
 
 ### Phase 08: ESP32 Worker - Crypto & Computation
 **Goal:** Implement dual-core FreeRTOS tasks with optimized crypto hot loop.
 
-| Task ID | Description | Priority | Dependencies |
-|---------|-------------|----------|--------------|
-| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` as a **CMake component** (Xtensa optimized). | High | P07-T010 |
-| P08-T020 | Implement `keccak256` hashing (utilizing ESP32 SHA Hardware Acceleration). | High | P08-T010 |
-| P08-T030 | Implement `derive_eth_address()` (secp256k1 point multiplication). | High | P08-T020 |
-| P08-T040 | Spawn **Core 0 Task** (`xTaskCreatePinnedToCore`) for Networking & Watchdog. | High | P07-T040 |
-| P08-T050 | Implement Job Lease logic on Core 0 (Inter-task signaling via **Task Notifications**). | High | P08-T040 |
-| P08-T060 | Set up FreeRTOS Timer for periodic background checkpointing (every 60s). | High | P08-T040 |
-| P08-T070 | Spawn **Core 1 Task** with highest priority for the computational hot loop. | High | P08-T030 |
-| P08-T080 | Implement optimized Nonce loop (direct byte manipulation, avoiding `sprintf`). | High | P08-T070 |
-| P08-T090 | Implement binary address comparison using `memcmp` for zero-overhead validation. | High | P08-T080 |
-| P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 |
-| P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 |
-| P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 |
+| Task ID | Description | Priority | Dependencies | Status |
+|---------|-------------|----------|--------------|--------|
+| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` as a **CMake component** (Xtensa optimized). | High | P07-T010 | [In Backlog] |
+| P08-T020 | Implement `keccak256` hashing (utilizing ESP32 SHA Hardware Acceleration). | High | P08-T010 | [In Backlog] |
+| P08-T030 | Implement `derive_eth_address()` (secp256k1 point multiplication). | High | P08-T020 | [In Backlog] |
+| P08-T040 | Spawn **Core 0 Task** (`xTaskCreatePinnedToCore`) for Networking & Watchdog. | High | P07-T040 | [In Backlog] |
+| P08-T050 | Implement Job Lease logic on Core 0 (Inter-task signaling via **Task Notifications**). | High | P08-T040 | [In Backlog] |
+| P08-T060 | Set up FreeRTOS Timer for periodic background checkpointing (every 60s). | High | P08-T040 | [In Backlog] |
+| P08-T070 | Spawn **Core 1 Task** with highest priority for the computational hot loop. | High | P08-T030 | [In Backlog] |
+| P08-T080 | Implement optimized Nonce loop (direct byte manipulation, avoiding `sprintf`). | High | P08-T070 | [In Backlog] |
+| P08-T090 | Implement binary address comparison using `memcmp` for zero-overhead validation. | High | P08-T080 | [In Backlog] |
+| P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 | [In Backlog] |
+| P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 | [In Backlog] |
+| P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 | [In Backlog] |
 
 ## Technical Notes
 
@@ -468,9 +468,9 @@ Each task file in `backlog/` or `done/` should follow this structure:
 
 ## Current Project State
 
-**Last Updated:** February 14, 2026  
-**Active Phase:** P01 (Project Foundation & Setup)  
-**Next Task:** P01-T010  
+**Last Updated:** February 18, 2026  
+**Active Phase:** P08 (ESP32 Worker - Crypto & Computation)  
+**Next Task:** P08-T010  
 **Blockers:** None
 
 ---

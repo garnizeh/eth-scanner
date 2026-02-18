@@ -10,6 +10,8 @@ extern void test_api_lease_success(void);
 extern void test_api_checkpoint(void);
 extern void test_api_complete(void);
 
+extern void test_crypto_secp256k1_point_multiplication(void);
+
 extern void test_nvs_handler_success(void);
 extern void test_nvs_handler_open_error(void);
 extern void test_nvs_handler_stats_warning(void);
@@ -67,7 +69,7 @@ void app_main(void)
     RUN_TEST(test_nvs_init_erase_retry);
 
     ESP_LOGI(TAG, "Running Checkpoint tests...");
-    
+
     RUN_TEST(test_save_checkpoint_success);
     RUN_TEST(test_save_checkpoint_null_arg);
     RUN_TEST(test_save_checkpoint_set_blob_error);
@@ -89,6 +91,9 @@ void app_main(void)
     RUN_TEST(test_batch_calc_zero_throughput);
     RUN_TEST(test_batch_calc_zero_duration);
     RUN_TEST(test_batch_calc_mid_range);
+
+    ESP_LOGI(TAG, "Running Crypto tests...");
+    RUN_TEST(test_crypto_secp256k1_point_multiplication);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
@@ -116,7 +121,7 @@ void app_main(void)
     if (is_wifi_connected())
     {
         ESP_LOGI(TAG, "WiFi Connected! Starting API tests...");
-        
+
         RUN_TEST(test_api_lease_success);
         RUN_TEST(test_api_checkpoint);
         RUN_TEST(test_api_complete);
