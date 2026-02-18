@@ -28,6 +28,12 @@ extern void test_load_checkpoint_stale(void);
 extern void test_benchmark_positive_throughput(void);
 extern void test_benchmark_repeatability(void);
 
+extern void test_batch_calc_normal(void);
+extern void test_batch_calc_small_throughput(void);
+extern void test_batch_calc_zero_throughput(void);
+extern void test_batch_calc_zero_duration(void);
+extern void test_batch_calc_mid_range(void);
+
 static const char *TAG = "test_runner";
 
 void app_main(void)
@@ -42,6 +48,8 @@ void app_main(void)
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
+        ESP_LOGI(TAG, "NVS partition issue detected, erasing and reinitializing...");
+
         ESP_ERROR_CHECK(nvs_flash_erase());
         ESP_ERROR_CHECK(nvs_flash_init());
     }
@@ -58,6 +66,8 @@ void app_main(void)
     RUN_TEST(test_nvs_handler_stats_warning);
     RUN_TEST(test_nvs_init_erase_retry);
 
+    ESP_LOGI(TAG, "Running Checkpoint tests...");
+    
     RUN_TEST(test_save_checkpoint_success);
     RUN_TEST(test_save_checkpoint_null_arg);
     RUN_TEST(test_save_checkpoint_set_blob_error);
@@ -67,8 +77,18 @@ void app_main(void)
     RUN_TEST(test_load_checkpoint_invalid_magic);
     RUN_TEST(test_load_checkpoint_stale);
 
+    ESP_LOGI(TAG, "Running Benchmark tests...");
+
     RUN_TEST(test_benchmark_positive_throughput);
     RUN_TEST(test_benchmark_repeatability);
+
+    ESP_LOGI(TAG, "Running Batch Calculator tests...");
+
+    RUN_TEST(test_batch_calc_normal);
+    RUN_TEST(test_batch_calc_small_throughput);
+    RUN_TEST(test_batch_calc_zero_throughput);
+    RUN_TEST(test_batch_calc_zero_duration);
+    RUN_TEST(test_batch_calc_mid_range);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
@@ -96,6 +116,7 @@ void app_main(void)
     if (is_wifi_connected())
     {
         ESP_LOGI(TAG, "WiFi Connected! Starting API tests...");
+        
         RUN_TEST(test_api_lease_success);
         RUN_TEST(test_api_checkpoint);
         RUN_TEST(test_api_complete);

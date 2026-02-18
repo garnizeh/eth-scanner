@@ -9,14 +9,12 @@
 #include "nvs_handler.h"
 #include "nvs_compat.h"
 #include "benchmark.h"
+#include "batch_calculator.h"
 
 static const char *TAG = "eth-scanner";
 
-// Temporary stub for batch size calculation (to be implemented in P07-T090)
-uint32_t calculate_batch_size(uint32_t keys_per_sec, uint32_t target_duration_sec)
-{
-    return keys_per_sec * target_duration_sec;
-}
+// Job configuration
+#define TARGET_DURATION_SEC 3600 // 1 hour
 
 // Extracted helper so tests can exercise retry logic.
 esp_err_t nvs_init_with_retry(void)
@@ -60,9 +58,9 @@ void app_main(void)
     g_state.keys_per_second = throughput;
     ESP_LOGI(TAG, "Device throughput: %lu keys/sec", (unsigned long)throughput);
 
-    // Initial batch size calculation (to be refined in P07-T090)
-    uint32_t batch_size = calculate_batch_size(throughput, 3600);
-    ESP_LOGI(TAG, "Initial calculated batch size: %lu", (unsigned long)batch_size);
+    // Initial batch size calculation based on TARGET_DURATION_SEC (3600s)
+    uint32_t batch_size = calculate_batch_size(throughput, TARGET_DURATION_SEC);
+    ESP_LOGI(TAG, "Initial calculated batch size: %lu keys", (unsigned long)batch_size);
 
     // Initialize WiFi
     wifi_init_sta();
