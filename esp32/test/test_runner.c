@@ -25,6 +25,9 @@ extern void test_load_checkpoint_not_found(void);
 extern void test_load_checkpoint_invalid_magic(void);
 extern void test_load_checkpoint_stale(void);
 
+extern void test_benchmark_positive_throughput(void);
+extern void test_benchmark_repeatability(void);
+
 static const char *TAG = "test_runner";
 
 void app_main(void)
@@ -63,6 +66,9 @@ void app_main(void)
     RUN_TEST(test_load_checkpoint_not_found);
     RUN_TEST(test_load_checkpoint_invalid_magic);
     RUN_TEST(test_load_checkpoint_stale);
+
+    RUN_TEST(test_benchmark_positive_throughput);
+    RUN_TEST(test_benchmark_repeatability);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
