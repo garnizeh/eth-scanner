@@ -53,6 +53,14 @@
       "/^pio test -e esp32doit-devkit-v1$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^cd go && make lint$/": {
+        "approve": true,
+        "matchCommandLine": true
+      },
+      "/^make lint$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }

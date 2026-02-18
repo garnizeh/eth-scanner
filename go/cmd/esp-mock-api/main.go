@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -13,15 +14,26 @@ func main() {
 	mux.HandleFunc("/api/v1/jobs/lease", handleLease)
 	mux.HandleFunc("/api/v1/jobs/", handleJobUpdate) // matches /checkpoint and /complete
 
-	// Logging middleware
+	// Logging middleware — sanitize tainted values before logging
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[MOCK] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		//nolint:gosec // false positive: Log injection via taint analysis in mock server is not a security risk
+		log.Printf("[MOCK] %q %q from %q", r.Method, r.URL.Path, r.RemoteAddr)
 		mux.ServeHTTP(w, r)
 	})
 
 	port := "8080"
 	log.Printf("ESP32 Mock API starting on :%s (listening on all interfaces)", port)
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+
+	// Use an http.Server with timeouts to satisfy security linters
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: handler,
+		// reasonable defaults for a mock server
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }
 
 func handleLease(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +42,10 @@ func handleLease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//nolint:gosec // false positive: Log injection via taint analysis in mock server is not a security risk
 	scenario := r.Header.Get("X-Test-Scenario")
-	log.Printf("Lease request received. Scenario: %s", scenario)
+	//nolint:gosec // false positive: Log injection via taint analysis in mock server is not a security risk
+	log.Printf("Lease request received. Scenario: %q", scenario)
 
 	switch scenario {
 	case "500":
@@ -51,14 +65,19 @@ func handleLease(w http.ResponseWriter, r *http.Request) {
 			"target_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Printf("failed to encode lease response: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
 func handleJobUpdate(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	scenario := r.Header.Get("X-Test-Scenario")
-	log.Printf("Update request (%s) received. Scenario: %s", path, scenario)
+	//nolint:gosec // false positive: Log injection via taint analysis in mock server is not a security risk
+	log.Printf("Update request (%q) received. Scenario: %q", path, scenario)
 
 	if scenario == "500" {
 		http.Error(w, "internal error", http.StatusInternalServerError)
