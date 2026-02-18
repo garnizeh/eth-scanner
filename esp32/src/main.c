@@ -182,6 +182,17 @@ void core0_system_task(void *pvParameters)
 
         if (g_state.wifi_connected && !g_state.job_active)
         {
+            // P08-T120: Check if we just recovered a job from NVS
+            if (g_state.current_job.job_id != 0 && atomic_load(&g_state.current_nonce) != 0)
+            {
+                ESP_LOGI(TAG, "RECOVERY: Activating recovered job %lld from nonce %llu",
+                         g_state.current_job.job_id, (unsigned long long)atomic_load(&g_state.current_nonce));
+                g_state.job_active = true;
+                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+                // Continue to avoid immediate re-lease
+                continue;
+            }
+
             ESP_LOGI(TAG, "Device idle, requesting new job lease...");
 
             // Calculate requested batch size based on startup benchmark
@@ -200,6 +211,18 @@ void core0_system_task(void *pvParameters)
                 atomic_store(&g_state.current_nonce, new_job.nonce_start);
                 atomic_store(&g_state.keys_scanned, 0);
                 g_state.job_active = true;
+
+                // Create initial checkpoint to allow recovery if we crash shortly after leasing
+                job_checkpoint_t cp = {0};
+                cp.job_id = new_job.job_id;
+                memcpy(cp.prefix_28, new_job.prefix_28, PREFIX_28_SIZE);
+                cp.nonce_start = new_job.nonce_start;
+                cp.nonce_end = new_job.nonce_end;
+                cp.current_nonce = new_job.nonce_start;
+                cp.keys_scanned = 0;
+                cp.timestamp = (uint64_t)time(NULL);
+                cp.magic = 0xACE1;
+                save_checkpoint(g_state.nvs_handle, &cp);
 
                 // Signal Core 1 task to start working
                 xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
@@ -243,15 +266,12 @@ void core1_worker_task(void *pvParameters)
 
                 // Initialize job-specific state
                 memcpy(priv_key, g_state.current_job.prefix_28, 28);
-                uint32_t start = (uint32_t)g_state.current_job.nonce_start;
+
+                // P08-T120: Load from atomic current_nonce for recovery support
+                uint32_t current = (uint32_t)atomic_load(&g_state.current_nonce);
                 uint32_t end = (uint32_t)g_state.current_job.nonce_end;
-                uint32_t current = start;
 
-                // Reset atomic progress trackers for the new job session
-                atomic_store(&g_state.current_nonce, start);
-                atomic_store(&g_state.keys_scanned, 0);
-
-                ESP_LOGI(TAG, "Core 1: Scan loop starting: %lu -> %lu", (unsigned long)start, (unsigned long)end);
+                ESP_LOGI(TAG, "Core 1: Scan loop starting at %lu (to %lu)", (unsigned long)current, (unsigned long)end);
 
                 while (g_state.job_active && !g_state.should_stop)
                 {
@@ -361,8 +381,32 @@ void app_main(void)
 
     ESP_LOGI(TAG, "EthScanner ESP32 Worker starting...");
 
+    // P08-T120: Check for existing checkpoint in NVS before starting
+    job_checkpoint_t checkpoint;
+    if (load_checkpoint(g_state.nvs_handle, &checkpoint) == ESP_OK)
+    {
+        ESP_LOGI(TAG, "RECOVERY: Found existing checkpoint for job %lld.", checkpoint.job_id);
+        ESP_LOGI(TAG, "RECOVERY: Resuming from nonce %llu (Scanned: %llu)",
+                 (unsigned long long)checkpoint.current_nonce, (unsigned long long)checkpoint.keys_scanned);
+
+        // Resume state
+        g_state.current_job.job_id = checkpoint.job_id;
+        memcpy(g_state.current_job.prefix_28, checkpoint.prefix_28, PREFIX_28_SIZE);
+        g_state.current_job.nonce_start = checkpoint.nonce_start;
+        g_state.current_job.nonce_end = checkpoint.nonce_end;
+        // Target address is not in checkpoint structure currently,
+        // in a real scenario we'd need it.
+        // For MVP resuming work we assume it was for the same global objective or
+        // we'd need to extend the checkpoint schema.
+
+        atomic_store(&g_state.current_nonce, checkpoint.current_nonce);
+        atomic_store(&g_state.keys_scanned, checkpoint.keys_scanned);
+
+        // Note: we don't set job_active = true yet because Core 0 handles the lease/start flow.
+        // But the state is now primed.
+    }
+
     // Run startup benchmark for throughput calculation
-    ESP_LOGI(TAG, "Running startup benchmark...");
     uint32_t throughput = benchmark_key_generation();
     g_state.stats.keys_per_second = throughput;
     ESP_LOGI(TAG, "Device throughput: %lu keys/sec", (unsigned long)throughput);
