@@ -10,6 +10,7 @@
 #include "nvs_compat.h"
 #include "benchmark.h"
 #include "batch_calculator.h"
+#include "api_client.h"
 #include <string.h>
 
 // Define global state instance and initialize
@@ -56,6 +57,44 @@ void core0_system_task(void *pvParameters)
         // Check WiFi status and update global state
         g_state.wifi_connected = is_wifi_connected();
 
+        if (g_state.wifi_connected && !g_state.job_active)
+        {
+            ESP_LOGI(TAG, "Device idle, requesting new job lease...");
+
+            // Calculate requested batch size based on startup benchmark
+            uint32_t batch_size = calculate_batch_size(g_state.stats.keys_per_second, TARGET_DURATION_SEC);
+
+            job_info_t new_job = {0};
+            esp_err_t err = api_lease_job(g_state.worker_id, batch_size, &new_job);
+
+            if (err == ESP_OK)
+            {
+                ESP_LOGI(TAG, "Job leased successfully! ID: %lld, Range: [%lu - %lu]",
+                         new_job.job_id, (unsigned long)new_job.nonce_start, (unsigned long)new_job.nonce_end);
+
+                // Update global state
+                memcpy(&(g_state.current_job), &new_job, sizeof(job_info_t));
+                atomic_store(&g_state.current_nonce, new_job.nonce_start);
+                atomic_store(&g_state.keys_scanned, 0);
+                g_state.job_active = true;
+
+                // Signal Core 1 task to start working
+                xTaskNotify(g_state.core1_task_handle, 0x01, eSetBits);
+            }
+            else if (err == ESP_ERR_NOT_FOUND)
+            {
+                ESP_LOGW(TAG, "No jobs available on server, retrying in 30s...");
+                vTaskDelay(pdMS_TO_TICKS(30000));
+                continue;
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to lease job (err %d), retrying in 10s...", err);
+                vTaskDelay(pdMS_TO_TICKS(10000));
+                continue;
+            }
+        }
+
         // Feed watchdog by yielding
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -66,9 +105,43 @@ void core1_computation_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting Computation Task on Core %d", xPortGetCoreID());
 
+    uint32_t notification_value = 0;
+
     while (1)
     {
-        // Placeholder for the hot loop (to be implemented in P08-T050)
+        // Wait for notification from Core 0
+        if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notification_value, pdMS_TO_TICKS(1000)) == pdTRUE)
+        {
+            if (notification_value & 0x01)
+            {
+                ESP_LOGI(TAG, "Core 1: New job signaled! Starting scan...");
+
+                // SCAN LOOP PLACEHOLDER (To be implemented in P08-T060)
+                // For now, we simulate work by incrementing counters and waiting
+                while (g_state.job_active && !g_state.should_stop)
+                {
+                    uint64_t current = atomic_load(&g_state.current_nonce);
+                    if (current >= g_state.current_job.nonce_end)
+                    {
+                        break;
+                    }
+
+                    // Simulate scanning 1000 keys
+                    atomic_fetch_add(&g_state.current_nonce, 1000);
+                    atomic_fetch_add(&g_state.keys_scanned, 1000);
+
+                    // Yield to system tasks
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+
+                if (atomic_load(&g_state.current_nonce) >= g_state.current_job.nonce_end)
+                {
+                    ESP_LOGI(TAG, "Core 1: Job complete.");
+                    g_state.job_active = false;
+                }
+            }
+        }
+
         // Feed the watchdog by yielding
         vTaskDelay(pdMS_TO_TICKS(100));
     }
