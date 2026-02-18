@@ -2,6 +2,7 @@
 // the wrapper symbols (nvs_*_wr) so they do not conflict with the real
 // nvs_flash library symbols when linking.
 #include "nvs_compat.h"
+#include "shared_types.h"
 #include <string.h>
 
 int stub_nvs_open_behavior = 0; // 0 = success, 1 = open error

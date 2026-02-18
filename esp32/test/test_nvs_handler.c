@@ -1,6 +1,6 @@
 #include <unity.h>
 #include "nvs_handler.h"
-#include "global_state.h"
+#include "shared_types.h"
 
 void test_nvs_handler_success(void)
 {
