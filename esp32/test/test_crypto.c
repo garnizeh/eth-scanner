@@ -67,11 +67,8 @@ void test_crypto_derive_eth_address(void)
     uint8_t priv_key[32] = {0};
     priv_key[31] = 0x01;
 
-    uint8_t pub_key[65];
-    ecdsa_get_public_key65(&secp256k1, priv_key, pub_key);
-
     uint8_t address[20];
-    derive_eth_address(pub_key, address);
+    derive_eth_address(priv_key, address);
 
     // Expected values from verified Go implementation
     uint8_t expected_address[] = {
