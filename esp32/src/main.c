@@ -44,6 +44,11 @@ static inline void update_nonce_in_buffer(uint8_t *buffer, uint32_t nonce)
     buffer[31] = (uint8_t)((nonce >> 24) & 0xFF);
 }
 
+// Static task buffers for Core 0 (System management)
+#define CORE0_STACK_SIZE 4096
+static StackType_t core0_stack[CORE0_STACK_SIZE];
+static StaticTask_t core0_task_buffer;
+
 // Static task buffers for Core 1 (computational hot loop)
 #define CORE1_STACK_SIZE 8192
 static StackType_t core1_stack[CORE1_STACK_SIZE];
@@ -383,15 +388,21 @@ void app_main(void)
     // Core 0: PRO_CPU (Networking, API, Misc)
     // Core 1: APP_CPU (Hot Loop)
 
-    xTaskCreatePinnedToCore(
+    g_state.core0_task_handle = xTaskCreateStaticPinnedToCore(
         core0_system_task,
         "core0_system",
-        4096,
+        CORE0_STACK_SIZE,
         NULL,
         5, // Priority must be lower than Core 1 to avoid interference
-        &g_state.core0_task_handle,
+        core0_stack,
+        &core0_task_buffer,
         0 // Core 0
     );
+
+    if (g_state.core0_task_handle == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create Core 0 system task!");
+    }
 
     // Create Core 1 task statically for maximum stability and priority
     g_state.core1_task_handle = xTaskCreateStaticPinnedToCore(
