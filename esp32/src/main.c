@@ -20,6 +20,10 @@ static const char *TAG = "eth-scanner";
 // Job configuration
 #define TARGET_DURATION_SEC 3600 // 1 hour
 
+// Task prototypes
+void core0_system_task(void *pvParameters);
+void core1_computation_task(void *pvParameters);
+
 // Extracted helper so tests can exercise retry logic.
 esp_err_t nvs_init_with_retry(void)
 {
@@ -36,6 +40,38 @@ esp_err_t nvs_init_with_retry(void)
         ret = nvs_flash_init_wr();
     }
     return ret;
+}
+
+// System Management Task (Networking, API, Monitoring) - Core 0
+void core0_system_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting System Task on Core %d", xPortGetCoreID());
+
+    // Initialize WiFi
+    wifi_init_sta();
+
+    // Maintenance loop
+    while (1)
+    {
+        // Check WiFi status and update global state
+        g_state.wifi_connected = is_wifi_connected();
+
+        // Feed watchdog by yielding
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// Computation Task (The "Hot Loop") - Core 1
+void core1_computation_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting Computation Task on Core %d", xPortGetCoreID());
+
+    while (1)
+    {
+        // Placeholder for the hot loop (to be implemented in P08-T050)
+        // Feed the watchdog by yielding
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
 }
 
 // Declare app_main as weak so it can be overridden by test code
@@ -82,13 +118,35 @@ void app_main(void)
     uint32_t batch_size = calculate_batch_size(throughput, TARGET_DURATION_SEC);
     ESP_LOGI(TAG, "Initial calculated batch size: %lu keys", (unsigned long)batch_size);
 
-    // Initialize WiFi
-    wifi_init_sta();
+    // Create tasks pinned to cores
+    // Core 0: PRO_CPU (Networking, API, Misc)
+    // Core 1: APP_CPU (Hot Loop)
 
-    ESP_LOGI(TAG, "WiFi connected, starting worker tasks...");
+    xTaskCreatePinnedToCore(
+        core0_system_task,
+        "core0_system",
+        4096,
+        NULL,
+        5, // Priority must be lower than Core 1 to avoid interference?
+        &g_state.core0_task_handle,
+        0 // Core 0
+    );
 
+    xTaskCreatePinnedToCore(
+        core1_computation_task,
+        "core1_compute",
+        8192,
+        NULL,
+        10, // Higher priority for the compute task
+        &g_state.core1_task_handle,
+        1 // Core 1
+    );
+
+    ESP_LOGI(TAG, "All tasks spawned.");
+
+    // Monitoring loop for the main task
     while (1)
     {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
