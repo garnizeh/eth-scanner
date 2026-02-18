@@ -11,6 +11,8 @@ extern void test_api_checkpoint(void);
 extern void test_api_complete(void);
 
 extern void test_crypto_secp256k1_point_multiplication(void);
+extern void test_crypto_keccak256(void);
+extern void test_crypto_derive_eth_address(void);
 
 extern void test_nvs_handler_success(void);
 extern void test_nvs_handler_open_error(void);
@@ -94,6 +96,8 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Running Crypto tests...");
     RUN_TEST(test_crypto_secp256k1_point_multiplication);
+    RUN_TEST(test_crypto_keccak256);
+    RUN_TEST(test_crypto_derive_eth_address);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
