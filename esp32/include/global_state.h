@@ -3,7 +3,8 @@
 
 #include "nvs_flash.h"
 
-typedef struct {
+typedef struct
+{
     nvs_handle_t nvs_handle;
 } global_state_t;
 

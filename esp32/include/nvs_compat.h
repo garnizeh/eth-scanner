@@ -9,5 +9,8 @@ esp_err_t nvs_open_wr(const char *name, nvs_open_mode_t open_mode, nvs_handle_t 
 esp_err_t nvs_get_stats_wr(const char *partition_name, nvs_stats_t *stats);
 esp_err_t nvs_flash_init_wr(void);
 esp_err_t nvs_flash_erase_wr(void);
+esp_err_t nvs_set_blob_wr(nvs_handle_t handle, const char *key, const void *value, size_t length);
+esp_err_t nvs_get_blob_wr(nvs_handle_t handle, const char *key, void *out_value, size_t *length);
+esp_err_t nvs_commit_wr(nvs_handle_t handle);
 
 #endif // NVS_COMPAT_H

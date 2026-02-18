@@ -25,3 +25,18 @@ esp_err_t __attribute__((weak)) nvs_flash_erase_wr(void)
 {
     return nvs_flash_erase();
 }
+
+esp_err_t __attribute__((weak)) nvs_set_blob_wr(nvs_handle_t handle, const char *key, const void *value, size_t length)
+{
+    return nvs_set_blob(handle, key, value, length);
+}
+
+esp_err_t __attribute__((weak)) nvs_get_blob_wr(nvs_handle_t handle, const char *key, void *out_value, size_t *length)
+{
+    return nvs_get_blob(handle, key, out_value, length);
+}
+
+esp_err_t __attribute__((weak)) nvs_commit_wr(nvs_handle_t handle)
+{
+    return nvs_commit(handle);
+}
