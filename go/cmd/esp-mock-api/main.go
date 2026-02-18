@@ -43,9 +43,9 @@ func handleLease(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"job_id": 123, "nonce_start": "not-a-number"}`) // invalid type
 	default:
 		// Success case
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"job_id":         42,
-			"prefix_28":      "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRo=", // bytes 1-28
+			"prefix_28":      "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHA==", // bytes 1-28 (correct base64)
 			"nonce_start":    1000,
 			"nonce_end":      2000,
 			"target_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
@@ -81,7 +81,7 @@ func handleJobUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify request body
-	var body map[string]interface{}
+	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		log.Printf("Error decoding body: %v", err)
 		http.Error(w, "bad request", http.StatusBadRequest)
