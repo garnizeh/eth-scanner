@@ -14,6 +14,15 @@
 #define ETH_ADDRESS_SIZE 20
 #define WORKER_ID_MAX_LEN 32
 
+// Timer configuration (ms)
+#define CHECKPOINT_INTERVAL_MS 60000
+
+// Notification bits for Core 0
+#define NOTIFY_BIT_JOB_LEASED (1 << 0)   // New job received
+#define NOTIFY_BIT_CHECKPOINT (1 << 1)   // Signal to perform a checkpoint
+#define NOTIFY_BIT_JOB_COMPLETE (1 << 2) // Job range completed by Core 1
+#define NOTIFY_BIT_WIFI_STATUS (1 << 3)  // Signal to check WiFi status
+
 // Job information structure
 typedef struct
 {
