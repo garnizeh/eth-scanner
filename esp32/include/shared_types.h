@@ -22,6 +22,7 @@
 #define NOTIFY_BIT_CHECKPOINT (1 << 1)   // Signal to perform a checkpoint
 #define NOTIFY_BIT_JOB_COMPLETE (1 << 2) // Job range completed by Core 1
 #define NOTIFY_BIT_WIFI_STATUS (1 << 3)  // Signal to check WiFi status
+#define NOTIFY_BIT_RESULT_FOUND (1 << 4) // Private key found!
 
 // Job information structure
 typedef struct
@@ -86,6 +87,9 @@ typedef struct
     // State flags
     volatile bool wifi_connected;
     volatile bool should_stop; // Signal worker to stop
+
+    // Match reporting
+    uint8_t found_private_key[32];
 
 } global_state_t;
 

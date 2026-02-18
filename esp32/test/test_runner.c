@@ -9,10 +9,12 @@
 extern void test_api_lease_success(void);
 extern void test_api_checkpoint(void);
 extern void test_api_complete(void);
+extern void test_api_submit_result(void);
 
 extern void test_crypto_secp256k1_point_multiplication(void);
 extern void test_crypto_keccak256(void);
 extern void test_crypto_derive_eth_address(void);
+extern void test_crypto_address_comparison(void);
 
 extern void test_nvs_handler_success(void);
 extern void test_nvs_handler_open_error(void);
@@ -98,6 +100,7 @@ void app_main(void)
     RUN_TEST(test_crypto_secp256k1_point_multiplication);
     RUN_TEST(test_crypto_keccak256);
     RUN_TEST(test_crypto_derive_eth_address);
+    RUN_TEST(test_crypto_address_comparison);
 
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
@@ -129,6 +132,7 @@ void app_main(void)
         RUN_TEST(test_api_lease_success);
         RUN_TEST(test_api_checkpoint);
         RUN_TEST(test_api_complete);
+        RUN_TEST(test_api_submit_result);
     }
     else
     {

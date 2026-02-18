@@ -38,3 +38,12 @@ void test_api_complete()
     esp_err_t err = api_complete(42, "test-worker", 2000, 1000, 20000);
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
+
+void test_api_submit_result()
+{
+    uint8_t priv_key[32] = {0x01, 0x02, 0x03, 0x04};
+    uint8_t address[20] = {0xaa, 0xbb, 0xcc, 0xdd};
+
+    esp_err_t err = api_submit_result(42, "test-worker", priv_key, address);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+}

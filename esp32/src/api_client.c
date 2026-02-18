@@ -265,3 +265,70 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
 
     return err;
 }
+
+esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
+                            const uint8_t *private_key, const uint8_t *address)
+{
+    const char *url = CONFIG_ETHSCANNER_API_URL "/api/v1/results";
+    ESP_LOGI(TAG, "!!! MATCH FOUND !!! Submitting result for job %lld to %s", job_id, url);
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for result submission");
+        return ESP_FAIL;
+    }
+
+    // Convert keys to hex strings for JSON (simple approach for ESP32)
+    char priv_hex[65] = {0};
+    char addr_hex[43] = {0};
+    // Address must be 0x-prefixed for the Master API to accept it.
+    strcpy(addr_hex, "0x");
+    for (int i = 0; i < 32; i++)
+        sprintf(priv_hex + (i * 2), "%02x", private_key[i]);
+    for (int i = 0; i < 20; i++)
+        sprintf(addr_hex + 2 + (i * 2), "%02x", address[i]);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "worker_id", worker_id);
+    cJSON_AddNumberToObject(root, "job_id", (double)job_id);
+    cJSON_AddStringToObject(root, "private_key", priv_hex);
+    cJSON_AddStringToObject(root, "address", addr_hex);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, json_str, strlen(json_str));
+
+    esp_err_t err = esp_http_client_perform(client);
+
+    if (err == ESP_OK)
+    {
+        int status = esp_http_client_get_status_code(client);
+        if (status != 200 && status != 201)
+        {
+            ESP_LOGE(TAG, "Result submission failed with HTTP status %d", status);
+            err = ESP_FAIL;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Result submitted successfully!");
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Result submission performance failed: %s", esp_err_to_name(err));
+    }
+
+    cJSON_Delete(root);
+    if (json_str)
+        free(json_str);
+    esp_http_client_cleanup(client);
+
+    return err;
+}
