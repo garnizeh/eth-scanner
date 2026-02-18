@@ -13,6 +13,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/jobs/lease", handleLease)
 	mux.HandleFunc("/api/v1/jobs/", handleJobUpdate) // matches /checkpoint and /complete
+	mux.HandleFunc("/api/v1/results", handleResults)
 
 	// Logging middleware — sanitize tainted values before logging
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,4 +111,14 @@ func handleJobUpdate(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"status":"ok"}`)
+}
+
+func handleResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	log.Printf("[MOCK] Result submitted successfully")
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, `{"status":"created"}`)
 }
