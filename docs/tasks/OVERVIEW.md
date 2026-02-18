@@ -185,18 +185,19 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 
 | Task ID | Description | Priority | Dependencies | Status |
 |---------|-------------|----------|--------------|--------|
-| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` as a **CMake component** (Xtensa optimized). | High | P07-T010 | [In Backlog] |
-| P08-T020 | Implement `keccak256` hashing (utilizing ESP32 SHA Hardware Acceleration). | High | P08-T010 | [In Backlog] |
-| P08-T030 | Implement `derive_eth_address()` (secp256k1 point multiplication). | High | P08-T020 | [In Backlog] |
-| P08-T040 | Spawn **Core 0 Task** (`xTaskCreatePinnedToCore`) for Networking & Watchdog. | High | P07-T040 | [In Backlog] |
-| P08-T050 | Implement Job Lease logic on Core 0 (Inter-task signaling via **Task Notifications**). | High | P08-T040 | [In Backlog] |
-| P08-T060 | Set up FreeRTOS Timer for periodic background checkpointing (every 60s). | High | P08-T040 | [In Backlog] |
-| P08-T070 | Spawn **Core 1 Task** with highest priority for the computational hot loop. | High | P08-T030 | [In Backlog] |
-| P08-T080 | Implement optimized Nonce loop (direct byte manipulation, avoiding `sprintf`). | High | P08-T070 | [In Backlog] |
-| P08-T090 | Implement binary address comparison using `memcmp` for zero-overhead validation. | High | P08-T080 | [In Backlog] |
-| P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 | [In Backlog] |
-| P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 | [In Backlog] |
-| P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 | [In Backlog] |
+| P08-T010 | Integrate `trezor-crypto` or `micro-ecc` as a **CMake component** (Xtensa optimized). | High | P07-T010 | ✅ Completed |
+| P08-T020 | Implement `keccak256` hashing (utilizing ESP32 SHA Hardware Acceleration). | High | P08-T010 | ✅ Completed |
+| P08-T030 | Implement `derive_eth_address()` (secp256k1 point multiplication). | High | P08-T020 | ✅ Completed |
+| P08-T040 | Spawn **Core 0 Task** (`xTaskCreatePinnedToCore`) for Networking & Watchdog. | High | P07-T040 | ✅ Completed |
+| P08-T050 | Implement Job Lease logic on Core 0 (Inter-task signaling via **Task Notifications**). | High | P08-T040 | ✅ Completed |
+| P08-T060 | Set up FreeRTOS Timer for periodic background checkpointing (every 60s). | High | P08-T040 | ✅ Completed |
+| P08-T070 | Spawn **Core 1 Task** with highest priority for the computational hot loop. | High | P08-T030 | ✅ Completed |
+| P08-T080 | Implement optimized Nonce loop (direct byte manipulation, avoiding `sprintf`). | High | P08-T070 | ✅ Completed |
+| P08-T090 | Implement binary address comparison using `memcmp` for zero-overhead validation. | High | P08-T080 | ✅ Completed |
+| P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 | ✅ Completed |
+| P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 | ✅ Completed |
+| P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 | ✅ Completed |
+| P08-T130 | Long-haul Stress Test (30-60m running against Master API + manual resets). | High | P08-T120 | [In Backlog] |
 
 ## Technical Notes
 
