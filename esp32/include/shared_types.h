@@ -55,7 +55,7 @@ typedef struct
 
     // Current job information
     job_info_t current_job;
-    bool job_active;
+    volatile bool job_active;
 
     // Atomic progress counters (accessed from Core 1 hot loop)
     atomic_ullong current_nonce; // Current nonce being processed

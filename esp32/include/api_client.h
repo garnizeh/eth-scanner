@@ -3,18 +3,7 @@
 
 #include <stdint.h>
 #include "esp_err.h"
-
-/**
- * @brief Job information structure
- */
-typedef struct
-{
-    int64_t job_id;
-    uint8_t prefix_28[28];
-    uint32_t nonce_start;
-    uint32_t nonce_end;
-    char target_address[43]; // 0x... format
-} job_info_t;
+#include "shared_types.h"
 
 /**
  * @brief Request a new job lease from the Master API
@@ -38,7 +27,7 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
  * @return ESP_OK on success, appropriate error code otherwise
  */
 esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
-                         uint32_t current_nonce, uint64_t keys_scanned,
+                         uint64_t current_nonce, uint64_t keys_scanned,
                          uint64_t duration_ms);
 
 /**
@@ -48,11 +37,11 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
  * @param worker_id Unique worker identifier
  * @param final_nonce Final nonce reached
  * @param keys_scanned Total keys scanned
- * @param duration_ms Total time spent in milliseconds
+ * @param duration_ms Time spent scanning in milliseconds
  * @return ESP_OK on success, appropriate error code otherwise
  */
 esp_err_t api_complete(int64_t job_id, const char *worker_id,
-                       uint32_t final_nonce, uint64_t keys_scanned,
+                       uint64_t final_nonce, uint64_t keys_scanned,
                        uint64_t duration_ms);
 
 #endif // API_CLIENT_H

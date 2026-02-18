@@ -13,7 +13,13 @@ void test_api_lease_success()
     TEST_ASSERT_EQUAL(42, job.job_id);
     TEST_ASSERT_EQUAL(1000, job.nonce_start);
     TEST_ASSERT_EQUAL(2000, job.nonce_end);
-    TEST_ASSERT_EQUAL_STRING("0x742d35Cc6634C0532925a3b844Bc454e4438f44e", job.target_address);
+
+    // Target address: 0x742d3... = [0x74, 0x2d, 0x35, 0xcc, ...]
+    uint8_t expected_target[20] = {
+        0x74, 0x2d, 0x35, 0xCc, 0x66, 0x34, 0xC0, 0x53, 0x29, 0x25,
+        0xa3, 0xb8, 0x44, 0xBc, 0x45, 0x4e, 0x44, 0x38, 0xf4, 0x4e};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expected_target, job.target_address, 20);
+
     // Prefix 1..28
     uint8_t expected_prefix[28];
     for (int i = 0; i < 28; i++)

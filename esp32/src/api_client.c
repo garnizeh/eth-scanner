@@ -18,6 +18,27 @@ typedef struct
     int buffer_len;
 } response_data_t;
 
+static int hex_to_int(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static void hex_to_bytes(const char *hex, uint8_t *bytes, size_t len)
+{
+    if (hex[0] == '0' && hex[1] == 'x')
+        hex += 2;
+    for (size_t i = 0; i < len; i++)
+    {
+        bytes[i] = (hex_to_int(hex[i * 2]) << 4) | hex_to_int(hex[i * 2 + 1]);
+    }
+}
+
 /**
  * @brief Handle HTTP events and capture response body
  */
@@ -86,12 +107,11 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
             if (resp)
             {
                 out_job->job_id = (int64_t)cJSON_GetObjectItem(resp, "job_id")->valuedouble;
-                out_job->nonce_start = (uint32_t)cJSON_GetObjectItem(resp, "nonce_start")->valuedouble;
-                out_job->nonce_end = (uint32_t)cJSON_GetObjectItem(resp, "nonce_end")->valuedouble;
+                out_job->nonce_start = (uint64_t)cJSON_GetObjectItem(resp, "nonce_start")->valuedouble;
+                out_job->nonce_end = (uint64_t)cJSON_GetObjectItem(resp, "nonce_end")->valuedouble;
 
                 const char *target = cJSON_GetObjectItem(resp, "target_address")->valuestring;
-                strncpy(out_job->target_address, target, sizeof(out_job->target_address) - 1);
-                out_job->target_address[sizeof(out_job->target_address) - 1] = '\0';
+                hex_to_bytes(target, out_job->target_address, 20);
 
                 const char *prefix_b64 = cJSON_GetObjectItem(resp, "prefix_28")->valuestring;
                 size_t olen = 0;
@@ -136,7 +156,7 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
 }
 
 esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
-                         uint32_t current_nonce, uint64_t keys_scanned,
+                         uint64_t current_nonce, uint64_t keys_scanned,
                          uint64_t duration_ms)
 {
     char url[256];
@@ -192,7 +212,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
 }
 
 esp_err_t api_complete(int64_t job_id, const char *worker_id,
-                       uint32_t final_nonce, uint64_t keys_scanned,
+                       uint64_t final_nonce, uint64_t keys_scanned,
                        uint64_t duration_ms)
 {
     char url[256];
