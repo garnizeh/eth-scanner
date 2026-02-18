@@ -20,7 +20,7 @@ static const char *TAG = "wifi_handler";
  * - we are connected to the AP with an IP
  * - we failed to connect after the maximum amount of retries */
 #define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+#define WIFI_FAIL_BIT BIT1
 
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -29,30 +29,39 @@ static const int MAX_RETRY = 10;
 static const int backoff_delays[] = {1, 2, 5, 10, 30}; // seconds
 static const int num_backoff_delays = sizeof(backoff_delays) / sizeof(backoff_delays[0]);
 
-static void event_handler(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data)
+static void event_handler(void *arg, esp_event_base_t event_base,
+                          int32_t event_id, void *event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < MAX_RETRY) {
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        if (s_retry_num < MAX_RETRY)
+        {
             int delay_index = s_retry_num;
-            if (delay_index >= num_backoff_delays) {
+            if (delay_index >= num_backoff_delays)
+            {
                 delay_index = num_backoff_delays - 1;
             }
             int delay_sec = backoff_delays[delay_index];
-            
+
             ESP_LOGW(TAG, "Disconnected from AP, retrying in %d seconds... (%d/%d)", delay_sec, s_retry_num + 1, MAX_RETRY);
-            
+
             vTaskDelay(pdMS_TO_TICKS(delay_sec * 1000));
             esp_wifi_connect();
             s_retry_num++;
-        } else {
+        }
+        else
+        {
             ESP_LOGE(TAG, "Max retries reached, restarting...");
             esp_restart();
         }
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -66,7 +75,8 @@ void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_netif_init());
 
     esp_err_t err = esp_event_loop_create_default();
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+    {
         ESP_ERROR_CHECK(err);
     }
 
@@ -95,18 +105,34 @@ void wifi_init_sta(void)
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
-    ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "wifi_init_sta finished, waiting for connection...");
 
-    /* Waiting until the connection is established (WIFI_CONNECTED_BIT). */
+    /* Waiting 100ms to start event. */
     xEventGroupWaitBits(s_wifi_event_group,
-            WIFI_CONNECTED_BIT,
-            pdFALSE,
-            pdFALSE,
-            portMAX_DELAY);
+                        WIFI_CONNECTED_BIT,
+                        pdFALSE,
+                        pdFALSE,
+                        pdMS_TO_TICKS(5000));
 
-    ESP_LOGI(TAG, "Connected to SSID:%s", CONFIG_ETHSCANNER_WIFI_SSID);
+    if (is_wifi_connected())
+    {
+        ESP_LOGI(TAG, "Connected to SSID:%s", CONFIG_ETHSCANNER_WIFI_SSID);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to connect to WiFi within timeout");
+    }
+}
+
+bool is_wifi_connected(void)
+{
+    if (s_wifi_event_group == NULL)
+        return false;
+
+    EventBits_t uxBits = xEventGroupGetBits(s_wifi_event_group);
+    return (uxBits & WIFI_CONNECTED_BIT) != 0;
 }

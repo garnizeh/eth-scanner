@@ -20,7 +20,8 @@ esp_err_t nvs_init_with_retry(void)
     {
         // NVS partition was truncated, erase and retry
         esp_err_t erase_ret = nvs_flash_erase_wr();
-        if (erase_ret != ESP_OK) {
+        if (erase_ret != ESP_OK)
+        {
             return erase_ret;
         }
         ret = nvs_flash_init_wr();
@@ -38,7 +39,8 @@ void app_main(void)
 
     // Initialize and open storage namespace in NVS
     esp_err_t err = nvs_handler_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "NVS handler init failed: %s", esp_err_to_name(err));
         return;
     }
