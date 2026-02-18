@@ -12,6 +12,7 @@
 #include "batch_calculator.h"
 #include "api_client.h"
 #include <string.h>
+#include <time.h>
 
 // Define global state instance and initialize
 global_state_t g_state = {0};
@@ -24,6 +25,16 @@ static const char *TAG = "eth-scanner";
 // Task prototypes
 void core0_system_task(void *pvParameters);
 void core1_computation_task(void *pvParameters);
+
+// Timer callback for periodic checkpoints
+static void checkpoint_timer_callback(TimerHandle_t xTimer)
+{
+    if (g_state.job_active && g_state.core0_task_handle != NULL)
+    {
+        ESP_LOGI(TAG, "Checkpoint timer fired! Signaling Core 0...");
+        xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_CHECKPOINT, eSetBits);
+    }
+}
 
 // Extracted helper so tests can exercise retry logic.
 esp_err_t nvs_init_with_retry(void)
@@ -51,11 +62,66 @@ void core0_system_task(void *pvParameters)
     // Initialize WiFi
     wifi_init_sta();
 
+    uint32_t notifications = 0;
+
     // Maintenance loop
     while (1)
     {
+        // Wait for notifications or 1s timeout for basic maintenance
+        notifications = 0;
+        xTaskNotifyWait(0, 0xFFFFFFFF, &notifications, pdMS_TO_TICKS(1000));
+
         // Check WiFi status and update global state
         g_state.wifi_connected = is_wifi_connected();
+
+        // Handle Checkpoint Signal
+        if (notifications & NOTIFY_BIT_CHECKPOINT)
+        {
+            if (g_state.job_active)
+            {
+                uint64_t current = atomic_load(&g_state.current_nonce);
+                uint64_t scanned = atomic_load(&g_state.keys_scanned);
+                ESP_LOGI(TAG, "Periodic Checkpoint: [ID %lld] Nonce: %llu, Scanned: %llu",
+                         g_state.current_job.job_id, (unsigned long long)current, (unsigned long long)scanned);
+
+                // Save to NVS
+                job_checkpoint_t cp = {0};
+                cp.job_id = g_state.current_job.job_id;
+                memcpy(cp.prefix_28, g_state.current_job.prefix_28, PREFIX_28_SIZE);
+                cp.nonce_start = g_state.current_job.nonce_start;
+                cp.nonce_end = g_state.current_job.nonce_end;
+                cp.current_nonce = current;
+                cp.keys_scanned = scanned;
+                cp.timestamp = (uint64_t)time(NULL);
+                cp.magic = 0xACE1; // Validating magic
+
+                esp_err_t err = save_checkpoint(g_state.nvs_handle, &cp);
+                if (err != ESP_OK)
+                {
+                    ESP_LOGE(TAG, "Failed to save checkpoint to NVS: %s", esp_err_to_name(err));
+                }
+
+                // If WiFi is connected, report to API as well
+                if (g_state.wifi_connected)
+                {
+                    api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, 0); // TODO: Track actual duration
+                }
+            }
+        }
+
+        // Handle Job Completion Signal
+        if (notifications & NOTIFY_BIT_JOB_COMPLETE)
+        {
+            ESP_LOGI(TAG, "Job completion received from Core 1.");
+            g_state.job_active = false;
+
+            if (g_state.wifi_connected)
+            {
+                uint64_t current = atomic_load(&g_state.current_nonce);
+                uint64_t scanned = atomic_load(&g_state.keys_scanned);
+                api_complete(g_state.current_job.job_id, g_state.worker_id, current, scanned, 0);
+            }
+        }
 
         if (g_state.wifi_connected && !g_state.job_active)
         {
@@ -79,24 +145,24 @@ void core0_system_task(void *pvParameters)
                 g_state.job_active = true;
 
                 // Signal Core 1 task to start working
-                xTaskNotify(g_state.core1_task_handle, 0x01, eSetBits);
+                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
             }
             else if (err == ESP_ERR_NOT_FOUND)
             {
-                ESP_LOGW(TAG, "No jobs available on server, retrying in 30s...");
+                ESP_LOGW(TAG, "No jobs available on server, retrying soon...");
                 vTaskDelay(pdMS_TO_TICKS(30000));
                 continue;
             }
             else
             {
-                ESP_LOGE(TAG, "Failed to lease job (err %d), retrying in 10s...", err);
+                ESP_LOGE(TAG, "Failed to lease job (err %d), retrying soon...", err);
                 vTaskDelay(pdMS_TO_TICKS(10000));
                 continue;
             }
         }
 
         // Feed watchdog by yielding
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -105,16 +171,16 @@ void core1_computation_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting Computation Task on Core %d", xPortGetCoreID());
 
-    uint32_t notification_value = 0;
+    uint32_t notifications = 0;
 
     while (1)
     {
         // Wait for notification from Core 0
-        if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notification_value, pdMS_TO_TICKS(1000)) == pdTRUE)
+        if (xTaskNotifyWait(0, 0xFFFFFFFF, &notifications, pdMS_TO_TICKS(100)) == pdTRUE)
         {
-            if (notification_value & 0x01)
+            if (notifications & NOTIFY_BIT_JOB_LEASED)
             {
-                ESP_LOGI(TAG, "Core 1: New job signaled! Starting scan...");
+                ESP_LOGI(TAG, "Core 1: New job signaled! Starting scan for job %lld...", g_state.current_job.job_id);
 
                 // SCAN LOOP PLACEHOLDER (To be implemented in P08-T060)
                 // For now, we simulate work by incrementing counters and waiting
@@ -137,7 +203,7 @@ void core1_computation_task(void *pvParameters)
                 if (atomic_load(&g_state.current_nonce) >= g_state.current_job.nonce_end)
                 {
                     ESP_LOGI(TAG, "Core 1: Job complete.");
-                    g_state.job_active = false;
+                    xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_JOB_COMPLETE, eSetBits);
                 }
             }
         }
@@ -190,6 +256,19 @@ void app_main(void)
     // Initial batch size calculation based on TARGET_DURATION_SEC (3600s)
     uint32_t batch_size = calculate_batch_size(throughput, TARGET_DURATION_SEC);
     ESP_LOGI(TAG, "Initial calculated batch size: %lu keys", (unsigned long)batch_size);
+
+    // Create checkpoint timer
+    g_state.checkpoint_timer = xTimerCreate("checkpoint_timer",
+                                            pdMS_TO_TICKS(CHECKPOINT_INTERVAL_MS),
+                                            pdTRUE, // Auto-reload
+                                            (void *)0,
+                                            checkpoint_timer_callback);
+
+    if (g_state.checkpoint_timer != NULL)
+    {
+        xTimerStart(g_state.checkpoint_timer, 0);
+        ESP_LOGI(TAG, "Checkpoint timer initialized (interval: %d ms)", CHECKPOINT_INTERVAL_MS);
+    }
 
     // Create tasks pinned to cores
     // Core 0: PRO_CPU (Networking, API, Misc)
