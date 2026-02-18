@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "eth_crypto.h"
+#include "esp_task_wdt.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -19,13 +20,9 @@ uint32_t benchmark_key_generation(void)
     ESP_LOGI(TAG, "Starting benchmark (%d iterations)...", BENCHMARK_ITERATIONS);
 
     // Warm-up (exclude from measurement)
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 50; i++)
     {
         derive_eth_address(privkey, address);
-        if (i > 0 && (i % 20) == 0)
-        {
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
     }
 
     // Benchmark loop
@@ -38,8 +35,8 @@ uint32_t benchmark_key_generation(void)
         derive_eth_address(privkey, address);
         nonce++;
 
-        // Feed watchdog periodically (every 20 iterations to be safer and faster)
-        if (i > 0 && (i % 20) == 0)
+        // Feed watchdog periodically (every 10 iterations to be safer and faster)
+        if (i > 0 && (i % 10) == 0)
         {
             vTaskDelay(pdMS_TO_TICKS(1)); // Yield for at least 1 tick
         }
