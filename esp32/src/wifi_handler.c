@@ -14,6 +14,7 @@
 #include "lwip/sys.h"
 
 #include "wifi_handler.h"
+#include "led_manager.h"
 
 static const char *TAG = "wifi_handler";
 
@@ -44,6 +45,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
         ESP_LOGI(TAG, "STA Started. Connecting...");
+        set_led_status(LED_WIFI_CONNECTING);
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
@@ -55,6 +57,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
 
             ESP_LOGW(TAG, "Disconnected. Retry %d/%d scheduled in %d seconds...",
                      s_retry_num, MAX_RETRY, delay_sec);
+            set_led_status(LED_WIFI_CONNECTING);
 
             /* Professional approach: Change the period and start the existing timer.
                xTimerChangePeriod also starts the timer if it was idle. */
@@ -71,6 +74,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         else
         {
             ESP_LOGE(TAG, "Max retries reached.");
+            set_led_status(LED_SYSTEM_ERROR);
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     }
@@ -79,14 +83,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+        set_led_status(LED_WIFI_CONNECTED);
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-    }
-}
-
-void heartbeat_task(void *pvParameters) {
-    while(1) {
-        ESP_LOGI("HEARTBEAT", "System is still alive...");
-        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -144,8 +142,6 @@ void wifi_init_sta(void)
     ESP_LOGI(TAG, "Connecting to SSID: %s", (char *)wifi_config.sta.ssid);
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
-    xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 1, NULL);
-    
     ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_start());
 

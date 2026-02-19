@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "wifi_handler.h"
 #include "nvs_flash.h"
+#include "led_manager.h"
 
 // External test function declarations
 extern void test_api_lease_success(void);
@@ -41,6 +42,10 @@ extern void test_batch_calc_small_throughput(void);
 extern void test_batch_calc_zero_throughput(void);
 extern void test_batch_calc_zero_duration(void);
 extern void test_batch_calc_mid_range(void);
+
+extern void test_led_manager_init(void);
+extern void test_led_set_status(void);
+extern void test_led_trigger_activity(void);
 
 static const char *TAG = "test_runner";
 
@@ -102,6 +107,11 @@ void app_main(void)
     RUN_TEST(test_crypto_derive_eth_address);
     RUN_TEST(test_crypto_address_comparison);
 
+    ESP_LOGI(TAG, "Running LED Manager tests...");
+    RUN_TEST(test_led_manager_init);
+    RUN_TEST(test_led_set_status);
+    RUN_TEST(test_led_trigger_activity);
+
     /* * STAGE 3: WIFI INITIALIZATION
      * Only start WiFi after local tests are done to avoid shared resource conflicts.
      * Ensure your wifi_init_sta() no longer uses portMAX_DELAY.
@@ -141,6 +151,9 @@ void app_main(void)
         // Unity doesn't have a "Skip" macro for entire groups,
         // but the logs will clearly show why these didn't run.
     }
+
+    set_led_status(LED_OFF);
+    vTaskDelay(pdMS_TO_TICKS(150));
 
     UNITY_END();
 

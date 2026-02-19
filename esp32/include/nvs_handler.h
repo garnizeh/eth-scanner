@@ -11,11 +11,23 @@
 esp_err_t nvs_handler_init(void);
 
 /**
+ * @brief Performs NVS initialization with erase and retry logic.
+ */
+esp_err_t nvs_init_with_retry(void);
+
+/**
+ * @brief Attempts to recover a job from NVS and updates global state if found.
+ */
+esp_err_t job_resume_from_nvs(void);
+
+/**
  * @brief Save job checkpoint to NVS atomically using nvs_set_blob.
  */
 esp_err_t save_checkpoint(nvs_handle_t handle, const job_checkpoint_t *checkpoint);
+
 /**
  * @brief Load job checkpoint from NVS and validate it.
  */
 esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint);
+
 #endif // NVS_HANDLER_H
