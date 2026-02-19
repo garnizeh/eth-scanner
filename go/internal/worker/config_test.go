@@ -178,3 +178,52 @@ func TestLoadConfig_MissingAPIKeyAllowed(t *testing.T) {
 		t.Fatalf("expected empty APIKey when WORKER_API_KEY not set, got: %s", cfg.APIKey)
 	}
 }
+
+func TestLoadConfig_WorkerNumGoroutines_SetUnsetInvalidZero(t *testing.T) {
+	// Base required env
+	os.Setenv("WORKER_API_URL", "http://localhost:8080")
+	defer os.Unsetenv("WORKER_API_URL")
+
+	// Unset -> default (0) which indicates fallback to runtime.NumCPU()
+	os.Unsetenv("WORKER_NUM_GOROUTINES")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.WorkerNumGoroutines != 0 {
+		t.Fatalf("expected WorkerNumGoroutines 0 when unset, got %d", cfg.WorkerNumGoroutines)
+	}
+
+	// Set to a positive integer
+	os.Setenv("WORKER_NUM_GOROUTINES", "4")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed with WORKER_NUM_GOROUTINES set: %v", err)
+	}
+	if cfg.WorkerNumGoroutines != 4 {
+		t.Fatalf("expected WorkerNumGoroutines 4, got %d", cfg.WorkerNumGoroutines)
+	}
+	os.Unsetenv("WORKER_NUM_GOROUTINES")
+
+	// Invalid value -> should fallback to 0 (and not return error)
+	os.Setenv("WORKER_NUM_GOROUTINES", "notanint")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed for invalid WORKER_NUM_GOROUTINES: %v", err)
+	}
+	if cfg.WorkerNumGoroutines != 0 {
+		t.Fatalf("expected WorkerNumGoroutines 0 for invalid value, got %d", cfg.WorkerNumGoroutines)
+	}
+	os.Unsetenv("WORKER_NUM_GOROUTINES")
+
+	// Zero value explicitly set -> treated as unset/fallback
+	os.Setenv("WORKER_NUM_GOROUTINES", "0")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed for WORKER_NUM_GOROUTINES=0: %v", err)
+	}
+	if cfg.WorkerNumGoroutines != 0 {
+		t.Fatalf("expected WorkerNumGoroutines 0 for explicit zero, got %d", cfg.WorkerNumGoroutines)
+	}
+	os.Unsetenv("WORKER_NUM_GOROUTINES")
+}

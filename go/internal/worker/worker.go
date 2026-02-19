@@ -42,16 +42,28 @@ type Worker struct {
 	config             *Config
 	measuredThroughput uint64
 	batchSize          uint32
+	numWorkers         int
 }
 
 // NewWorker constructs a Worker. measuredThroughput may be zero to use
 // conservative defaults in CalculateBatchSize.
 func NewWorker(cfg *Config) *Worker {
+	// Determine goroutine count once at construction time. If the config
+	// specifies a positive override use it, otherwise fallback to
+	// runtime.NumCPU(). Ensure at least 1 worker.
+	nw := runtime.NumCPU()
+	if cfg != nil && cfg.WorkerNumGoroutines > 0 {
+		nw = cfg.WorkerNumGoroutines
+	}
+	if nw <= 0 {
+		nw = 1
+	}
 	return &Worker{
 		client:             NewClient(cfg),
 		config:             cfg,
 		measuredThroughput: 0,
 		batchSize:          0,
+		numWorkers:         nw,
 	}
 }
 
@@ -241,12 +253,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	}()
 
 	// Start real scanning using the parallel scanner in smaller internal
-	// chunks. This allows the worker to checkpoint metrics per chunk while
-	// maintaining a single long-lived lease.
-	numWorkers := runtime.NumCPU()
-	if numWorkers <= 0 {
-		numWorkers = 1
-	}
+	// chunks. Use the cached `w.numWorkers` value determined at startup to
+	// avoid repeated runtime/config checks inside the hot path.
+	numWorkers := w.numWorkers
 	log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
 
 	// Build scanner job template
