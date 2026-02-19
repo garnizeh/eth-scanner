@@ -12,10 +12,13 @@ import (
 
 // Config holds worker configuration values loaded from environment.
 type Config struct {
-	APIURL             string
-	WorkerID           string
-	APIKey             string //nolint:gosec // false positive
-	CheckpointInterval time.Duration
+	APIURL   string
+	WorkerID string
+	APIKey   string //nolint:gosec // false positive
+	// WorkerNumGoroutines sets the fixed number of scanning goroutines to use
+	// when >0. When zero the worker will fallback to runtime.NumCPU().
+	WorkerNumGoroutines int
+	CheckpointInterval  time.Duration
 	// LeaseGracePeriod is subtracted from lease expiry to create a scanning
 	// deadline so the worker can checkpoint and shut down gracefully before
 	// the master-side lease actually expires.
@@ -133,6 +136,20 @@ func LoadConfig() (*Config, error) {
 		internalBatch = uint32(n)
 	}
 
+	// Worker goroutine count override (optional). If unset, invalid or <=0
+	// the runtime will fallback to runtime.NumCPU(). We parse but do not
+	// treat invalid values as fatal to allow running with defaults.
+	workerGoroutines := 0
+	if v := os.Getenv("WORKER_NUM_GOROUTINES"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			// treat as unset/zero fallback
+			workerGoroutines = 0
+		} else {
+			workerGoroutines = n
+		}
+	}
+
 	return &Config{
 		APIURL:                   apiURL,
 		WorkerID:                 workerID,
@@ -147,6 +164,7 @@ func LoadConfig() (*Config, error) {
 		BatchAdjustAlpha:         alpha,
 		InitialBatchSize:         initialBatch,
 		InternalBatchSize:        internalBatch,
+		WorkerNumGoroutines:      workerGoroutines,
 	}, nil
 }
 
