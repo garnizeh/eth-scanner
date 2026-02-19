@@ -119,3 +119,45 @@ esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint)
 
     return ESP_OK;
 }
+// Extracted helper so tests can exercise retry logic.
+esp_err_t nvs_init_with_retry(void)
+{
+    // Use wrapper functions so unit tests can override behavior.
+    esp_err_t ret = nvs_flash_init_wr();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        // NVS partition was truncated, erase and retry
+        esp_err_t erase_ret = nvs_flash_erase_wr();
+        if (erase_ret != ESP_OK)
+        {
+            return erase_ret;
+        }
+        ret = nvs_flash_init_wr();
+    }
+    return ret;
+}
+
+/**
+ * @brief Attempts to recover a job from NVS and updates global state if found.
+ */
+esp_err_t job_resume_from_nvs(void)
+{
+    job_checkpoint_t checkpoint;
+    if (load_checkpoint(g_state.nvs_handle, &checkpoint) == ESP_OK)
+    {
+        ESP_LOGI(TAG, "RECOVERY: Found existing checkpoint for job %lld.", checkpoint.job_id);
+        ESP_LOGI(TAG, "RECOVERY: Resuming from nonce %llu (Scanned: %llu)",
+                 (unsigned long long)checkpoint.current_nonce, (unsigned long long)checkpoint.keys_scanned);
+
+        // Resume state
+        g_state.current_job.job_id = checkpoint.job_id;
+        memcpy(g_state.current_job.prefix_28, checkpoint.prefix_28, PREFIX_28_SIZE);
+        g_state.current_job.nonce_start = checkpoint.nonce_start;
+        g_state.current_job.nonce_end = checkpoint.nonce_end;
+
+        atomic_store(&g_state.current_nonce, checkpoint.current_nonce);
+        atomic_store(&g_state.keys_scanned, checkpoint.keys_scanned);
+        return ESP_OK;
+    }
+    return ESP_ERR_NOT_FOUND;
+}

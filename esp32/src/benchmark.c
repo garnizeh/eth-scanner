@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "eth_crypto.h"
 #include "esp_task_wdt.h"
+#include "led_manager.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -31,7 +32,7 @@ uint32_t benchmark_key_generation(void)
     for (int i = 0; i < BENCHMARK_ITERATIONS; i++)
     {
         // Simulate nonce increment (last 4 bytes)
-        memcpy(&privkey[28], &nonce, sizeof(nonce));
+        update_nonce_in_buffer(privkey, nonce);
         derive_eth_address(privkey, address);
         nonce++;
 
@@ -39,6 +40,7 @@ uint32_t benchmark_key_generation(void)
         if (i > 0 && (i % 10) == 0)
         {
             vTaskDelay(pdMS_TO_TICKS(1)); // Yield for at least 1 tick
+            led_trigger_activity();
         }
     }
 

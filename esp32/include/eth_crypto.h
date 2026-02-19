@@ -21,4 +21,21 @@ void keccak256(const uint8_t *input, size_t len, uint8_t *output);
  */
 void derive_eth_address(const uint8_t *priv_key, uint8_t *address);
 
+/**
+ * @brief Optimally updates the 4-byte nonce at the end of a 32-byte private key.
+ *
+ * This function performs direct byte manipulation to avoid expensive sprintf/memcpy.
+ * The nonce is placed at offset 28 in little-endian format.
+ *
+ * @param buffer 32-byte private key buffer.
+ * @param nonce  4-byte nonce to set.
+ */
+static inline void update_nonce_in_buffer(uint8_t *buffer, uint32_t nonce)
+{
+    buffer[28] = (uint8_t)(nonce & 0xFF);
+    buffer[29] = (uint8_t)((nonce >> 8) & 0xFF);
+    buffer[30] = (uint8_t)((nonce >> 16) & 0xFF);
+    buffer[31] = (uint8_t)((nonce >> 24) & 0xFF);
+}
+
 #endif // ETH_CRYPTO_H
