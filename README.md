@@ -2,7 +2,7 @@
 
 EthScanner Distributed is an educational research project demonstrating a distributed key-scanning architecture (Master API + heterogeneous workers: PC and ESP32).
 
-**Project Status:** 🟢 Phase 4 Complete - Master API is fully functional with Job Management, Dynamic Batching, and Checkpointing. PC and ESP32 workers are currently in development (Phase 5+).
+**Project Status:** 🟢 Phase 8 Complete - Core components (Master API, PC worker, and ESP32 firmware foundations) implemented; starting Phase 9 (Integration, Testing & Validation).
 
 IMPORTANT: This project is for research/educational purposes only. Do NOT use it against real wallets with funds. Brute-forcing private keys is computationally infeasible and unethical when targeting active addresses.
 
@@ -167,10 +167,11 @@ The multi-tier statistics architecture is designed to power a comprehensive web-
 - [x] **Phase 4: Job Management** - Lease, Checkpoint, and Complete logic.
 - [x] **Phase 5: PC Worker - Core Implementation** - Completed
 - [x] **Phase 6: PC Worker - Crypto & Scanning Engine** - Completed
-- [ ] **Phase 7-8: ESP32 Worker** - (Planned) Resource-constrained device support.
-- [ ] **Phase 9: Integration, Testing & Validation** - (Planned) broader integration tests, benchmarks, and hardware validation.
-- [ ] **Phase 10: Documentation, Deployment & Monitoring** - (Planned) API docs, deployment guides, and observability.
-- [ ] **Phase 11: Dashboard & Monitoring UI** - (Planned) Web-based dashboard with real-time monitoring, analytics, worker leaderboards, and multi-tier statistics visualization.
+- [x] **Phase 7: ESP32 Worker - Core Infrastructure** - Completed
+- [x] **Phase 8: ESP32 Worker - Crypto & Computation** - Completed
+- [ ] **Phase 9: Integration, Testing & Validation** - Next (in progress)
+- [ ] **Phase 10: Documentation, Deployment & Monitoring** - (Planned)
+- [ ] **Phase 11: Dashboard & Monitoring UI** - (Planned)
 - [ ] **Phase A01: Performance & Optimization (Adhoc Tasks)** - Ongoing optimizations including:
   - [x] Worker-specific prefix affinity (vertical exhaustion)
   - [x] Master background cleanup for stale jobs
@@ -185,6 +186,50 @@ Within the `go/` directory:
 - `make test`: Run all unit tests.
 - `make fmt`: Format Go code.
 - `make sqlc`: Re-generate database code from SQL definitions.
+
+## ESP32 Developer Quickstart
+
+Essentials for building, flashing and monitoring the ESP32 firmware (PlatformIO + ESP-IDF targets). These commands assume you're at the repo root.
+
+Common PlatformIO commands (ESP32 DoIt DevKit v1):
+
+```bash
+# build for the default environment
+pio run -e esp32doit-devkit-v1
+
+# upload/flash to device (auto-detects serial port)
+pio run -e esp32doit-devkit-v1 -t upload
+
+# monitor serial output (115200 baud default)
+pio device monitor -e esp32doit-devkit-v1
+
+# run the unit tests for the esp32 test environment
+pio test -e esp32doit-devkit-v1 -vv
+
+# open menuconfig (sdkconfig)
+pio run -e esp32doit-devkit-v1 -t menuconfig
+```
+
+Tips & recommendations:
+
+- Use `pio device list` to confirm the serial port before flashing.
+- When debugging NVS checkpointing, increase serial log verbosity in `menuconfig` and check `esp32/src/nvs_handler.c` for read/write flows.
+- Keep networking tasks on Core 0 and the crypto hot-loop on Core 1. See `esp32/include/core_tasks.h` and `esp32/src/core_tasks.c` for task pinning patterns.
+- Use `pio device monitor` while performing manual resets (EN button) to verify NVS restore and checkpoint resume behavior.
+- For faster iteration enable `build_flags = -DDEBUG` in `platformio.ini` or toggle logging in `menuconfig`.
+- If you encounter watchdog resets under heavy load, ensure the networking/watchdog task yields appropriately and NVS writes are batched (see `esp32/src/nvs_handler.c`).
+
+Helpful platformio targets used in CI/dev flows:
+
+- `pio run -e esp32doit-devkit-v1` — build
+- `pio run -e esp32doit-devkit-v1 -t upload` — flash
+- `pio test -e esp32doit-devkit-v1` — run unit tests
+
+Hardware tips:
+
+- Use a good USB cable and a reliable 5V supply when flashing multiple times; flaky power causes spurious failures.
+- Press and hold BOOT only when required by your board for flashing (PlatformIO autodetect usually handles this).
+
 
 ## Ethics & Disclaimer
 - Use only on synthetic or "dead" addresses (e.g., `0x000...dEaD`) for demos.
