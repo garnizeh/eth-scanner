@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"runtime"
 	"testing"
 	"time"
 
@@ -178,7 +179,7 @@ func TestScanRangeParallel_Match(t *testing.T) {
 		t.Fatalf("DeriveEthereumAddress failed: %v", err)
 	}
 
-	got, err := ScanRangeParallel(context.Background(), job, expectedAddr, nil)
+	got, err := ScanRangeParallel(context.Background(), job, expectedAddr, nil, runtime.NumCPU())
 	if err != nil {
 		t.Fatalf("ScanRangeParallel failed: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestScanRangeParallel_NoMatch(t *testing.T) {
 		NonceEnd:   1000,
 	}
 
-	got, err := ScanRangeParallel(context.Background(), job, commonAddressZero(), nil)
+	got, err := ScanRangeParallel(context.Background(), job, commonAddressZero(), nil, runtime.NumCPU())
 	if err != nil {
 		t.Fatalf("ScanRangeParallel failed: %v", err)
 	}
@@ -222,7 +223,7 @@ func TestScanRangeParallel_Cancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err := ScanRangeParallel(ctx, job, commonAddressZero(), nil)
+	_, err := ScanRangeParallel(ctx, job, commonAddressZero(), nil, runtime.NumCPU())
 	if err == nil {
 		t.Fatal("expected error due to timeout, got nil")
 	}

@@ -95,8 +95,10 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 // progressFn, if non-nil, is called to report progress where the first
 // argument is the last scanned nonce (inclusive) and the second is the
 // number of keys scanned in that chunk.
-func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, progressFn func(nonce uint32, keys uint64)) (*ScanResult, error) {
-	numWorkers := runtime.NumCPU()
+func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, progressFn func(nonce uint32, keys uint64), numWorkers int) (*ScanResult, error) {
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
 	if numWorkers <= 0 {
 		numWorkers = 1
 	}
