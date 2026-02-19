@@ -298,7 +298,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		// Snapshot total keys before scanning this chunk
 		beforeKeys := atomic.LoadUint64(&totalKeys)
 		batchStart := time.Now()
-		res, err := ScanRangeParallel(leaseCtx, subJob, target, progressFn)
+		res, err := ScanRangeParallel(leaseCtx, subJob, target, progressFn, numWorkers)
 		batchDurationMs := time.Since(batchStart).Milliseconds()
 		afterKeys := atomic.LoadUint64(&totalKeys)
 		keysThisChunk := afterKeys - beforeKeys
