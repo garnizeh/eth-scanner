@@ -59,11 +59,13 @@ func handleLease(w http.ResponseWriter, r *http.Request) {
 	default:
 		// Success case
 		resp := map[string]any{
-			"job_id":         42,
-			"prefix_28":      "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHA==", // bytes 1-28 (correct base64)
-			"nonce_start":    1000,
-			"nonce_end":      2000,
-			"target_address": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+			"job_id":      42,
+			"prefix_28":   "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHA==", // bytes 1-28 (correct base64)
+			"nonce_start": 1000,
+			"nonce_end":   2000,
+			"target_addresses": []string{
+				"0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+			},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {

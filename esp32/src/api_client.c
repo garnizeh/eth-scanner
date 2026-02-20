@@ -110,8 +110,23 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
                 out_job->nonce_start = (uint64_t)cJSON_GetObjectItem(resp, "nonce_start")->valuedouble;
                 out_job->nonce_end = (uint64_t)cJSON_GetObjectItem(resp, "nonce_end")->valuedouble;
 
-                const char *target = cJSON_GetObjectItem(resp, "target_address")->valuestring;
-                hex_to_bytes(target, out_job->target_address, 20);
+                // Load target addresses
+                out_job->num_targets = 0;
+                cJSON *targets = cJSON_GetObjectItem(resp, "target_addresses");
+                if (cJSON_IsArray(targets))
+                {
+                    int size = cJSON_GetArraySize(targets);
+                    if (size > MAX_TARGET_ADDRESSES)
+                        size = MAX_TARGET_ADDRESSES;
+                    for (int i = 0; i < size; i++)
+                    {
+                        cJSON *item = cJSON_GetArrayItem(targets, i);
+                        if (cJSON_IsString(item))
+                        {
+                            hex_to_bytes(item->valuestring, out_job->target_addresses[out_job->num_targets++], 20);
+                        }
+                    }
+                }
 
                 const char *prefix_b64 = cJSON_GetObjectItem(resp, "prefix_28")->valuestring;
                 size_t olen = 0;

@@ -78,13 +78,13 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 
 	// Build response
 	type resp struct {
-		JobID         int64   `json:"job_id"`
-		Prefix28      string  `json:"prefix_28"`
-		NonceStart    int64   `json:"nonce_start"`
-		NonceEnd      int64   `json:"nonce_end"`
-		TargetAddress string  `json:"target_address"`
-		CurrentNonce  *int64  `json:"current_nonce,omitempty"`
-		ExpiresAt     *string `json:"expires_at,omitempty"`
+		JobID           int64    `json:"job_id"`
+		Prefix28        string   `json:"prefix_28"`
+		NonceStart      int64    `json:"nonce_start"`
+		NonceEnd        int64    `json:"nonce_end"`
+		TargetAddresses []string `json:"target_addresses"`
+		CurrentNonce    *int64   `json:"current_nonce,omitempty"`
+		ExpiresAt       *string  `json:"expires_at,omitempty"`
 	}
 
 	var cur *int64
@@ -99,13 +99,13 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := resp{
-		JobID:         job.ID,
-		Prefix28:      base64.StdEncoding.EncodeToString(job.Prefix28),
-		NonceStart:    job.NonceStart,
-		NonceEnd:      job.NonceEnd,
-		TargetAddress: s.cfg.TargetAddress,
-		CurrentNonce:  cur,
-		ExpiresAt:     exp,
+		JobID:           job.ID,
+		Prefix28:        base64.StdEncoding.EncodeToString(job.Prefix28),
+		NonceStart:      job.NonceStart,
+		NonceEnd:        job.NonceEnd,
+		TargetAddresses: s.cfg.TargetAddresses,
+		CurrentNonce:    cur,
+		ExpiresAt:       exp,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

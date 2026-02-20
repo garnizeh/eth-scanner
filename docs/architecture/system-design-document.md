@@ -370,7 +370,7 @@ stateDiagram-v2
   "current_nonce": 0,
   "expires_at": "2026-02-14T16:30:00Z",
   "lease_duration": 3600,
-  "target_address": "0x000000000000000000000000000000000000dEaD"
+  "target_addresses": ["0x000000000000000000000000000000000000dEaD"]
 }
 ```
 
@@ -382,7 +382,7 @@ stateDiagram-v2
 - `current_nonce`: Current checkpoint (0 if new, or resume point if re-leased)
 - `expires_at`: UTC timestamp when lease expires
 - `lease_duration`: Lease duration in seconds
-- `target_address`: Ethereum address to search for
+- `target_addresses`: List of Ethereum addresses to search for in this batch
 
 **Response (No Jobs Available - 204 No Content):**
 ```http
@@ -649,7 +649,7 @@ func processBatch(job *Job, numWorkers int) {
         go func(chunk NonceRange) {
             defer wg.Done()
             scanNonceRange(ctx, job.Prefix28, chunk.Start, chunk.End, 
-                          &currentNonce, &keysScanned, job.TargetAddress)
+                          &currentNonce, &keysScanned, job.TargetAddresses)
         }(nonceChunks[i])
     }
     
@@ -661,7 +661,7 @@ func processBatch(job *Job, numWorkers int) {
 
 func scanNonceRange(ctx context.Context, prefix28 []byte, startNonce, endNonce uint32, 
                      currentNonce *atomic.Uint64, keysScanned *atomic.Uint64, 
-                     targetAddress string) {
+                     targetAddresses []string) {
     
     privateKey := make([]byte, 32)
     copy(privateKey[:28], prefix28)
@@ -682,9 +682,11 @@ func scanNonceRange(ctx context.Context, prefix28 []byte, startNonce, endNonce u
         // Derive address
         address := deriveEthereumAddress(privateKey)
         
-        if address == targetAddress {
-            submitResult(privateKey, address, nonce)
-            return
+        for _, target := range targetAddresses {
+            if address == target {
+                submitResult(privateKey, address, nonce)
+                return
+            }
         }
         
         // Update progress

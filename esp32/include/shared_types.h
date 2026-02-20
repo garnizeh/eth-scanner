@@ -13,6 +13,7 @@
 // Constants
 #define PREFIX_28_SIZE 28
 #define ETH_ADDRESS_SIZE 20
+#define MAX_TARGET_ADDRESSES 10
 #define WORKER_ID_MAX_LEN 32
 
 // Timer configuration (ms)
@@ -32,7 +33,8 @@ typedef struct
     uint8_t prefix_28[PREFIX_28_SIZE];
     uint64_t nonce_start;
     uint64_t nonce_end;
-    uint8_t target_address[ETH_ADDRESS_SIZE];
+    uint8_t target_addresses[MAX_TARGET_ADDRESSES][ETH_ADDRESS_SIZE];
+    uint8_t num_targets;
     int64_t expires_at; // Unix timestamp
 } job_info_t;
 

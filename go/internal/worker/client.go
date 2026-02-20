@@ -127,12 +127,12 @@ func (c *Client) doRequestWithContext(ctx context.Context, method, p string, req
 var ErrNoJobsAvailable = errors.New("no jobs available")
 
 type JobLease struct {
-	JobID         string
-	Prefix28      []byte
-	NonceStart    uint32
-	NonceEnd      uint32
-	TargetAddress string
-	ExpiresAt     time.Time
+	JobID           string
+	Prefix28        []byte
+	NonceStart      uint32
+	NonceEnd        uint32
+	TargetAddresses []string
+	ExpiresAt       time.Time
 }
 
 // LeaseBatch requests a job lease from the Master API.
@@ -182,12 +182,12 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 	}
 
 	return &JobLease{
-		JobID:         string(resp.JobID),
-		Prefix28:      prefix28,
-		NonceStart:    resp.NonceStart,
-		NonceEnd:      resp.NonceEnd,
-		TargetAddress: resp.TargetAddress,
-		ExpiresAt:     expiresAt.UTC(),
+		JobID:           string(resp.JobID),
+		Prefix28:        prefix28,
+		NonceStart:      resp.NonceStart,
+		NonceEnd:        resp.NonceEnd,
+		TargetAddresses: resp.TargetAddresses,
+		ExpiresAt:       expiresAt.UTC(),
 	}, nil
 }
 
@@ -199,12 +199,12 @@ type leaseRequest struct {
 }
 
 type leaseResponse struct {
-	JobID         laxString `json:"job_id"`
-	Prefix28      string    `json:"prefix_28"` // hex-encoded
-	NonceStart    uint32    `json:"nonce_start"`
-	NonceEnd      uint32    `json:"nonce_end"`
-	TargetAddress string    `json:"target_address"`
-	ExpiresAt     string    `json:"expires_at"`
+	JobID           laxString `json:"job_id"`
+	Prefix28        string    `json:"prefix_28"` // hex-encoded
+	NonceStart      uint32    `json:"nonce_start"`
+	NonceEnd        uint32    `json:"nonce_end"`
+	TargetAddresses []string  `json:"target_addresses"`
+	ExpiresAt       string    `json:"expires_at"`
 }
 
 // laxString unmarshals a JSON value that may be either a string or a number into

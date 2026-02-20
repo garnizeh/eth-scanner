@@ -21,11 +21,12 @@ func TestWorkerRun_ProcessesAndCompletesBatch(t *testing.T) {
 		case "/api/v1/jobs/lease":
 			expires := time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339)
 			resp := leaseResponse{
-				JobID:      "test-job-123",
-				Prefix28:   strings.Repeat("00", 28),
-				NonceStart: 0,
-				NonceEnd:   10,
-				ExpiresAt:  expires,
+				JobID:           "test-job-123",
+				Prefix28:        strings.Repeat("00", 28),
+				NonceStart:      0,
+				NonceEnd:        10,
+				TargetAddresses: []string{"0x000000000000000000000000000000000000dEaD"},
+				ExpiresAt:       expires,
 			}
 			w.WriteHeader(http.StatusOK)
 			if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -83,11 +84,12 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 			if atomic.AddInt32(&leaseCount, 1) == 1 {
 				expires := time.Now().Add(500 * time.Millisecond).UTC().Format(time.RFC3339)
 				resp := leaseResponse{
-					JobID:      "short-lease",
-					Prefix28:   strings.Repeat("00", 28),
-					NonceStart: 0,
-					NonceEnd:   1000,
-					ExpiresAt:  expires,
+					JobID:           "short-lease",
+					Prefix28:        strings.Repeat("00", 28),
+					NonceStart:      0,
+					NonceEnd:        1000,
+					TargetAddresses: []string{"0x000000000000000000000000000000000000dEaD"},
+					ExpiresAt:       expires,
 				}
 				w.WriteHeader(http.StatusOK)
 				if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -121,10 +123,11 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 
 	// Construct a lease directly to avoid interactions with LeaseBatch timing
 	lease := &JobLease{
-		JobID:      "test-job-unauth",
-		Prefix28:   make([]byte, 28),
-		NonceStart: 0,
-		NonceEnd:   1,
+		JobID:           "test-job-unauth",
+		Prefix28:        make([]byte, 28),
+		NonceStart:      0,
+		NonceEnd:        1,
+		TargetAddresses: []string{"0x000000000000000000000000000000000000dEaD"},
 		// set a short expiry so the grace period triggers an earlier deadline
 		ExpiresAt: time.Now().Add(500 * time.Millisecond).UTC(),
 	}

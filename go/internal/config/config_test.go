@@ -7,6 +7,25 @@ import (
 	"time"
 )
 
+func TestLoad_MultipleTargetAddresses(t *testing.T) {
+	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("MASTER_TARGET_ADDRESSES", "0x111, 0x222 , 0x333")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	expected := []string{"0x111", "0x222", "0x333"}
+	if len(cfg.TargetAddresses) != len(expected) {
+		t.Fatalf("expected %d addresses, got %d", len(expected), len(cfg.TargetAddresses))
+	}
+	for i, v := range expected {
+		if cfg.TargetAddresses[i] != v {
+			t.Fatalf("index %d: expected %s, got %s", i, v, cfg.TargetAddresses[i])
+		}
+	}
+}
+
 func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
 	// ensure other envs unset
@@ -35,8 +54,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.APIKey != "" {
 		t.Fatalf("expected empty APIKey, got %s", cfg.APIKey)
 	}
-	if cfg.TargetAddress != "0x000000000000000000000000000000000000dEaD" {
-		t.Fatalf("expected default TargetAddress dead, got %s", cfg.TargetAddress)
+	if len(cfg.TargetAddresses) != 1 || cfg.TargetAddresses[0] != "0x000000000000000000000000000000000000dEaD" {
+		t.Fatalf("expected default TargetAddresses dead, got %v", cfg.TargetAddresses)
 	}
 	if cfg.StaleJobThresholdSeconds != 604800 {
 		t.Fatalf("expected default StaleJobThresholdSeconds 604800, got %d", cfg.StaleJobThresholdSeconds)
@@ -73,8 +92,8 @@ func TestLoad_CustomEnv(t *testing.T) {
 	if cfg.APIKey != "secret" {
 		t.Fatalf("expected APIKey secret, got %s", cfg.APIKey)
 	}
-	if cfg.TargetAddress != "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" {
-		t.Fatalf("expected TargetAddress override, got %s", cfg.TargetAddress)
+	if len(cfg.TargetAddresses) != 1 || cfg.TargetAddresses[0] != "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" {
+		t.Fatalf("expected TargetAddresses override, got %v", cfg.TargetAddresses)
 	}
 	// Defaults not set in this test; ensure parsing does not error when unset
 	if cfg.StaleJobThresholdSeconds != 604800 {

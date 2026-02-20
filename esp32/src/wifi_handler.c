@@ -142,6 +142,8 @@ void wifi_init_sta(void)
     ESP_LOGI(TAG, "Connecting to SSID: %s", (char *)wifi_config.sta.ssid);
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Short delay to ensure config is set before starting WiFi
+
     ESP_LOGI(TAG, "Starting WiFi...");
     ESP_ERROR_CHECK(esp_wifi_start());
 
