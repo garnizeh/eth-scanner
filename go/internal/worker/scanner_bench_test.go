@@ -30,7 +30,7 @@ func BenchmarkScanRange_Single(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				_, _ = ScanRange(ctx, job, target)
+				_, _ = ScanRange(ctx, job, []common.Address{target})
 			}
 			b.StopTimer()
 			// Avoid integer overflow when converting b.N to uint64; compute in float64
@@ -51,7 +51,7 @@ func BenchmarkScanRange_Parallel(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				_, _ = ScanRangeParallel(ctx, job, target, nil, runtime.NumCPU())
+				_, _ = ScanRangeParallel(ctx, job, []common.Address{target}, nil, runtime.NumCPU())
 			}
 			b.StopTimer()
 			// Avoid integer overflow when converting b.N to uint64; compute in float64

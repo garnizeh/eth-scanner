@@ -28,7 +28,7 @@ func TestScanRange_NoMatch(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	got, err := ScanRange(ctx, job, (commonAddressZero()))
+	got, err := ScanRange(ctx, job, []common.Address{commonAddressZero()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestScanRange_FindAtNonce(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	got, err := ScanRange(ctx, job, expectedAddr)
+	got, err := ScanRange(ctx, job, []common.Address{expectedAddr})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestScanRange_InclusiveEnd(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	got, err := ScanRange(ctx, job, expectedAddr)
+	got, err := ScanRange(ctx, job, []common.Address{expectedAddr})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,9 +141,55 @@ func TestScanRange_ContextCancelled(t *testing.T) {
 	// cancel before calling ScanRange; first iteration checks ctx and should return
 	cancel()
 
-	got, err := ScanRange(ctx, job, commonAddressZero())
+	got, err := ScanRange(ctx, job, []common.Address{commonAddressZero()})
 	if err == nil {
 		t.Fatalf("expected context error, got nil and result %v", got)
+	}
+}
+
+func TestScanRange_MultipleTargets(t *testing.T) {
+	t.Parallel()
+
+	// Target 1
+	k1, _ := crypto.GenerateKey()
+	p1 := crypto.FromECDSA(k1)
+	var prefix [28]byte
+	copy(prefix[:], p1[:28])
+	n1 := binary.LittleEndian.Uint32(p1[28:32])
+	a1, _ := DeriveEthereumAddressFast([32]byte(p1), crypto.NewKeccakState(), &[64]byte{}, &[32]byte{})
+
+	// Target 2 (different nonce, same prefix)
+	n2 := n1 + 10
+	var k2Full [32]byte
+	copy(k2Full[:28], prefix[:])
+	binary.LittleEndian.PutUint32(k2Full[28:], n2)
+	a2, _ := DeriveEthereumAddressFast(k2Full, crypto.NewKeccakState(), &[64]byte{}, &[32]byte{})
+
+	job := Job{
+		Prefix28:   prefix,
+		NonceStart: n1 - 5,
+		NonceEnd:   n2 + 5,
+	}
+
+	targets := []common.Address{commonAddressZero(), a1, a2}
+
+	// Should find a1 first if we start from n1-5
+	got, err := ScanRange(context.Background(), job, targets)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.Nonce != n1 {
+		t.Fatalf("expected to find n1 (%d), got %v", n1, got)
+	}
+
+	// If we start from n1+1, it should find a2
+	job.NonceStart = n1 + 1
+	got, err = ScanRange(context.Background(), job, targets)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.Nonce != n2 {
+		t.Fatalf("expected to find n2 (%d), got %v", n2, got)
 	}
 }
 
@@ -179,7 +225,7 @@ func TestScanRangeParallel_Match(t *testing.T) {
 		t.Fatalf("DeriveEthereumAddress failed: %v", err)
 	}
 
-	got, err := ScanRangeParallel(context.Background(), job, expectedAddr, nil, runtime.NumCPU())
+	got, err := ScanRangeParallel(context.Background(), job, []common.Address{expectedAddr}, nil, runtime.NumCPU())
 	if err != nil {
 		t.Fatalf("ScanRangeParallel failed: %v", err)
 	}
@@ -201,7 +247,7 @@ func TestScanRangeParallel_NoMatch(t *testing.T) {
 		NonceEnd:   1000,
 	}
 
-	got, err := ScanRangeParallel(context.Background(), job, commonAddressZero(), nil, runtime.NumCPU())
+	got, err := ScanRangeParallel(context.Background(), job, []common.Address{commonAddressZero()}, nil, runtime.NumCPU())
 	if err != nil {
 		t.Fatalf("ScanRangeParallel failed: %v", err)
 	}
@@ -223,7 +269,7 @@ func TestScanRangeParallel_Cancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err := ScanRangeParallel(ctx, job, commonAddressZero(), nil, runtime.NumCPU())
+	_, err := ScanRangeParallel(ctx, job, []common.Address{commonAddressZero()}, nil, runtime.NumCPU())
 	if err == nil {
 		t.Fatal("expected error due to timeout, got nil")
 	}

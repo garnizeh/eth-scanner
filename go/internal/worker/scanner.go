@@ -28,9 +28,9 @@ type ScanResult struct {
 }
 
 // ScanRange scans the nonce range [job.NonceStart, job.NonceEnd] (inclusive)
-// for a private key whose derived address equals targetAddr. It periodically
-// checks ctx for cancellation and returns ctx.Err() if canceled.
-func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanResult, error) {
+// for a private key whose derived address matches any of the targetAddresses.
+// It periodically checks ctx for cancellation and returns ctx.Err() if canceled.
+func ScanRange(ctx context.Context, job Job, targetAddresses []common.Address) (*ScanResult, error) {
 	const checkInterval = 10000
 
 	// If the start is greater than the end, nothing to scan.
@@ -44,6 +44,13 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 	var pubBuf [64]byte
 	var hashBuf [32]byte
 	var key [32]byte
+
+	// Map lookup is fast, but for 1-3 addresses, a simple array iterate might be faster.
+	// However, a map is more general and scales better if the list grows.
+	targets := make(map[common.Address]bool, len(targetAddresses))
+	for _, a := range targetAddresses {
+		targets[a] = true
+	}
 
 	// Use a uint32 loop variable to avoid unsafe downcasts; maintain a
 	// separate counter for periodic context checks so we don't overflow.
@@ -71,7 +78,7 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 			continue
 		}
 
-		if addr == targetAddr {
+		if targets[addr] {
 			return &ScanResult{
 				PrivateKey: key,
 				Address:    addr,
@@ -94,7 +101,7 @@ func ScanRange(ctx context.Context, job Job, targetAddr common.Address) (*ScanRe
 // progressFn, if non-nil, is called to report progress where the first
 // argument is the last scanned nonce (inclusive) and the second is the
 // number of keys scanned in that chunk.
-func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, progressFn func(nonce uint32, keys uint64), numWorkers int) (*ScanResult, error) {
+func ScanRangeParallel(ctx context.Context, job Job, targetAddresses []common.Address, progressFn func(nonce uint32, keys uint64), numWorkers int) (*ScanResult, error) {
 	if numWorkers <= 0 {
 		numWorkers = 1
 	}
@@ -116,7 +123,7 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, 
 	for range numWorkers {
 		wg.Go(func() {
 			for subJob := range jobsCh {
-				result, err := ScanRange(ctx, subJob, targetAddr)
+				result, err := ScanRange(ctx, subJob, targetAddresses)
 				if err != nil {
 					select {
 					case errCh <- err:
@@ -126,7 +133,7 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddr common.Address, 
 					return
 				}
 				// report progress for this chunk
-				if progressFn != nil {
+				if progressFn != nil && result == nil {
 					keys := uint64(subJob.NonceEnd - subJob.NonceStart + 1)
 					progressFn(subJob.NonceEnd, keys)
 				}

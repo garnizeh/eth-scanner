@@ -138,7 +138,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		if len(lease.Prefix28) > 0 {
 			prefixHex = hex.EncodeToString(lease.Prefix28)
 		}
-		log.Printf("worker: leased job %s prefix=%s target=%s nonce=[%d,%d] expires=%s", lease.JobID, prefixHex, lease.TargetAddress, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
+		log.Printf("worker: leased job %s prefix=%s targets=%v nonce=[%d,%d] expires=%s", lease.JobID, prefixHex, lease.TargetAddresses, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
 
 		duration, keys, err := w.processBatch(ctx, lease)
 		if err != nil {
@@ -264,8 +264,11 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	job.ID = 0
 	job.ExpiresAt = lease.ExpiresAt
 
-	// parse target address from lease
-	target := common.HexToAddress(lease.TargetAddress)
+	// parse target addresses from lease
+	targets := make([]common.Address, 0, len(lease.TargetAddresses))
+	for _, a := range lease.TargetAddresses {
+		targets = append(targets, common.HexToAddress(a))
+	}
 
 	progressFn := func(nonce uint32, keys uint64) {
 		atomic.StoreUint32(&currentNonce, nonce)
@@ -307,7 +310,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		// Snapshot total keys before scanning this chunk
 		beforeKeys := atomic.LoadUint64(&totalKeys)
 		batchStart := time.Now()
-		res, err := ScanRangeParallel(leaseCtx, subJob, target, progressFn, numWorkers)
+		res, err := ScanRangeParallel(leaseCtx, subJob, targets, progressFn, numWorkers)
 		batchDurationMs := time.Since(batchStart).Milliseconds()
 		afterKeys := atomic.LoadUint64(&totalKeys)
 		keysThisChunk := afterKeys - beforeKeys
@@ -405,8 +408,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 // isRetryable determines whether an error should be retried.
 func isRetryable(err error) bool {
 	// If it's an APIError, retry on 5xx and 429.
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		if apiErr.StatusCode >= 500 && apiErr.StatusCode < 600 {
 			return true
 		}

@@ -29,9 +29,9 @@ type Config struct {
 	// API key enforcement is disabled (useful for local testing).
 	APIKey string //nolint:gosec // false positive: this is a config field name, not a hardcoded secret
 
-	// TargetAddress is the Ethereum address that workers should search for.
-	// Defaults to 0x000000000000000000000000000000000000dEaD if not specified.
-	TargetAddress string
+	// TargetAddresses is the list of Ethereum addresses that workers should search for.
+	// Defaults to ["0x000000000000000000000000000000000000dEaD"] if not specified.
+	TargetAddresses []string
 
 	// StaleJobThresholdSeconds is the age in seconds after which a processing
 	// job with no recent checkpoints is considered abandoned and eligible for
@@ -94,9 +94,22 @@ func Load() (*Config, error) {
 		cfg.APIKey = k
 	}
 
-	cfg.TargetAddress = strings.TrimSpace(os.Getenv("MASTER_TARGET_ADDRESS"))
-	if cfg.TargetAddress == "" {
-		cfg.TargetAddress = "0x000000000000000000000000000000000000dEaD"
+	rawAddresses := strings.TrimSpace(os.Getenv("MASTER_TARGET_ADDRESSES"))
+	if rawAddresses == "" {
+		// fallback to singular for backward compatibility
+		rawAddresses = strings.TrimSpace(os.Getenv("MASTER_TARGET_ADDRESS"))
+	}
+
+	if rawAddresses == "" {
+		cfg.TargetAddresses = []string{"0x000000000000000000000000000000000000dEaD"}
+	} else {
+		parts := strings.Split(rawAddresses, ",")
+		for _, p := range parts {
+			addr := strings.ToLower(strings.TrimSpace(p))
+			if addr != "" {
+				cfg.TargetAddresses = append(cfg.TargetAddresses, addr)
+			}
+		}
 	}
 
 	// Stale job cleanup settings

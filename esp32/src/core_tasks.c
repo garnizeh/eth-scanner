@@ -94,8 +94,6 @@ void start_core_tasks(void)
     ESP_LOGI(TAG, "All core tasks spawned.");
 }
 
-/* Implementations moved from main.c so tasks are in their own compilation unit. */
-
 // System Management Task (Networking, API, Monitoring) - Core 0
 void core0_system_task(void *pvParameters)
 {
@@ -268,6 +266,8 @@ void core1_worker_task(void *pvParameters)
     ESP_LOGI(TAG, "Starting Computation Task on Core %d with priority %d",
              xPortGetCoreID(), uxTaskPriorityGet(NULL));
 
+    vTaskDelay(pdMS_TO_TICKS(10000)); // Initial delay to allow system setup and job leasing
+
     uint32_t notifications = 0;
     uint8_t priv_key[32] __attribute__((aligned(4))) = {0};
 
@@ -327,7 +327,16 @@ void core1_worker_task(void *pvParameters)
                     derive_eth_address(priv_key, derived_addr);
 
                     // Binary comparison using memcmp for zero-overhead validation (P08-T090)
-                    if (memcmp(derived_addr, g_state.current_job.target_address, 20) == 0)
+                    bool match = false;
+                    for (int i = 0; i < g_state.current_job.num_targets; i++)
+                    {
+                        if (memcmp(derived_addr, g_state.current_job.target_addresses[i], 20) == 0)
+                        {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (match)
                     {
                         ESP_LOGI(TAG, "Core 1: !!! MATCH FOUND !!! at nonce %lu", (unsigned long)current);
                         set_led_status(LED_KEY_FOUND);
