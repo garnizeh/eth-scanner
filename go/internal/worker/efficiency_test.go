@@ -53,6 +53,8 @@ func TestWorker_CheckpointTimeout(t *testing.T) {
 	_ = w.Run(ctx)
 	// If the timeout worked, we shouldn't have been blocked for 500ms on each call.
 	// The ticker triggers every 50ms, run duration is 200ms, so ~4 attempts.
+
+	t.Log("Test checkpoint count:", atomic.LoadInt32(&checkpointCount))
 }
 
 func TestWorker_ProgressThrottling(t *testing.T) {
@@ -124,6 +126,7 @@ func TestWorker_ProgressThrottling(t *testing.T) {
 	if atomic.LoadUint64(&checkpointKeys) != 0 && atomic.LoadInt32(&checkpoints) > 1 {
 		// This assertion is a bit fuzzy due to timing, but if throttle is 1s and run is 200ms,
 		// most periodic checkpoints should see 0.
+		t.Log("Test checkpoint count:", atomic.LoadInt32(&checkpoints))
 	}
 }
 
@@ -161,4 +164,5 @@ func TestWorker_LogSampling(t *testing.T) {
 	defer cancel()
 
 	_ = w.Run(ctx)
+	t.Log("Log sampling test completed without crashing")
 }
