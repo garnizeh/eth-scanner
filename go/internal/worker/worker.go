@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,18 +47,37 @@ type Worker struct {
 }
 
 // NewWorker constructs a Worker. measuredThroughput may be zero to use
-// conservative defaults in CalculateBatchSize.
+// conservative defaults in CalculateBatchSize. Config MUST not be nil.
 func NewWorker(cfg *Config) *Worker {
+	if cfg == nil {
+		panic("worker: Nil configuration provided")
+	}
 	// Determine goroutine count once at construction time. If the config
 	// specifies a positive override use it, otherwise fallback to
 	// runtime.NumCPU(). Ensure at least 1 worker.
 	nw := runtime.NumCPU()
-	if cfg != nil && cfg.WorkerNumGoroutines > 0 {
+	if cfg.WorkerNumGoroutines > 0 {
 		nw = cfg.WorkerNumGoroutines
 	}
 	if nw <= 0 {
 		nw = 1
 	}
+
+	// Apply sensible defaults if not set (common in tests using struct literals).
+	// Most of these are normally set by LoadConfig().
+	if cfg.CheckpointInterval <= 0 {
+		cfg.CheckpointInterval = 5 * time.Minute
+	}
+	if cfg.InternalBatchSize == 0 {
+		cfg.InternalBatchSize = 1_000_000
+	}
+	if cfg.CheckpointTimeout == 0 {
+		cfg.CheckpointTimeout = 10 * time.Second
+	}
+	if cfg.ProgressThrottleMS == 0 {
+		cfg.ProgressThrottleMS = 100 // default to 100ms if not specified
+	}
+
 	return &Worker{
 		client:             NewClient(cfg),
 		config:             cfg,
@@ -151,7 +171,9 @@ func (w *Worker) Run(ctx context.Context) error {
 			continue
 		}
 
-		log.Printf("worker: completed job %s (duration=%s keys=%d)", lease.JobID, duration.Round(time.Millisecond), keys)
+		if !w.config.LogSampling {
+			log.Printf("worker: completed job %s (duration=%s keys=%d)", lease.JobID, duration.Round(time.Millisecond), keys)
+		}
 
 		// Adjust batch size for next iteration using adaptive controller
 		if w.config != nil {
@@ -226,7 +248,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 						log.Printf("worker: final checkpoint failed: %v", err)
 					}
 				} else {
-					log.Printf("worker: final checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
+					if !w.config.LogSampling {
+						log.Printf("worker: final checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
+					}
 				}
 				bgCancel()
 				return
@@ -236,7 +260,11 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 				cn := atomic.LoadUint32(&currentNonce)
 				tk := atomic.LoadUint64(&totalKeys)
 				durationMs := time.Since(startTime).Milliseconds()
-				if err := w.client.UpdateCheckpoint(ctx, lease.JobID, cn, tk, startTime, durationMs); err != nil {
+
+				// Per-call timeout for periodic checkpoint
+				cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
+				if err := w.client.UpdateCheckpoint(cctx, lease.JobID, cn, tk, startTime, durationMs); err != nil {
+					ccancel()
 					if errors.Is(err, ErrUnauthorized) {
 						// fatal: mark flag and cancel lease context so scanning stops.
 						atomic.StoreInt32(&unauthorizedFlag, 1)
@@ -246,7 +274,10 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 					}
 					log.Printf("worker: checkpoint failed: %v", err)
 				} else {
-					log.Printf("worker: checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
+					ccancel()
+					if !w.config.LogSampling {
+						log.Printf("worker: checkpoint sent job=%s nonce=%d keys=%d", lease.JobID, cn, tk)
+					}
 				}
 			}
 		}
@@ -256,7 +287,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	// chunks. Use the cached `w.numWorkers` value determined at startup to
 	// avoid repeated runtime/config checks inside the hot path.
 	numWorkers := w.numWorkers
-	log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
+	if !w.config.LogSampling {
+		log.Printf("worker: scanning job %s range [%d,%d] using %d goroutines", lease.JobID, lease.NonceStart, lease.NonceEnd, numWorkers)
+	}
 
 	// Build scanner job template
 	var job Job
@@ -270,14 +303,53 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		targets = append(targets, common.HexToAddress(a))
 	}
 
+	// Wrap progress updates in a throttler to reduce atomic overhead.
+	// We use a local non-atomic variable to accumulate keys between updates
+	// and update the shared atomics only periodically.
+	var (
+		progressMu         sync.Mutex
+		lastProgressUpdate time.Time
+		localKeys          uint64
+		latestNonce        uint32
+	)
+	progressThrottle := time.Duration(w.config.ProgressThrottleMS) * time.Millisecond
+
 	progressFn := func(nonce uint32, keys uint64) {
-		atomic.StoreUint32(&currentNonce, nonce)
-		atomic.AddUint64(&totalKeys, keys)
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		localKeys += keys
+		if nonce > latestNonce {
+			latestNonce = nonce
+		}
+		now := time.Now()
+		// Only update shared atomics if enough time has passed to reduce synchronization overhead.
+		if now.Sub(lastProgressUpdate) >= progressThrottle {
+			atomic.StoreUint32(&currentNonce, latestNonce)
+			atomic.AddUint64(&totalKeys, localKeys)
+			localKeys = 0
+			lastProgressUpdate = now
+		}
+	}
+
+	// flushProgress ensures all accumulated keys are reported to atomics.
+	// Must be called after ScanRangeParallel returns.
+	flushProgress := func(finalNonce uint32) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		if localKeys > 0 {
+			atomic.AddUint64(&totalKeys, localKeys)
+			localKeys = 0
+		}
+		// update latestNonce to final if provided, then store in atomic
+		if finalNonce > latestNonce {
+			latestNonce = finalNonce
+		}
+		atomic.StoreUint32(&currentNonce, latestNonce)
 	}
 
 	// Determine internal chunk size
 	internalBatch := uint32(1000000)
-	if w.config != nil && w.config.InternalBatchSize > 0 {
+	if w.config.InternalBatchSize > 0 {
 		internalBatch = w.config.InternalBatchSize
 	}
 
@@ -311,6 +383,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		beforeKeys := atomic.LoadUint64(&totalKeys)
 		batchStart := time.Now()
 		res, err := ScanRangeParallel(leaseCtx, subJob, targets, progressFn, numWorkers)
+		flushProgress(end) // Flush any pending keys from this chunk
+
 		batchDurationMs := time.Since(batchStart).Milliseconds()
 		afterKeys := atomic.LoadUint64(&totalKeys)
 		keysThisChunk := afterKeys - beforeKeys
@@ -326,7 +400,13 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 
 		// If a result was found, submit it
 		if res != nil {
-			if err := w.client.SubmitResult(ctx, res.PrivateKey[:], res.Address.Hex()); err != nil {
+			// Snapshot final nonce if a result was found
+			atomic.StoreUint32(&currentNonce, res.Nonce)
+
+			// Submit with per-call timeout
+			sctx, scancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
+			if err := w.client.SubmitResult(sctx, res.PrivateKey[:], res.Address.Hex()); err != nil {
+				scancel()
 				if errors.Is(err, ErrUnauthorized) {
 					cancel()
 					<-doneCh
@@ -334,13 +414,17 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 					return elapsed, afterKeys, ErrUnauthorized
 				}
 				log.Printf("worker: failed to submit result: %v", err)
+			} else {
+				scancel()
 			}
-			atomic.StoreUint32(&currentNonce, res.Nonce)
 			foundResult = res
 		}
 
 		// Send a checkpoint for this chunk (reporting chunk-level metrics).
-		if err := w.client.UpdateCheckpoint(ctx, lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk, batchStart, batchDurationMs); err != nil {
+		// Per-call timeout for chunk checkpoint
+		cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
+		if err := w.client.UpdateCheckpoint(cctx, lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk, batchStart, batchDurationMs); err != nil {
+			ccancel()
 			if errors.Is(err, ErrUnauthorized) {
 				// fatal: stop processing and propagate
 				cancel()
@@ -360,7 +444,10 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 			// continue attempting periodic checkpoints as well.
 			log.Printf("worker: checkpoint failed for chunk [%d,%d]: %v", start, end, err)
 		} else {
-			log.Printf("worker: chunk checkpoint sent job=%s nonce=%d keys_chunk=%d", lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk)
+			ccancel()
+			if !w.config.LogSampling {
+				log.Printf("worker: chunk checkpoint sent job=%s nonce=%d keys_chunk=%d", lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk)
+			}
 		}
 
 		// If a result was found we can stop scanning further chunks.
@@ -391,7 +478,10 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 
 	// If we exited early due to lease expiry, the caller will handle re-request.
 	// Otherwise, complete the batch on master with overall metrics.
-	if err := w.client.CompleteBatch(ctx, lease.JobID, lease.NonceEnd, tk, startTime, elapsed.Milliseconds()); err != nil {
+	// Use a background context with 10s timeout for final completion.
+	bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer bgCancel()
+	if err := w.client.CompleteBatch(bgCtx, lease.JobID, lease.NonceEnd, tk, startTime, elapsed.Milliseconds()); err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			return elapsed, tk, ErrUnauthorized
 		}
