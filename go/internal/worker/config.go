@@ -36,6 +36,12 @@ type Config struct {
 	// per internal chunk before sending a checkpoint. This is independent of
 	// the requested lease size returned by the Master API.
 	InternalBatchSize uint32
+	// CheckpointTimeout is the per-call timeout for periodic checkpoint updates.
+	CheckpointTimeout time.Duration
+	// ProgressThrottleMS is the minimum time between progress updates (telemetry).
+	ProgressThrottleMS int
+	// LogSampling enabled reduced logging in hot paths.
+	LogSampling bool
 }
 
 // LoadConfig reads configuration from environment variables and validates them.
@@ -150,6 +156,28 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	checkpointTimeout := 10 * time.Second
+	if v := os.Getenv("WORKER_CHECKPOINT_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WORKER_CHECKPOINT_TIMEOUT: %w", err)
+		}
+		checkpointTimeout = d
+	}
+
+	progressThrottle := 500
+	if v := os.Getenv("WORKER_PROGRESS_THROTTLE_MS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err == nil {
+			progressThrottle = n
+		}
+	}
+
+	logSampling := false
+	if v := os.Getenv("WORKER_LOG_SAMPLING"); v != "" {
+		logSampling = (v == "1" || v == "true")
+	}
+
 	return &Config{
 		APIURL:                   apiURL,
 		WorkerID:                 workerID,
@@ -165,6 +193,9 @@ func LoadConfig() (*Config, error) {
 		InitialBatchSize:         initialBatch,
 		InternalBatchSize:        internalBatch,
 		WorkerNumGoroutines:      workerGoroutines,
+		CheckpointTimeout:        checkpointTimeout,
+		ProgressThrottleMS:       progressThrottle,
+		LogSampling:              logSampling,
 	}, nil
 }
 

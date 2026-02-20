@@ -55,6 +55,16 @@ func TestLoadConfig_Valid(t *testing.T) {
 	if cfg.InternalBatchSize != 1000000 {
 		t.Fatalf("unexpected InternalBatchSize default: %d", cfg.InternalBatchSize)
 	}
+	// new efficiency fields defaults
+	if cfg.CheckpointTimeout != 10*time.Second {
+		t.Fatalf("unexpected CheckpointTimeout default: %v", cfg.CheckpointTimeout)
+	}
+	if cfg.ProgressThrottleMS != 500 {
+		t.Fatalf("unexpected ProgressThrottleMS default: %d", cfg.ProgressThrottleMS)
+	}
+	if cfg.LogSampling {
+		t.Fatalf("unexpected LogSampling default: %v", cfg.LogSampling)
+	}
 }
 
 func TestLoadConfig_AutoGenerateID(t *testing.T) {
@@ -95,6 +105,12 @@ func TestLoadConfig_AdaptiveEnvOverrides(t *testing.T) {
 	defer os.Unsetenv("WORKER_INITIAL_BATCH_SIZE")
 	os.Setenv("WORKER_INTERNAL_BATCH_SIZE", "250000")
 	defer os.Unsetenv("WORKER_INTERNAL_BATCH_SIZE")
+	os.Setenv("WORKER_CHECKPOINT_TIMEOUT", "45s")
+	defer os.Unsetenv("WORKER_CHECKPOINT_TIMEOUT")
+	os.Setenv("WORKER_PROGRESS_THROTTLE_MS", "123")
+	defer os.Unsetenv("WORKER_PROGRESS_THROTTLE_MS")
+	os.Setenv("WORKER_LOG_SAMPLING", "1")
+	defer os.Unsetenv("WORKER_LOG_SAMPLING")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -117,6 +133,15 @@ func TestLoadConfig_AdaptiveEnvOverrides(t *testing.T) {
 	}
 	if cfg.InternalBatchSize != 250000 {
 		t.Fatalf("expected InternalBatchSize 250000, got %d", cfg.InternalBatchSize)
+	}
+	if cfg.CheckpointTimeout != 45*time.Second {
+		t.Fatalf("expected CheckpointTimeout 45s, got %v", cfg.CheckpointTimeout)
+	}
+	if cfg.ProgressThrottleMS != 123 {
+		t.Fatalf("expected ProgressThrottleMS 123, got %d", cfg.ProgressThrottleMS)
+	}
+	if !cfg.LogSampling {
+		t.Fatalf("expected LogSampling true, got %v", cfg.LogSampling)
 	}
 }
 
