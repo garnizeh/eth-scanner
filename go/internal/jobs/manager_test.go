@@ -629,96 +629,96 @@ func TestCompleteJob_Errors(t *testing.T) {
 // TestGetNextNonceRange_TableDriven covers sequential ranges with varying sizes
 // and ensures no gaps between allocations.
 func TestGetNextNonceRange_TableDriven(t *testing.T) {
-ctx := t.Context()
-db, q := setupInMemoryDB(t)
-m := New(q)
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
 
-prefix := make([]byte, 28)
-copy(prefix, []byte("test-prefix-1234567890123456"))
+	prefix := make([]byte, 28)
+	copy(prefix, []byte("test-prefix-1234567890123456"))
 
-tests := []struct {
-name      string
-batchSize uint32
-wantStart uint32
-wantEnd   uint32
-}{
-{"First-10k", 10000, 0, 9999},
-{"Second-5k", 5000, 10000, 14999},
-{"Third-1k", 1000, 15000, 15999},
-{"Fourth-50k", 50000, 16000, 65999},
-}
+	tests := []struct {
+		name      string
+		batchSize uint32
+		wantStart uint32
+		wantEnd   uint32
+	}{
+		{"First-10k", 10000, 0, 9999},
+		{"Second-5k", 5000, 10000, 14999},
+		{"Third-1k", 1000, 15000, 15999},
+		{"Fourth-50k", 50000, 16000, 65999},
+	}
 
-for _, tt := range tests {
-t.Run(tt.name, func(t *testing.T) {
-start, end, err := m.GetNextNonceRange(ctx, prefix, tt.batchSize)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
-if start != tt.wantStart {
-t.Errorf("start mismatch: got %d, want %d", start, tt.wantStart)
-}
-if end != tt.wantEnd {
-t.Errorf("end mismatch: got %d, want %d", end, tt.wantEnd)
-}
-// Insert a job to persist the allocation so the next call sees the state
-if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, ?, ?, 'pending')", prefix, int64(start), int64(end)); err != nil {
-t.Fatalf("failed to insert job: %v", err)
-}
-})
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end, err := m.GetNextNonceRange(ctx, prefix, tt.batchSize)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if start != tt.wantStart {
+				t.Errorf("start mismatch: got %d, want %d", start, tt.wantStart)
+			}
+			if end != tt.wantEnd {
+				t.Errorf("end mismatch: got %d, want %d", end, tt.wantEnd)
+			}
+			// Insert a job to persist the allocation so the next call sees the state
+			if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, ?, ?, 'pending')", prefix, int64(start), int64(end)); err != nil {
+				t.Fatalf("failed to insert job: %v", err)
+			}
+		})
+	}
 }
 
 // TestGetNextNonceRange_Exhaustion specifically tests the rollover (exhausted)
 // case when the prefix nonce space is already full.
 func TestGetNextNonceRange_Exhaustion(t *testing.T) {
-ctx := t.Context()
-db, q := setupInMemoryDB(t)
-m := New(q)
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
 
-prefix := make([]byte, 28)
-// Seed one job that covers the entire range up to MaxUint32
-if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, 0, ?, 'completed')", prefix, int64(math.MaxUint32)); err != nil {
-t.Fatalf("seed error: %v", err)
-}
+	prefix := make([]byte, 28)
+	// Seed one job that covers the entire range up to MaxUint32
+	if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, 0, ?, 'completed')", prefix, int64(math.MaxUint32)); err != nil {
+		t.Fatalf("seed error: %v", err)
+	}
 
-start, end, err := m.GetNextNonceRange(ctx, prefix, 1000)
-if !errors.Is(err, ErrPrefixExhausted) {
-t.Fatalf("expected ErrPrefixExhausted, got (start=%d, end=%d, err=%v)", start, end, err)
-}
+	start, end, err := m.GetNextNonceRange(ctx, prefix, 1000)
+	if !errors.Is(err, ErrPrefixExhausted) {
+		t.Fatalf("expected ErrPrefixExhausted, got (start=%d, end=%d, err=%v)", start, end, err)
+	}
 }
 
 // TestGetNextNonceRange_CapToMaxUint32 ensures that when we request a range
 // that would exceed MaxUint32, the manager returns a capped range.
 func TestGetNextNonceRange_CapToMaxUint32(t *testing.T) {
-ctx := t.Context()
-db, q := setupInMemoryDB(t)
-m := New(q)
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
 
-prefix := make([]byte, 28)
-// Seed a job that ends near the end
-last := uint32(math.MaxUint32 - 50)
-if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, 0, ?, 'completed')", prefix, int64(last)); err != nil {
-t.Fatalf("seed error: %v", err)
-}
+	prefix := make([]byte, 28)
+	// Seed a job that ends near the end
+	last := uint32(math.MaxUint32 - 50)
+	if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, 0, ?, 'completed')", prefix, int64(last)); err != nil {
+		t.Fatalf("seed error: %v", err)
+	}
 
-// Request more than remains (100 > 50)
-start, end, err := m.GetNextNonceRange(ctx, prefix, 100)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
-if start != last+1 {
-t.Errorf("unexpected start: %d", start)
-}
-if end != uint32(math.MaxUint32) {
-t.Errorf("unexpected end (capped): %d", end)
-}
+	// Request more than remains (100 > 50)
+	start, end, err := m.GetNextNonceRange(ctx, prefix, 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if start != last+1 {
+		t.Errorf("unexpected start: %d", start)
+	}
+	if end != uint32(math.MaxUint32) {
+		t.Errorf("unexpected end (capped): %d", end)
+	}
 
-// Now it should definitely be exhausted
-if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, ?, ?, 'completed')", prefix, int64(start), int64(end)); err != nil {
-t.Fatalf("insert error: %v", err)
-}
-_, _, err = m.GetNextNonceRange(ctx, prefix, 10)
-if !errors.Is(err, ErrPrefixExhausted) {
-t.Fatalf("expected ErrPrefixExhausted, got %v", err)
-}
+	// Now it should definitely be exhausted
+	if _, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, status) VALUES (?, ?, ?, 'completed')", prefix, int64(start), int64(end)); err != nil {
+		t.Fatalf("insert error: %v", err)
+	}
+	_, _, err = m.GetNextNonceRange(ctx, prefix, 10)
+	if !errors.Is(err, ErrPrefixExhausted) {
+		t.Fatalf("expected ErrPrefixExhausted, got %v", err)
+	}
 }

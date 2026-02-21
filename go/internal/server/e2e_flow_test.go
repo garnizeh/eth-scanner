@@ -119,6 +119,7 @@ func TestE2EFlow(t *testing.T) {
 	checkpointURL := fmt.Sprintf("%s/api/v1/jobs/%d/checkpoint", baseURL, leaseResp.JobID)
 	req, _ = http.NewRequestWithContext(ctx, http.MethodPatch, checkpointURL, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // base URL is local and trusted
 	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatalf("checkpoint request failed: %v", err)
@@ -139,6 +140,7 @@ func TestE2EFlow(t *testing.T) {
 	body, _ = json.Marshal(resultReq)
 	req, _ = http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/v1/results", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // base URL is local and trusted
 	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatalf("submit result request failed: %v", err)
@@ -160,6 +162,7 @@ func TestE2EFlow(t *testing.T) {
 	completeURL := fmt.Sprintf("%s/api/v1/jobs/%d/complete", baseURL, leaseResp.JobID)
 	req, _ = http.NewRequestWithContext(ctx, http.MethodPost, completeURL, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // base URL is local and trusted
 	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatalf("complete request failed: %v", err)

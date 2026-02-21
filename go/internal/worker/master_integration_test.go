@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -28,7 +29,8 @@ func TestWorkerMasterIntegration(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "master_integration.db")
 
 	// Find a free port
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	lc := &net.ListenConfig{}
+	l, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -58,12 +60,11 @@ func TestWorkerMasterIntegration(t *testing.T) {
 	// Wait for server to be responsive
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	responsive := false
+	dialer := &net.Dialer{Timeout: 100 * time.Millisecond}
 	for range 20 {
 		hctx, hcancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		req, _ := hctx.Done(), hcancel
-		_ = req
-		// Simple GET to health
-		res, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		// Simple check if port is open
+		res, err := dialer.DialContext(hctx, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			res.Close()
 			responsive = true
@@ -113,11 +114,11 @@ func TestWorkerMasterIntegration(t *testing.T) {
 		}
 		select {
 		case err := <-workerErrCh:
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				t.Fatalf("worker exited with error: %v", err)
 			}
 		case err := <-serverErrCh:
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				t.Fatalf("server exited with error: %v", err)
 			}
 		case <-time.After(100 * time.Millisecond):
