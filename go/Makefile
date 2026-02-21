@@ -1,7 +1,7 @@
 # EthScanner Distributed - Makefile
 # Provides convenient shortcuts for common development tasks
 
-.PHONY: help all tidy vuln build test clean sqlc run-master run-worker fmt lint clean-branches
+.PHONY: help all tidy vuln build test clean sqlc run-master run-worker fmt fix lint clean-branches
 
 # Git configuration for clean-branches
 REMOTE = origin
@@ -52,7 +52,7 @@ help:
 	@echo ""
 
 # Run full CI pipeline
-all: tidy fmt lint vuln sqlc build test
+all: tidy fmt fix lint vuln sqlc build test
 	@echo "✓ All checks passed"
 
 # Tidy Go modules
@@ -156,6 +156,12 @@ fmt:
 	@echo "Formatting Go code..."
 	@go fmt ./...
 	@echo "✓ Code formatted"
+
+# Fix Go code
+fix:
+	@echo "Fixing Go code..."
+	@go fix ./...
+	@echo "✓ Code fixed"
 
 # Run linter (requires golangci-lint)
 lint:
