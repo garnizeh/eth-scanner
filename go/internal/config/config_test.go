@@ -9,6 +9,7 @@ import (
 
 func TestLoad_MultipleTargetAddresses(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_TARGET_ADDRESSES", "0x111, 0x222 , 0x333")
 
 	cfg, err := Load()
@@ -28,6 +29,7 @@ func TestLoad_MultipleTargetAddresses(t *testing.T) {
 
 func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	// ensure other envs unset
 	t.Setenv("MASTER_PORT", "")
 	t.Setenv("MASTER_LOG_LEVEL", "")
@@ -67,6 +69,7 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_CustomEnv(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/custom.db")
+	t.Setenv("DASHBOARD_PASSWORD", "custompass")
 	t.Setenv("MASTER_PORT", "9090")
 	t.Setenv("MASTER_LOG_LEVEL", "DEBUG")
 	t.Setenv("MASTER_SHUTDOWN_TIMEOUT", "1m30s")
@@ -103,6 +106,7 @@ func TestLoad_CustomEnv(t *testing.T) {
 
 func TestLoad_InvalidShutdownTimeout(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_SHUTDOWN_TIMEOUT", "notaduration")
 	if _, err := Load(); err == nil {
 		t.Fatalf("expected error for invalid MASTER_SHUTDOWN_TIMEOUT, got nil")
@@ -111,6 +115,7 @@ func TestLoad_InvalidShutdownTimeout(t *testing.T) {
 
 func TestLoad_CustomCleanupEnv(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_STALE_JOB_THRESHOLD", "3600")
 	t.Setenv("MASTER_CLEANUP_INTERVAL", "1200")
 
@@ -128,6 +133,7 @@ func TestLoad_CustomCleanupEnv(t *testing.T) {
 
 func TestLoad_RetentionDefaults(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	// ensure retention envs unset
 	t.Setenv("WORKER_HISTORY_LIMIT", "")
 	t.Setenv("WORKER_DAILY_STATS_LIMIT", "")
@@ -167,6 +173,7 @@ func TestGetRetentionLimits_Custom(t *testing.T) {
 
 func TestLoad_RetentionZeroUsesDefaults(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	// set zero/negative values which should be replaced by defaults
 	t.Setenv("WORKER_HISTORY_LIMIT", "0")
 	t.Setenv("WORKER_DAILY_STATS_LIMIT", "0")
@@ -189,6 +196,7 @@ func TestLoad_RetentionZeroUsesDefaults(t *testing.T) {
 
 func TestLoad_DefaultsAndRequired(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", ":memory:")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	// ensure other vars unset
 	t.Setenv("MASTER_PORT", "")
 	t.Setenv("MASTER_LOG_LEVEL", "")
@@ -215,6 +223,7 @@ func TestLoad_DefaultsAndRequired(t *testing.T) {
 
 func TestLoad_CustomValues(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", "/tmp/test.db")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_PORT", "12345")
 	t.Setenv("MASTER_LOG_LEVEL", "DEBUG")
 	t.Setenv("MASTER_SHUTDOWN_TIMEOUT", "45s")
@@ -246,6 +255,7 @@ func TestLoad_CustomValues(t *testing.T) {
 
 func TestLoad_InvalidTimeout(t *testing.T) {
 	t.Setenv("MASTER_DB_PATH", ":memory:")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_SHUTDOWN_TIMEOUT", "notaduration")
 	t.Setenv("MASTER_API_KEY", "")
 
@@ -269,6 +279,19 @@ func TestLoad_MissingDBPath(t *testing.T) {
 	}
 }
 
+func TestLoad_MissingDashboardPassword(t *testing.T) {
+	t.Setenv("MASTER_DB_PATH", "dummy")
+	t.Setenv("DASHBOARD_PASSWORD", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatalf("expected error when DASHBOARD_PASSWORD is missing, got nil")
+	}
+	if !strings.Contains(err.Error(), "DASHBOARD_PASSWORD is required") {
+		t.Fatalf("expected DASHBOARD_PASSWORD is required error, got: %v", err)
+	}
+}
+
 func TestLoad_InvalidStaleJobThreshold(t *testing.T) {
 	// This test manipulates environment variables via t.Setenv and therefore
 	// must not run in parallel with other tests.
@@ -276,6 +299,7 @@ func TestLoad_InvalidStaleJobThreshold(t *testing.T) {
 	// Use t.Setenv to avoid races with parallel tests modifying environment.
 	// Ensure DBPath is set so Load progresses to parsing the threshold.
 	t.Setenv("MASTER_DB_PATH", "dummy")
+	t.Setenv("DASHBOARD_PASSWORD", "testpass")
 	t.Setenv("MASTER_STALE_JOB_THRESHOLD", "not-an-int")
 
 	_, err := Load()
@@ -292,14 +316,17 @@ func TestLoad_InvalidCleanupInterval(t *testing.T) {
 
 	// preserve env
 	origDB := os.Getenv("MASTER_DB_PATH")
+	origPass := os.Getenv("DASHBOARD_PASSWORD")
 	origCleanup := os.Getenv("MASTER_CLEANUP_INTERVAL")
 	defer func() {
 		_ = os.Setenv("MASTER_DB_PATH", origDB)
+		_ = os.Setenv("DASHBOARD_PASSWORD", origPass)
 		_ = os.Setenv("MASTER_CLEANUP_INTERVAL", origCleanup)
 	}()
 
 	// ensure DBPath is set so Load progresses to parsing the cleanup interval
 	_ = os.Setenv("MASTER_DB_PATH", "dummy")
+	_ = os.Setenv("DASHBOARD_PASSWORD", "testpass")
 	_ = os.Setenv("MASTER_CLEANUP_INTERVAL", "not-an-int")
 
 	_, err := Load()

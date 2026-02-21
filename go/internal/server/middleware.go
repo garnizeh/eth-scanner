@@ -145,10 +145,11 @@ func (s *Server) apiKeyMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Allow /health, /dashboard and /static routes to pass through without API key.
-		// These provide the UI and system monitoring endpoints.
+		// Allow /health, /dashboard, /login, /logout and /static routes to pass
+		// through without API key. These provide the UI and system monitoring endpoints.
 		p := r.URL.Path
-		if p == "/health" || strings.HasPrefix(p, "/dashboard") || strings.HasPrefix(p, "/static/") {
+		if p == "/health" || strings.HasPrefix(p, "/dashboard") ||
+			p == "/login" || p == "/logout" || strings.HasPrefix(p, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
