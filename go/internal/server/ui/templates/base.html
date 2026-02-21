@@ -17,38 +17,100 @@
     <!-- HTMX WebSocket Extension -->
     <script src="/static/htmx.ws.2.0.8.min.js"></script>
     <style>
-        [vx-cloak] {
+        [hx-cloak] {
             display: none !important;
         }
     </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen">
-    <header class="bg-gray-800 text-white shadow-lg p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">EthScanner Dashboard</h1>
-            {{if not .HideNav}}
-            <nav>
-                <ul class="flex space-x-4">
-                    <li><a href="/dashboard" class="hover:underline">Home</a></li>
-                    <li><a href="/dashboard/stats" class="hover:underline">Stats</a></li>
-                    <li>
-                        <form action="/logout" method="POST" class="inline">
-                            <button type="submit" class="hover:underline bg-transparent border-none p-0">Logout</button>
-                        </form>
-                    </li>
-                </ul>
-            </nav>
-            {{end}}
+<body class="bg-gray-100 min-h-screen text-gray-900 font-sans flex flex-col">
+    <!-- Navbar -->
+    <header class="bg-gray-900 text-white shadow-md z-10 sticky top-0">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Branding -->
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <img class="h-8 w-8 rounded-md" src="/static/img/apple-touch-icon.png" alt="EthScanner Logo">
+                    </div>
+                    <span class="ml-3 text-lg font-bold tracking-tight">EthScanner <span
+                            class="text-blue-400">Master</span></span>
+                </div>
+
+                <!-- Desktop Top Nav -->
+                {{if not .HideNav}}
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="/dashboard" class="{{navClass .CurrentPath " /dashboard" false}}">Overview</a>
+                        <a href="/dashboard/workers" class="{{navClass .CurrentPath " /dashboard/workers"
+                            false}}">Workers</a>
+                        <a href="/dashboard/settings" class="{{navClass .CurrentPath " /dashboard/settings"
+                            false}}">Settings</a>
+                    </div>
+                </div>
+                {{end}}
+
+                <!-- User actions -->
+                <div class="flex items-center space-x-3">
+                    {{if not .HideNav}}
+                    <form action="/logout" method="POST" class="inline">
+                        <button type="submit"
+                            class="bg-gray-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition uppercase">
+                            Logout
+                        </button>
+                    </form>
+                    {{else}}
+                    <span class="text-xs text-gray-500 uppercase font-bold tracking-widest">v1.2.0-distributed</span>
+                    {{end}}
+                </div>
+            </div>
         </div>
     </header>
 
-    <main class="container mx-auto p-4">
-        {{template "content" .}}
-    </main>
+    <!-- Content Area with optional Sidebar layout -->
+    <div class="flex-grow">
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {{if not .HideNav}}
+            <div class="flex flex-col lg:flex-row gap-8">
+                <!-- Simple Sidebar for Desktop -->
+                <aside class="hidden lg:block w-64 flex-shrink-0">
+                    <nav class="space-y-1">
+                        <a href="/dashboard" class="{{navClass .CurrentPath " /dashboard" true}}">
+                            Dashboard Overview
+                        </a>
+                        <a href="/dashboard/workers" class="{{navClass .CurrentPath " /dashboard/workers" true}}">
+                            Connected Workers
+                        </a>
+                        <a href="/dashboard/settings" class="{{navClass .CurrentPath " /dashboard/settings" true}}">
+                            System Settings
+                        </a>
+                    </nav>
+                </aside>
 
-    <footer class="bg-gray-200 text-center p-4 text-sm text-gray-600 border-t border-gray-300 mt-auto">
-        &copy; 2026 EthScanner Distributed. For educational purposes only.
+                <!-- Page Content -->
+                <div class="flex-1" hx-ext="ws" ws-connect="/api/v1/ws">
+                    {{template "content" .}}
+                </div>
+            </div>
+            {{else}}
+            <!-- No sidebar layout (e.g. for Login) -->
+            {{template "content" .}}
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div
+            class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm">
+            <p>&copy; 2026 EthScanner Distributed. All rights reserved.</p>
+            <div class="flex space-x-6 mt-4 md:mt-0">
+                <a href="https://github.com/garnizeh/eth-scanner"
+                    class="hover:text-gray-900 transition underline underline-offset-4">GitHub</a>
+                <span class="hidden md:inline text-gray-300">|</span>
+                <span class="font-mono text-xs uppercase tracking-tighter">Distributed ETH Key Search Engine</span>
+            </div>
+        </div>
     </footer>
 </body>
 

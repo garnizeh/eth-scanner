@@ -1,16 +1,42 @@
 {{define "fleet-stats"}}
-<div id="fleet-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" hx-swap-oob="true">
-    <div class="p-4 bg-blue-100 border-l-4 border-blue-400 text-blue-800 rounded shadow-sm">
-        <p class="font-bold text-xs uppercase tracking-wider text-blue-600">Active Workers</p>
-        <p class="text-2xl font-bold">{{ .ActiveWorkers }}</p>
+<div id="fleet-stats" class="grid grid-cols-1 md:grid-cols-3 gap-6" hx-swap-oob="true">
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div class="p-3 bg-blue-50 rounded-lg text-blue-600">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Live Active Workers
+            </p>
+            <p class="text-2xl font-black text-gray-900">{{ .ActiveWorkers }}</p>
+        </div>
     </div>
-    <div class="p-4 bg-green-100 border-l-4 border-green-400 text-green-800 rounded shadow-sm">
-        <p class="font-bold text-xs uppercase tracking-wider text-green-600">Total Keys Scanned</p>
-        <p class="text-2xl font-bold">{{ .TotalKeysScanned }}</p>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div class="p-3 bg-green-50 rounded-lg text-green-600">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Keys Scanned (Fleet)
+            </p>
+            <p class="text-2xl font-black text-gray-900">{{ .TotalKeysScanned }}</p>
+        </div>
     </div>
-    <div class="p-4 bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 rounded shadow-sm">
-        <p class="font-bold text-xs uppercase tracking-wider text-yellow-600">Completed Jobs</p>
-        <p class="text-2xl font-bold">{{ .CompletedJobCount }}</p>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div class="p-3 bg-indigo-50 rounded-lg text-indigo-600">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Completed Batches</p>
+            <p class="text-2xl font-black text-gray-900">{{ .CompletedJobCount }}</p>
+        </div>
     </div>
 </div>
 

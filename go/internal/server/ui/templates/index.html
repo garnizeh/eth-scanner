@@ -3,38 +3,89 @@
 {{define "title"}}Overview{{end}}
 
 {{define "content"}}
-<div hx-ext="ws" ws-connect="/api/v1/ws">
-    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-        <h2 class="text-2xl font-semibold mb-4 text-gray-800">Welcome to EthScanner Dashboard</h2>
-        <p class="text-gray-600 mb-6">Real-time distributed Ethereum brute-force monitoring.</p>
+<div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+        <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Overview</h2>
+        <p class="mt-1 text-sm text-gray-500">Real-time distributed Ethereum brute-force monitoring.</p>
+    </div>
 
-        <div id="fleet-stats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-700">
-                <p class="font-bold">Fleet Stats</p>
-                <p>Waiting for real-time updates from WebSocket...</p>
-            </div>
-        </div>
-
-        <!-- Hello World verification block -->
-        <div class="mt-8 flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-md">
-            <span class="text-green-800 font-medium">System Health:</span>
-            <span class="px-2 py-1 bg-green-200 text-green-900 rounded-full text-xs font-bold uppercase">Online</span>
-        </div>
+    <div class="flex items-center space-x-2 bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 shadow-sm">
+        <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        </span>
+        <span class="text-xs font-bold text-green-800 uppercase tracking-widest">Live Monitoring</span>
     </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    <div class="bg-white p-6 rounded-lg shadow-md">
-        <h3 class="font-bold text-lg mb-2">Total Workers</h3>
-        <p id="total-workers" class="text-3xl font-bold text-blue-600">0</p>
+<div class="space-y-6">
+    <!-- Live Stats Grid (updated via WebSocket) -->
+    <div id="fleet-stats" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
+            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
+            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
+        </div>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
+            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
+        </div>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow-md">
-        <h3 class="font-bold text-lg mb-2">Active Jobs</h3>
-        <p id="active-jobs" class="text-3xl font-bold text-green-600">0</p>
+
+    <!-- Secondary Stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Total Workers</h3>
+                <p id="total-workers" class="text-4xl font-black text-blue-600 tracking-tighter">0</p>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium">
+                <span class="text-gray-400">Lifetime registered</span>
+                <a href="/dashboard/workers" class="text-blue-500 hover:text-blue-700">View list →</a>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Active Jobs</h3>
+                <p id="active-jobs" class="text-4xl font-black text-green-600 tracking-tighter">0</p>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium">
+                <span class="text-gray-400">Currently processing</span>
+                <span class="text-green-500 font-bold uppercase tracking-widest">Running</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div>
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Global Throughput</h3>
+                <p id="global-throughput" class="text-4xl font-black text-purple-600 tracking-tighter">0.0 k/s</p>
+            </div>
+            <div class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-medium">
+                <span class="text-gray-400">Total keys/sec</span>
+                <span class="text-purple-500 font-bold uppercase tracking-widest">Aggregated</span>
+            </div>
+        </div>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow-md">
-        <h3 class="font-bold text-lg mb-2">Global Throughput</h3>
-        <p id="global-throughput" class="text-3xl font-bold text-purple-600">0 k/s</p>
+
+    <!-- Info Box -->
+    <div class="bg-blue-600 rounded-xl shadow-lg p-6 text-white overflow-hidden relative">
+        <div class="relative z-10">
+            <h3 class="text-xl font-bold mb-2">System Status</h3>
+            <p class="text-blue-100 text-sm max-w-2xl">
+                The master node is actively managing worker ranges. New jobs are distributed based on worker reported
+                throughput. Check the Workers tab for individual performance metrics.
+            </p>
+        </div>
+        <!-- Decorative SVG element -->
+        <svg class="absolute right-0 bottom-0 text-blue-500 opacity-20 w-48 h-48 -mr-12 -mb-12" fill="currentColor"
+            viewBox="0 0 200 200">
+            <path
+                d="M43.3,165.7c-17.1-17.1-17.1-44.8,0-61.9l61.9-61.9c17.1-17.1,44.8-17.1,61.9,0s17.1,44.8,0,61.9l-61.9,61.9 C88,182.7,60.3,182.7,43.3,165.7z" />
+        </svg>
     </div>
 </div>
 {{end}}
