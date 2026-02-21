@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"path"
@@ -26,7 +28,7 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	// remove trailing /checkpoint to get /api/v1/jobs/{id}
+	// removal of trailing /checkpoint handles ID parsing
 	parent := path.Dir(p)
 	idStr := path.Base(parent)
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -34,6 +36,17 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid job id", http.StatusBadRequest)
 		return
 	}
+
+	// Read and log raw body for debugging ESP32 payloads
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[DEBUG] checkpoint: failed to read body for job %d: %v", id, err)
+		http.Error(w, "failed to read body", http.StatusInternalServerError)
+		return
+	}
+	// Restore body after reading
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("[DEBUG] checkpoint payload for job %d: %s", id, string(bodyBytes))
 
 	type reqBody struct {
 		WorkerID     string    `json:"worker_id"`
@@ -44,6 +57,7 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	var req reqBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[DEBUG] checkpoint json decode failed for job %d: %v", id, err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -68,18 +82,23 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	job, err := q.GetJobByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			log.Printf("checkpoint failed: job %d not found", id)
 			http.Error(w, "job not found", http.StatusNotFound)
 			return
 		}
+		log.Printf("checkpoint failed: failed to fetch job %d: %v", id, err)
 		http.Error(w, "failed to fetch job", http.StatusInternalServerError)
 		return
 	}
 
 	if job.Status != "processing" {
-		http.Error(w, "job not processing", http.StatusBadRequest)
+		log.Printf("checkpoint failed: job %d status is %s, expected processing. Worker: %s", id, job.Status, req.WorkerID)
+		// Return 410 Gone to signal the worker to stop this job
+		http.Error(w, "job no longer active", http.StatusGone)
 		return
 	}
 	if !job.WorkerID.Valid || job.WorkerID.String != req.WorkerID {
+		log.Printf("checkpoint failed: job %d owned by %v, but checkpoint from %s", id, job.WorkerID.String, req.WorkerID)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

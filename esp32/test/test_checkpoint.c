@@ -99,6 +99,16 @@ void test_load_checkpoint_not_found(void)
     TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, err);
 }
 
+void test_clear_checkpoint_success(void)
+{
+    extern size_t g_test_nvs_blob_len;
+    g_test_nvs_blob_len = 50; // Mock something exists
+
+    esp_err_t err = nvs_clear_checkpoint((nvs_handle_t)0x1234);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+    TEST_ASSERT_EQUAL(0, g_test_nvs_blob_len); // Verify it was cleared
+}
+
 void test_load_checkpoint_invalid_magic(void)
 {
     job_checkpoint_t ckpt = {.job_id = 1, .timestamp = esp_timer_get_time() / 1000000ULL, .magic = 0xDEADBEEF};
@@ -113,6 +123,37 @@ void test_load_checkpoint_invalid_magic(void)
 
     esp_err_t err = load_checkpoint((nvs_handle_t)0x1234, &ckpt);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_CRC, err);
+}
+
+void test_clear_checkpoint_manual(void)
+{
+    extern size_t g_test_nvs_blob_len;
+    g_test_nvs_blob_len = 50; // Mock something exists
+
+    esp_err_t err = nvs_clear_checkpoint((nvs_handle_t)0x1234);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+    TEST_ASSERT_EQUAL(0, g_test_nvs_blob_len); // Verify it was cleared
+}
+
+void test_job_resume_clears_if_invalid_magic()
+{
+    extern size_t g_test_nvs_blob_len;
+    extern uint8_t g_test_nvs_blob[512];
+    extern global_state_t g_state;
+
+    // Save data with WRONG magic
+    job_checkpoint_t bad_ckpt = {.magic = 0xFFFF};
+    memcpy(g_test_nvs_blob, &bad_ckpt, sizeof(job_checkpoint_t));
+    g_test_nvs_blob_len = sizeof(job_checkpoint_t);
+
+    g_state.current_job.job_id = 0;
+
+    // This calls load_checkpoint and nvs_clear_checkpoint inside if invalid
+    // We'll test it indirectly by observing State/NVS
+    job_resume_from_nvs();
+
+    TEST_ASSERT_EQUAL(0, g_state.current_job.job_id);
+    TEST_ASSERT_EQUAL(0, g_test_nvs_blob_len); // NVS should have been cleared
 }
 
 void test_recovery_logic_resumption(void)

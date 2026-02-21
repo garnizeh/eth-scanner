@@ -51,6 +51,38 @@ void test_api_submit_result()
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
 
+// Resiliency Tests for Job Synchronization
+
+void test_checkpoint_404_rejected()
+{
+    // Simulate server returning 404 for a checkpoint
+    extern int g_mock_http_status;
+    g_mock_http_status = 404;
+
+    esp_err_t err = api_checkpoint(999, "test-worker", 500, 500, 1000);
+    // Should return ESP_ERR_INVALID_STATE based on our recent changes
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
+}
+
+void test_checkpoint_410_rejected()
+{
+    // Simulate server returning 410 (Gone) for a checkpoint
+    extern int g_mock_http_status;
+    g_mock_http_status = 410;
+
+    esp_err_t err = api_checkpoint(999, "test-worker", 500, 500, 1000);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
+}
+
+void test_complete_410_rejected()
+{
+    extern int g_mock_http_status;
+    g_mock_http_status = 410;
+
+    esp_err_t err = api_complete(999, "test-worker", 10000, 10000, 5000);
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
+}
+
 extern global_state_t g_state;
 
 void test_result_queue_flow()

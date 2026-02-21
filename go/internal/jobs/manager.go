@@ -175,19 +175,19 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 		if alloc > remaining {
 			alloc = remaining
 		}
-		nonceEnd64 := nonceStart + alloc - 1
-		// ensure values fit in uint32 before converting (silence static analyzers)
-		if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
+		nonceEnd64 := nonceStart + alloc
+		// ensure values fit in uint32 before converting
+		if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
 			return 0, 0, fmt.Errorf("nonce range overflow")
 		}
 		return uint32(nonceStart), uint32(nonceEnd64), nil
 	}
 
-	if lastEnd >= uint64(math.MaxUint32) {
+	if lastEnd > uint64(math.MaxUint32) {
 		return 0, 0, ErrPrefixExhausted
 	}
 
-	nonceStart := lastEnd + 1
+	nonceStart := lastEnd
 	if nonceStart > uint64(math.MaxUint32) {
 		return 0, 0, fmt.Errorf("nonceStart overflow")
 	}
@@ -201,10 +201,10 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 	if alloc > remaining {
 		alloc = remaining
 	}
-	nonceEnd64 := nonceStart + alloc - 1
+	nonceEnd64 := nonceStart + alloc
 
-	// ensure values fit in uint32 before converting (silence static analyzers)
-	if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
+	// ensure values fit in uint32 before converting
+	if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
 		return 0, 0, fmt.Errorf("nonce range overflow")
 	}
 	return uint32(nonceStart), uint32(nonceEnd64), nil

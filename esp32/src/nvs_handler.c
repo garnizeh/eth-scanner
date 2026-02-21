@@ -159,7 +159,8 @@ esp_err_t nvs_init_with_retry(void)
 esp_err_t job_resume_from_nvs(void)
 {
     job_checkpoint_t checkpoint;
-    if (load_checkpoint(g_state.nvs_handle, &checkpoint) == ESP_OK)
+    esp_err_t err = load_checkpoint(g_state.nvs_handle, &checkpoint);
+    if (err == ESP_OK)
     {
         ESP_LOGI(TAG, "RECOVERY: Found existing checkpoint for job %lld.", checkpoint.job_id);
         ESP_LOGI(TAG, "RECOVERY: Resuming from nonce %llu (Scanned: %llu)",
@@ -175,5 +176,10 @@ esp_err_t job_resume_from_nvs(void)
         atomic_store(&g_state.keys_scanned, checkpoint.keys_scanned);
         return ESP_OK;
     }
-    return ESP_ERR_NOT_FOUND;
+    else if (err == ESP_ERR_INVALID_CRC || err == ESP_ERR_INVALID_SIZE)
+    {
+        ESP_LOGW(TAG, "RECOVERY: Checkpoint corrupted during load, clearing NVS...");
+        nvs_clear_checkpoint(g_state.nvs_handle);
+    }
+    return err;
 }

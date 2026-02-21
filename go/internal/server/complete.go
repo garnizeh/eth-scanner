@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"path"
@@ -30,6 +32,17 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read and log raw body for debugging ESP32 payloads
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("[DEBUG] complete: failed to read body for job %d: %v", id, err)
+		http.Error(w, "failed to read body", http.StatusInternalServerError)
+		return
+	}
+	// Restore body after reading
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	log.Printf("[DEBUG] complete payload for job %d: %s", id, string(bodyBytes))
+
 	var req struct {
 		WorkerID    string    `json:"worker_id"`
 		FinalNonce  int64     `json:"final_nonce"`
@@ -38,6 +51,7 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		DurationMs  int64     `json:"duration_ms"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[DEBUG] complete json decode failed for job %d: %v", id, err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -61,18 +75,22 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 	job, err := q.GetJobByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			log.Printf("complete failed: job %d not found", id)
 			http.Error(w, "job not found", http.StatusNotFound)
 			return
 		}
+		log.Printf("complete failed: failed to fetch job %d: %v", id, err)
 		http.Error(w, "failed to fetch job", http.StatusInternalServerError)
 		return
 	}
 
 	if job.Status != "processing" {
-		http.Error(w, "job not processing", http.StatusBadRequest)
+		log.Printf("complete failed: job %d status is %s, expected processing. Worker: %s", id, job.Status, req.WorkerID)
+		http.Error(w, "job no longer active", http.StatusGone) // 410
 		return
 	}
 	if !job.WorkerID.Valid || job.WorkerID.String != req.WorkerID {
+		log.Printf("complete failed: job %d owned by %v, but complete from %s", id, job.WorkerID.String, req.WorkerID)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

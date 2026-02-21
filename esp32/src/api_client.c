@@ -6,6 +6,7 @@
 #include "mbedtls/base64.h"
 #include "api_client.h"
 #include "sdkconfig.h"
+#include "nvs_compat.h"
 
 static const char *TAG = "api_client";
 
@@ -88,7 +89,7 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
         .timeout_ms = 5000,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_handle_t client = esp_http_client_init_wr(&config);
     if (client == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
@@ -104,17 +105,17 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
 
     char *json_str = cJSON_PrintUnformatted(root);
 
-    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header_wr(client, "Content-Type", "application/json");
     if (json_str)
     {
-        esp_http_client_set_post_field(client, json_str, strlen(json_str));
+        esp_http_client_set_post_field_wr(client, json_str, strlen(json_str));
     }
 
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = esp_http_client_perform_wr(client);
 
     if (err == ESP_OK)
     {
-        int status = esp_http_client_get_status_code(client);
+        int status = esp_http_client_get_status_code_wr(client);
         if (status == 200)
         {
             cJSON *resp_json = cJSON_Parse(response_buffer);
@@ -196,7 +197,7 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
     cJSON_Delete(root);
     if (json_str)
         free(json_str);
-    esp_http_client_cleanup(client);
+    esp_http_client_cleanup_wr(client);
     free(response_buffer);
 
     return err;
@@ -216,7 +217,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
         .timeout_ms = 5000,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_handle_t client = esp_http_client_init_wr(&config);
     if (client == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize HTTP client for checkpoint");
@@ -233,26 +234,26 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
     if (!json_str)
     {
         cJSON_Delete(root);
-        esp_http_client_cleanup(client);
+        esp_http_client_cleanup_wr(client);
         return ESP_FAIL;
     }
 
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, json_str, strlen(json_str));
+    esp_http_client_set_header_wr(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field_wr(client, json_str, strlen(json_str));
 
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = esp_http_client_perform_wr(client);
 
     if (err == ESP_OK)
     {
-        int status = esp_http_client_get_status_code(client);
+        int status = esp_http_client_get_status_code_wr(client);
         if (status == 200)
         {
             // Success
         }
-        else if (status == 404)
+        else if (status == 404 || status == 410)
         {
-            ESP_LOGW(TAG, "Checkpoint failed: Job %lld not found (404)", job_id);
-            err = ESP_ERR_NOT_FOUND;
+            ESP_LOGW(TAG, "Checkpoint failed: Job %lld no longer valid on server (Status %d)", job_id, status);
+            err = ESP_ERR_INVALID_STATE;
         }
         else
         {
@@ -267,7 +268,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
 
     cJSON_Delete(root);
     free(json_str);
-    esp_http_client_cleanup(client);
+    esp_http_client_cleanup_wr(client);
 
     return err;
 }
@@ -286,7 +287,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
         .timeout_ms = 5000,
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_handle_t client = esp_http_client_init_wr(&config);
     if (client == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize HTTP client for complete");
@@ -303,26 +304,26 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
     if (!json_str)
     {
         cJSON_Delete(root);
-        esp_http_client_cleanup(client);
+        esp_http_client_cleanup_wr(client);
         return ESP_FAIL;
     }
 
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, json_str, strlen(json_str));
+    esp_http_client_set_header_wr(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field_wr(client, json_str, strlen(json_str));
 
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = esp_http_client_perform_wr(client);
 
     if (err == ESP_OK)
     {
-        int status = esp_http_client_get_status_code(client);
+        int status = esp_http_client_get_status_code_wr(client);
         if (status == 200)
         {
             // Success
         }
-        else if (status == 404)
+        else if (status == 404 || status == 410)
         {
-            ESP_LOGW(TAG, "Complete failed: Job %lld not found (404)", job_id);
-            err = ESP_ERR_NOT_FOUND;
+            ESP_LOGW(TAG, "Complete failed: Job %lld no longer valid on server (Status %d)", job_id, status);
+            err = ESP_ERR_INVALID_STATE;
         }
         else
         {
@@ -337,7 +338,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
 
     cJSON_Delete(root);
     free(json_str);
-    esp_http_client_cleanup(client);
+    esp_http_client_cleanup_wr(client);
 
     return err;
 }
@@ -356,7 +357,7 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
         .timeout_ms = 10000, // Longer timeout for critical submission
     };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+    esp_http_client_handle_t client = esp_http_client_init_wr(&config);
     if (client == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize HTTP client for result submission");
@@ -384,18 +385,18 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
     if (!json_str)
     {
         cJSON_Delete(root);
-        esp_http_client_cleanup(client);
+        esp_http_client_cleanup_wr(client);
         return ESP_FAIL;
     }
 
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, json_str, strlen(json_str));
+    esp_http_client_set_header_wr(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field_wr(client, json_str, strlen(json_str));
 
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = esp_http_client_perform_wr(client);
 
     if (err == ESP_OK)
     {
-        int status = esp_http_client_get_status_code(client);
+        int status = esp_http_client_get_status_code_wr(client);
         if (status != 200 && status != 201)
         {
             ESP_LOGE(TAG, "Result submission failed with HTTP status %d", status);
@@ -413,7 +414,7 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
 
     cJSON_Delete(root);
     free(json_str);
-    esp_http_client_cleanup(client);
+    esp_http_client_cleanup_wr(client);
 
     return err;
 }
