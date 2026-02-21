@@ -2,7 +2,7 @@
 
 EthScanner Distributed is an educational research project demonstrating a distributed key-scanning architecture (Master API + heterogeneous workers: PC and ESP32).
 
-**Project Status:** 🟢 Phase 8 Complete - Core components (Master API, PC worker, and ESP32 firmware foundations) implemented; starting Phase 9 (Integration, Testing & Validation).
+**Project Status:** 🟢 Phase 9 Complete - Integration, testing, and validation finished; starting Phase 10 (Dashboard & Monitoring UI).
 
 IMPORTANT: This project is for research/educational purposes only. Do NOT use it against real wallets with funds. Brute-forcing private keys is computationally infeasible and unethical when targeting active addresses.
 
@@ -93,9 +93,8 @@ MASTER_DB_PATH=./data/eth-scanner.db go run ./cmd/master
 ### Authentication
 Endpoints (except `/health`) require an `X-API-KEY` header if `MASTER_API_KEY` is configured.
 
-```bash
-curl -H "X-API-KEY: your-secret-key-here" http://localhost:8080/api/v1/jobs/lease
-```
+**Dashboard Security:**  
+The web-based dashboard (Phase 10) will be protected by a simple password authentication mechanism controlled via an environment variable (`DASHBOARD_PASSWORD`), without requiring a database for session management.
 
 ## Repository Layout
 ```
@@ -154,7 +153,7 @@ WORKER_MONTHLY_STATS_LIMIT=1000    # Monthly stats per worker
 See [Database Optimization Proposal](docs/architecture/db-optimization-proposal.md) for complete technical details.
 
 **Dashboard Integration:**  
-The multi-tier statistics architecture is designed to power a comprehensive web-based monitoring dashboard (Phase 11). Each tier serves specific dashboard use cases:
+The multi-tier statistics architecture is designed to power a comprehensive web-based monitoring dashboard (Phase 10). Each tier serves specific dashboard use cases:
 - **Tier 1 (worker_history)**: Real-time monitoring, live throughput graphs, recent errors
 - **Tier 2 (worker_stats_daily)**: 7-day trends, day-over-day comparison charts
 - **Tier 3 (worker_stats_monthly)**: Long-term trends, year-over-year analysis
@@ -169,9 +168,9 @@ The multi-tier statistics architecture is designed to power a comprehensive web-
 - [x] **Phase 6: PC Worker - Crypto & Scanning Engine** - Completed
 - [x] **Phase 7: ESP32 Worker - Core Infrastructure** - Completed
 - [x] **Phase 8: ESP32 Worker - Crypto & Computation** - Completed
-- [ ] **Phase 9: Integration, Testing & Validation** - Next (in progress)
-- [ ] **Phase 10: Documentation, Deployment & Monitoring** - (Planned)
-- [ ] **Phase 11: Dashboard & Monitoring UI** - (Planned)
+- [x] **Phase 9: Integration, Testing & Validation** - Completed
+- [ ] **Phase 10: Dashboard & Monitoring UI** - (Planned)
+- [ ] **Phase 11: Documentation, Deployment & Monitoring** - (Planned)
 - [ ] **Phase A01: Performance & Optimization (Adhoc Tasks)** - Ongoing optimizations including:
   - [x] Worker-specific prefix affinity (vertical exhaustion)
   - [x] Master background cleanup for stale jobs
