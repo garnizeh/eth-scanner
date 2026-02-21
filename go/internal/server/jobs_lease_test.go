@@ -238,11 +238,32 @@ func TestWorkerPrefixAffinity(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected prefix_28 string in resp1")
 	}
+	jobID1f, ok := out1["job_id"].(float64)
+	if !ok {
+		t.Fatalf("expected job_id in resp1")
+	}
+	jobID1 := int64(jobID1f)
 	end1f, ok := out1["nonce_end"].(float64)
 	if !ok {
 		t.Fatalf("expected nonce_end in resp1")
 	}
 	end1 := int64(end1f)
+
+	// complete the first job so worker-a is free to get a new one
+	completeReq := map[string]any{"worker_id": "worker-a", "final_nonce": end1, "keys_scanned": 100}
+	cb, _ := json.Marshal(completeReq)
+	cReq, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+fmt.Sprintf("/api/v1/jobs/%d/complete", jobID1), bytes.NewReader(cb))
+	cReq.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	//nolint:gosec // false positive: SSRF in test
+	cResp, err := client.Do(cReq)
+	if err != nil {
+		t.Fatalf("complete first job failed: %v", err)
+	}
+	if cResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for complete, got %d", cResp.StatusCode)
+	}
+	_ = cResp.Body.Close()
 
 	// second lease for same worker should continue same prefix
 	status2, out2 := postLease(t, ts.URL, map[string]any{"worker_id": "worker-a", "requested_batch_size": 100})

@@ -68,11 +68,18 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 	apiURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	ok := false
 	for range 20 {
-		resp, err := http.Get(apiURL + "/health")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/health", nil)
+		if err != nil {
+			t.Fatalf("failed to create health check request: %v", err)
+		}
+		resp, err := http.DefaultClient.Do(req) // #nosec G107 G704
 		if err == nil && resp.StatusCode == http.StatusOK {
 			_ = resp.Body.Close()
 			ok = true
 			break
+		}
+		if err == nil {
+			_ = resp.Body.Close()
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -92,7 +99,9 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 			"requested_batch_size": 50000,
 		}
 		body, _ := json.Marshal(leaseReq)
-		resp, err := client.Post(apiURL+"/api/v1/jobs/lease", "application/json", bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/jobs/lease", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req) // #nosec G107 G704
 		if err != nil {
 			t.Fatalf("lease failed: %v", err)
 		}
@@ -135,9 +144,9 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 			// Note: StartedAt is omitted as per api_client.c:198
 		}
 		body, _ := json.Marshal(checkpointReq)
-		req, _ := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/api/v1/jobs/%d/checkpoint", apiURL, jobID), bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/jobs/%d/checkpoint", apiURL, jobID), bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) // #nosec G107 G704
 		if err != nil {
 			t.Fatalf("checkpoint failed: %v", err)
 		}
@@ -166,7 +175,9 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 			"address":     "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
 		}
 		body, _ := json.Marshal(resultReq)
-		resp, err := client.Post(apiURL+"/api/v1/results", "application/json", bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, apiURL+"/api/v1/results", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req) // #nosec G107 G704
 		if err != nil {
 			t.Fatalf("submit result failed: %v", err)
 		}
@@ -186,7 +197,9 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 			"duration_ms":  5000,
 		}
 		body, _ := json.Marshal(completeReq)
-		resp, err := client.Post(fmt.Sprintf("%s/api/v1/jobs/%d/complete", apiURL, jobID), "application/json", bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/jobs/%d/complete", apiURL, jobID), bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req) // #nosec G107 G704
 		if err != nil {
 			t.Fatalf("complete failed: %v", err)
 		}
