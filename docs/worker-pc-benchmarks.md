@@ -2,54 +2,44 @@
 
 This document records the throughput and performance characteristics of the PC Worker scanning engine.
 
-**Last Updated:** February 16, 2026
-**Hardware Specs:** Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz (28 Cores)
+**Last Updated:** February 21, 2026
+**Hardware Specs:** Intel(R) Xeon(R) CPU E5-2690 v4 @ 2.60GHz (14 Cores / 28 Threads)
 **Go Version:** 1.26
 
 ---
 
-## Core Operations
+## Core Operations (Isolated)
+
+Measured by `internal/worker/crypto_bench_test.go`. These measure the raw cryptographic operations without loop overhead.
 
 | Operation | Latency (ns/op) | Throughput (keys/sec) | Allocations (B/op) | Allocs/op |
 |-----------|----------------|----------------------|--------------------|-----------|
-| **ConstructPrivateKey** | 1.87 ns | 534,473,543 | 0 | 0 |
-| **Derive (Standard)** | 63,844 ns | 15,663 | 641 | 13 |
-| **Derive (Fast)**     | 46,916 ns | 21,315 | 80 | 0 |
-| **Derive (Parallel)** | 2,758 ns | 362,622 | 0 | 0 |
+| **ConstructPrivateKey** | 1.89 ns | 526,777,828 | 0 | 0 |
+| **Derive (Standard)** | 61,304 ns | 16,312 | 641 | 13 |
+| **Derive (Fast)**     | 50,341 ns | 19,865 | 97 | 0 |
+| **Derive (Parallel-28)** | 2,651 ns | 377,147 | 0 | 0 |
 
-### How measured
-
-Command used to reproduce core op micro-benchmarks:
-
-```bash
-cd /home/user/code/garnizeh/eth-scanner/go && \
-	go test -run '^$' -bench='BenchmarkConstructPrivateKey|BenchmarkDerive' -benchmem ./internal/worker
-```
-
-Latest run (2026-02-16): measurements were collected on the same Intel E5-2690 v4 machine listed above; values shown in the table are the representative medians from those runs.
-
-Notes:
-- These microbenchmarks exercise hot-path functions in `internal/worker` and are single-core measurements unless marked Parallel.
-- Use `-run '^$'` and `-benchmem` to reproduce identical measurement conditions.
 ---
 
 ## Scanning Loop (ScanRange)
 
-Measured by scanning various nonce ranges. Values are per-core unless specified as Parallel.
+Measured by `internal/worker/scanner_bench_test.go` with a **non-zero 28-byte prefix**. Using a zero prefix artificially inflates results due to `secp256k1` optimizations for small scalars.
 
-| Range Size | Latency | Single-Threaded (keys/sec) | Parallel (keys/sec) |
-|------------|---------|---------------------------|---------------------|
-| **1,000**  | 165 ms  | 60,369                    | 52,067              |
-| **100,000**| 1.71 s  | 58,340                    | 78,606              |
-| **1,000,000**| 17.9 s| 55,866                    | 659,606             |
+| Range Size | Single-Threaded (keys/sec) | Parallel (28 Threads) (keys/sec) | Scaling Factor |
+|------------|---------------------------|----------------------------------|----------------|
+| **1,000**  | 21,307                    | 21,247                           | 1.0x           |
+| **100,000**| 23,773                    | 34,924                           | 1.5x           |
+| **1,000,000**| 23,533                  | 270,550                          | 11.5x          |
 
 ### Analysis
 
-1. **Parallel Scaling:** On the 28-core test machine, the parallel scanner achieved ~660,000 keys/sec on a range of 1 million nonces, representing a ~11.8x speedup over single-threaded execution for that specific range size. 
-2. **Optimizations:** The "Fast" derivation path reduces allocations to zero and provides a ~36% throughput improvement over the standard `go-ethereum` path.
-3. **Bottleneck:** Cryptographic scalar multiplication (secp256k1) remains the primary bottleneck. The `ConstructPrivateKey` overhead is negligible (< 2ns).
+1. **Parallel Scaling:** On the 28-thread test machine (14 physical cores), the parallel scanner achieved ~270,550 keys/sec on a range of 1 million nonces. Scaling is efficient (~82%) relative to physical cores.
+2. **Realistic Prefix:** Previous benchmarks (Feb 16) used a zero-prefix and showed ~60k keys/sec single-threaded. Real-world random prefixes result in ~23k keys/sec per core.
+3. **Capacity Estimation:** A baseline throughput of 270k keys/sec implies ~972 million keys per hour.
+4. **Master API Adjustment:** The Master API `maxBatchSize` has been increased from 10M to 4B to allow workers to request batches that actually cover ~1 hour of work.
 
 ---
+
 
 ## How to Run Benchmarks
 
