@@ -68,6 +68,7 @@ bin/
 *.dll
 *.so
 *.dylib
+docs/api/tests/tmp/
 
 # Go
 /go/bin/
