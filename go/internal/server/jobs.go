@@ -76,6 +76,16 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Always heartbeat the worker if a type is provided
+	// This ensures the dashboard sees the worker as active.
+	if req.WorkerType != "" {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: req.WorkerType,
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
+
 	// Build response
 	type resp struct {
 		JobID           int64    `json:"job_id"`
@@ -223,10 +233,6 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 	if err != nil {
 		log.Printf("get job by id failed after create: %v", err)
 		return nil, fmt.Errorf("get job by id: %w", err)
-	}
-	// Register or heartbeat this worker in workers table
-	if workerType != "" {
-		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{ID: workerID, WorkerType: workerType, Metadata: sql.NullString{Valid: false}})
 	}
 	return &updated, nil
 }

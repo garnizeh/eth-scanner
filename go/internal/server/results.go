@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -52,6 +53,15 @@ func (s *Server) handleResultSubmit(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	q := database.NewQueries(s.db)
+
+	// Heartbeat the worker on match submission
+	if req.WorkerID != "" {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: "unknown", // refined if it exists in the workers table already
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
 
 	params := database.InsertResultParams{
 		PrivateKey: req.PrivateKey,

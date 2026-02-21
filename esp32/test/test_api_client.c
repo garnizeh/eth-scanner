@@ -42,10 +42,12 @@ void test_api_complete()
 
 void test_api_submit_result()
 {
-    uint8_t priv_key[32] = {0x01, 0x02, 0x03, 0x04};
-    uint8_t address[20] = {0xaa, 0xbb, 0xcc, 0xdd};
+    uint8_t priv_key[32];
+    uint8_t address[20];
+    memset(priv_key, 0x01, sizeof(priv_key));
+    memset(address, 0xAA, sizeof(address));
 
-    esp_err_t err = api_submit_result(42, "test-worker", priv_key, address);
+    esp_err_t err = api_submit_result(42, "test-worker", priv_key, address, 123456);
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
 
@@ -68,6 +70,7 @@ void test_result_queue_flow()
     // Push test result
     found_result_t res;
     res.job_id = 1234;
+    res.nonce_found = 5678;
     memset(res.private_key, 0xDD, 32);
 
     BaseType_t q_ret = xQueueSend(g_state.found_results_queue, &res, 0);
@@ -78,6 +81,7 @@ void test_result_queue_flow()
     q_ret = xQueueReceive(g_state.found_results_queue, &read_res, 0);
     TEST_ASSERT_EQUAL(pdTRUE, q_ret);
     TEST_ASSERT_EQUAL(1234, read_res.job_id);
+    TEST_ASSERT_EQUAL(5678, read_res.nonce_found);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(res.private_key, read_res.private_key, 32);
 
     // Since we are in simulation, we don't call api_submit_result here to avoid

@@ -10,6 +10,7 @@ tool (
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/ethereum/go-ethereum v1.16.8
+	github.com/gorilla/websocket v1.5.3
 	github.com/pressly/goose/v3 v3.26.0
 	modernc.org/sqlite v1.45.0
 )

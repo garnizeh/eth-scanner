@@ -111,7 +111,7 @@ test-coverage:
 # Generate sqlc code
 sqlc:
 	@echo "Generating sqlc code..."
-	@sqlc generate
+	@go tool sqlc generate
 	@echo "✓ Database code generated"
 
 # Run master API server

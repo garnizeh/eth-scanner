@@ -28,6 +28,48 @@ static StaticTask_t core0_task_buffer;
 static StackType_t core1_stack[CORE1_STACK_SIZE];
 static StaticTask_t core1_task_buffer;
 
+static bool start_core1_task(void)
+{
+    if (g_state.core1_task_handle != NULL)
+    {
+        return true;
+    }
+
+    g_state.core1_task_handle = xTaskCreateStaticPinnedToCore(
+        core1_worker_task,
+        "core1_worker",
+        CORE1_STACK_SIZE,
+        NULL,
+        10,
+        core1_stack,
+        &core1_task_buffer,
+        1 // APP_CPU (Core 1)
+    );
+
+    if (g_state.core1_task_handle == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create Core 1 worker task!");
+        return false;
+    }
+
+    ESP_LOGI(TAG, "Core 1 worker task created.");
+    return true;
+}
+
+static void stop_core1_task(void)
+{
+    if (g_state.core1_task_handle == NULL)
+    {
+        return;
+    }
+
+    g_state.job_active = false;
+    vTaskDelete(g_state.core1_task_handle);
+    g_state.core1_task_handle = NULL;
+    set_led_status(LED_WIFI_CONNECTING);
+    ESP_LOGW(TAG, "Core 1 worker task stopped due to WiFi disconnect.");
+}
+
 /* Timer callback for periodic checkpoints */
 static void checkpoint_timer_callback(TimerHandle_t xTimer)
 {
@@ -56,14 +98,14 @@ void start_core_tasks(void)
         ESP_LOGI(TAG, "Checkpoint timer initialized (interval: %d ms)", CHECKPOINT_INTERVAL_MS);
     }
 
-    // Create tasks pinned to cores
+    // Create tasks pinned to cores — Core 0 handles system and interrupts
     // Core 0: PRO_CPU (Networking, API, Misc)
     g_state.core0_task_handle = xTaskCreateStaticPinnedToCore(
         core0_system_task,
         "core0_system",
         CORE0_STACK_SIZE,
         NULL,
-        5, // Priority
+        8, // Increased priority (above default event loop task)
         core0_stack,
         &core0_task_buffer,
         0 // Core 0
@@ -74,24 +116,7 @@ void start_core_tasks(void)
         ESP_LOGE(TAG, "Failed to create Core 0 system task!");
     }
 
-    // Create Core 1 task statically for maximum stability and priority
-    g_state.core1_task_handle = xTaskCreateStaticPinnedToCore(
-        core1_worker_task,
-        "core1_worker",
-        CORE1_STACK_SIZE,
-        NULL,
-        configMAX_PRIORITIES - 1, // Highest priority
-        core1_stack,
-        &core1_task_buffer,
-        1 // APP_CPU (Core 1)
-    );
-
-    if (g_state.core1_task_handle == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to create Core 1 worker task!");
-    }
-
-    ESP_LOGI(TAG, "All core tasks spawned.");
+    ESP_LOGI(TAG, "Core 0 system task spawned. Core 1 will start only after WiFi connects.");
 }
 
 // System Management Task (Networking, API, Monitoring) - Core 0
@@ -99,10 +124,12 @@ void core0_system_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting System Task on Core %d", xPortGetCoreID());
 
-    // Initialize WiFi
+    // Initialize WiFi (non-blocking process start)
     wifi_init_sta();
 
+    ESP_LOGI(TAG, "System Task: Entering management loop.");
     uint32_t notifications = 0;
+    bool last_wifi_connected = false;
 
     // Maintenance loop
     while (1)
@@ -112,6 +139,46 @@ void core0_system_task(void *pvParameters)
 
         // Check WiFi status and update global state
         g_state.wifi_connected = is_wifi_connected();
+
+        if (g_state.wifi_connected && !last_wifi_connected)
+        {
+            ESP_LOGI(TAG, "WiFi connected: enabling Core 1 worker.");
+            if (start_core1_task() && !g_state.should_stop && g_state.current_job.job_id != 0)
+            {
+                g_state.job_active = true;
+                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+            }
+        }
+        else if (!g_state.wifi_connected && last_wifi_connected)
+        {
+            ESP_LOGW(TAG, "WiFi disconnected: disabling Core 1 worker.");
+
+            if (g_state.job_active && g_state.current_job.job_id != 0)
+            {
+                uint64_t current = atomic_load(&g_state.current_nonce);
+                uint64_t scanned = atomic_load(&g_state.keys_scanned);
+
+                job_checkpoint_t cp = {0};
+                cp.job_id = g_state.current_job.job_id;
+                memcpy(cp.prefix_28, g_state.current_job.prefix_28, PREFIX_28_SIZE);
+                cp.nonce_start = g_state.current_job.nonce_start;
+                cp.nonce_end = g_state.current_job.nonce_end;
+                cp.current_nonce = current;
+                cp.keys_scanned = scanned;
+                cp.timestamp = (uint64_t)time(NULL);
+                cp.magic = 0xACE1;
+
+                esp_err_t cp_err = save_checkpoint(g_state.nvs_handle, &cp);
+                if (cp_err != ESP_OK)
+                {
+                    ESP_LOGE(TAG, "Failed to save checkpoint on WiFi disconnect: %s", esp_err_to_name(cp_err));
+                }
+            }
+
+            stop_core1_task();
+        }
+
+        last_wifi_connected = g_state.wifi_connected;
 
         // Handle Checkpoint Signal
         if (notifications & NOTIFY_BIT_CHECKPOINT)
@@ -143,7 +210,14 @@ void core0_system_task(void *pvParameters)
                 // If WiFi is connected, report to API as well
                 if (g_state.wifi_connected)
                 {
-                    api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, 0); // TODO: Track actual duration
+                    esp_err_t err = api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, 0); // TODO: Track actual duration
+                    if (err == ESP_ERR_NOT_FOUND)
+                    {
+                        ESP_LOGW(TAG, "Job %lld not found on server! Abandoning.", cp.job_id);
+                        g_state.job_active = false;
+                        g_state.current_job.job_id = 0;
+                        nvs_clear_checkpoint(g_state.nvs_handle);
+                    }
                 }
             }
         }
@@ -188,7 +262,7 @@ void core0_system_task(void *pvParameters)
                 {
                     uint8_t derived_addr[20];
                     derive_eth_address(res.private_key, derived_addr);
-                    api_submit_result(res.job_id, g_state.worker_id, res.private_key, derived_addr);
+                    api_submit_result(res.job_id, g_state.worker_id, res.private_key, derived_addr, res.nonce_found);
                 }
                 else
                 {
@@ -206,12 +280,15 @@ void core0_system_task(void *pvParameters)
         }
 
         // P08-T120: Check if we just recovered a job from NVS and activate it immediately (even offline)
-        if (!g_state.job_active && !g_state.should_stop && g_state.current_job.job_id != 0)
+        if (g_state.wifi_connected && !g_state.job_active && !g_state.should_stop && g_state.current_job.job_id != 0)
         {
             ESP_LOGI(TAG, "RECOVERY: Activating recovered job %lld from nonce %llu (Initial Status: Offline-ready)",
                      g_state.current_job.job_id, (unsigned long long)atomic_load(&g_state.current_nonce));
             g_state.job_active = true;
-            xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+            if (g_state.core1_task_handle != NULL)
+            {
+                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+            }
         }
 
         if (g_state.wifi_connected && !g_state.job_active)
@@ -248,7 +325,10 @@ void core0_system_task(void *pvParameters)
                 save_checkpoint(g_state.nvs_handle, &cp);
 
                 // Signal Core 1 task to start working
-                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+                if (g_state.core1_task_handle != NULL)
+                {
+                    xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+                }
             }
             else if (err == ESP_ERR_NOT_FOUND)
             {
@@ -272,11 +352,10 @@ void core0_system_task(void *pvParameters)
 // Computation Task (The "Hot Loop") - Core 1
 void core1_worker_task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "Starting Computation Task on Core %d with priority %d",
-             xPortGetCoreID(), uxTaskPriorityGet(NULL));
+    ESP_LOGI(TAG, "Core 1: Worker task started (WiFi already connected).");
+    vTaskPrioritySet(NULL, configMAX_PRIORITIES - 2);
 
-    vTaskDelay(pdMS_TO_TICKS(5000)); // Standard startup delay
-
+    ESP_LOGI(TAG, "Core 1: Worker state machine active (Waiting for jobs).");
     uint32_t notifications = 0;
     uint8_t priv_key[32] __attribute__((aligned(4))) = {0};
 
@@ -351,6 +430,7 @@ void core1_worker_task(void *pvParameters)
 
                         found_result_t res;
                         res.job_id = g_state.current_job.job_id;
+                        res.nonce_found = current;
                         memcpy(res.private_key, priv_key, 32);
 
                         if (xQueueSend(g_state.found_results_queue, &res, 0) == pdTRUE)
@@ -399,10 +479,9 @@ void core1_worker_task(void *pvParameters)
                                  (unsigned long)session_scanned);
                     }
 
-                    // Frequently yield to allow IDLE task to reset WDT (P08)
-                    // We use a safe interval (approx 1-2 seconds) based on throughput
-                    uint32_t yield_mask = (throughput > 400) ? 0xFF : 0x3F;
-                    if ((progress & yield_mask) == 0)
+                    // Frequently yield to allow system tasks and IDLE to reset WDT.
+                    // Yielding every 128 keys (approx once every 150-250ms) is a good balance.
+                    if ((progress & 0x7F) == 0)
                     {
                         vTaskDelay(1);
                     }

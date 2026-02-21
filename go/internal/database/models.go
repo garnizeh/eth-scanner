@@ -38,19 +38,20 @@ type Result struct {
 }
 
 type StatsSummary struct {
-	PendingBatches    int64           `json:"pending_batches"`
-	ProcessingBatches int64           `json:"processing_batches"`
-	CompletedBatches  int64           `json:"completed_batches"`
-	TotalBatches      int64           `json:"total_batches"`
-	TotalKeysScanned  interface{}     `json:"total_keys_scanned"`
-	AvgPcBatchSize    sql.NullFloat64 `json:"avg_pc_batch_size"`
-	AvgEsp32BatchSize sql.NullFloat64 `json:"avg_esp32_batch_size"`
-	ResultsFound      int64           `json:"results_found"`
-	TotalWorkers      int64           `json:"total_workers"`
-	ActiveWorkers     int64           `json:"active_workers"`
-	PcWorkers         int64           `json:"pc_workers"`
-	Esp32Workers      int64           `json:"esp32_workers"`
-	ActivePrefixes    int64           `json:"active_prefixes"`
+	PendingBatches      int64           `json:"pending_batches"`
+	ProcessingBatches   int64           `json:"processing_batches"`
+	CompletedBatches    int64           `json:"completed_batches"`
+	TotalBatches        int64           `json:"total_batches"`
+	TotalKeysScanned    interface{}     `json:"total_keys_scanned"`
+	AvgPcBatchSize      sql.NullFloat64 `json:"avg_pc_batch_size"`
+	AvgEsp32BatchSize   sql.NullFloat64 `json:"avg_esp32_batch_size"`
+	ResultsFound        int64           `json:"results_found"`
+	TotalWorkers        int64           `json:"total_workers"`
+	ActiveWorkers       int64           `json:"active_workers"`
+	PcWorkers           int64           `json:"pc_workers"`
+	Esp32Workers        int64           `json:"esp32_workers"`
+	GlobalKeysPerSecond interface{}     `json:"global_keys_per_second"`
+	ActivePrefixes      int64           `json:"active_prefixes"`
 }
 
 type Worker struct {

@@ -55,6 +55,16 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := database.NewQueries(s.db)
 
+	// Always heartbeat even if the job doesn't exist
+	// This helps with visibility when a worker is stuck in an old job after a master reset.
+	if req.WorkerID != "" {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: "unknown", // can't accurately know type from body yet, but it beats 0
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
+
 	job, err := q.GetJobByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -104,6 +114,15 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Register or heartbeat this worker in workers table
+	if updated.WorkerType.Valid {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: updated.WorkerType.String,
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
+
 	type resp struct {
 		JobID        int64   `json:"job_id"`
 		CurrentNonce int64   `json:"current_nonce"`
@@ -130,15 +149,17 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// choose batch size: prefers requested_batch_size if present
-		var batchSize interface{}
+		var batchSize any
 		if updated.RequestedBatchSize.Valid {
 			batchSize = updated.RequestedBatchSize.Int64
 		} else {
 			batchSize = dk
 		}
 
+		ctx := context.Background()
+
 		// Insert into worker_history (finished_at uses UTC now)
-		_, err := s.db.ExecContext(context.Background(), `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
+		_, err := s.db.ExecContext(ctx, `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
 			req.WorkerID,
 			updated.WorkerType.String,
 			updated.ID,
@@ -153,6 +174,8 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on checkpoint: %v", err)
 		}
+		// Trigger real-time broadcast of refreshed fleet stats
+		s.broadcastStats(ctx)
 	}(deltaKeys, deltaDuration)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)

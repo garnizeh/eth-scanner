@@ -80,6 +80,9 @@ func (s *Server) RegisterRoutes() {
 	s.router.Handle("/dashboard", s.DashboardAuth(http.HandlerFunc(s.handleDashboard)))
 	s.router.Handle("/dashboard/", s.DashboardAuth(http.HandlerFunc(s.handleDashboard)))
 
+	// WebSocket endpoint for dashboard real-time updates (protected by DashboardAuth)
+	s.router.Handle("/api/v1/ws", s.DashboardAuth(http.HandlerFunc(s.handleWS)))
+
 	// Static files serving from embedded FS (public)
 	s.router.Handle("/static/", http.FileServer(http.FS(ui.FS)))
 

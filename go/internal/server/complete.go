@@ -49,6 +49,15 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := database.NewQueries(s.db)
 
+	// Always heartbeat even if the job doesn't exist for better visibility.
+	if req.WorkerID != "" {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: "unknown", // placeholder that will be refined if job is found
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
+
 	job, err := q.GetJobByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -103,6 +112,15 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Register or heartbeat this worker in workers table
+	if updated.WorkerType.Valid {
+		_ = q.UpsertWorker(ctx, database.UpsertWorkerParams{
+			ID:         req.WorkerID,
+			WorkerType: updated.WorkerType.String,
+			Metadata:   sql.NullString{Valid: false},
+		})
+	}
+
 	type resp struct {
 		JobID       int64   `json:"job_id"`
 		Status      string  `json:"status"`
@@ -136,7 +154,8 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 			batchSize = dk
 		}
 
-		_, err := s.db.ExecContext(context.Background(), `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
+		ctx := context.Background()
+		_, err := s.db.ExecContext(ctx, `INSERT INTO worker_history (worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))`,
 			req.WorkerID,
 			updated.WorkerType.String,
 			updated.ID,
@@ -151,6 +170,8 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on complete: %v", err)
 		}
+		// Trigger real-time broadcast of refreshed fleet stats
+		s.broadcastStats(ctx)
 	}(deltaKeys, deltaDuration)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)

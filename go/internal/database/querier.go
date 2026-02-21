@@ -10,7 +10,7 @@ import (
 )
 
 type Querier interface {
-	// Clear worker assignment for long-stale processing jobs so they can be re-leased
+	// Clear worker assignment for long-stale processing jobs so they can be re-leased.
 	CleanupStaleJobs(ctx context.Context, thresholdSeconds sql.NullString) error
 	// Mark a batch as completed
 	CompleteBatch(ctx context.Context, arg CompleteBatchParams) error
@@ -26,6 +26,7 @@ type Querier interface {
 	GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString) ([]Worker, error)
 	// Get all results (limited)
 	GetAllResults(ctx context.Context, limit int64) ([]Result, error)
+	// Get lifetime stats for all workers, ordered by total keys scanned
 	GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error)
 	// Get a specific job by ID
 	GetJobByID(ctx context.Context, id int64) (Job, error)
@@ -37,6 +38,7 @@ type Querier interface {
 	GetNextNonceRange(ctx context.Context, prefix28 []byte) (interface{}, error)
 	// Get usage statistics per prefix
 	GetPrefixUsage(ctx context.Context, limit int64) ([]GetPrefixUsageRow, error)
+	// Get recent worker history records for the last N seconds
 	GetRecentWorkerHistory(ctx context.Context, arg GetRecentWorkerHistoryParams) ([]WorkerHistory, error)
 	// Find a result by private key
 	GetResultByPrivateKey(ctx context.Context, privateKey string) (Result, error)
@@ -51,7 +53,9 @@ type Querier interface {
 	GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]WorkerStatsDaily, error)
 	// Tracks the last prefix assigned to a worker to enable vertical exhaustion
 	GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error)
+	// Get lifetime stats for a worker
 	GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error)
+	// Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
 	GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error)
 	// Get statistics per worker
 	GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerStatsRow, error)

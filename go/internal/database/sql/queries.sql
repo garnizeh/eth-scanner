@@ -203,6 +203,7 @@ INSERT INTO worker_history (
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetRecentWorkerHistory :many
+-- Get recent worker history records for the last N seconds
 SELECT * FROM worker_history
 WHERE finished_at > datetime('now', '-' || ? || ' seconds')
 ORDER BY finished_at DESC
@@ -216,15 +217,18 @@ WHERE worker_id = ? AND stats_date >= substr(?, 1, 10)
 ORDER BY stats_date DESC;
 
 -- name: GetWorkerMonthlyStats :many
+-- Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
 SELECT * FROM worker_stats_monthly
 WHERE worker_id = ? AND stats_month >= ?
 ORDER BY stats_month DESC;
 
 -- name: GetWorkerLifetimeStats :one
+-- Get lifetime stats for a worker
 SELECT * FROM worker_stats_lifetime
 WHERE worker_id = ? LIMIT 1;
 
 -- name: GetAllWorkerLifetimeStats :many
+-- Get lifetime stats for all workers, ordered by total keys scanned
 SELECT * FROM worker_stats_lifetime
 ORDER BY total_keys_scanned DESC;
 
@@ -247,9 +251,9 @@ LIMIT ?;
 -- name: CleanupStaleJobs :exec
 -- Clear worker assignment for long-stale processing jobs so they can be re-leased.
 UPDATE jobs
-SET worker_id = NULL, status = "pending", expires_at = NULL
-WHERE status = "processing"
+SET worker_id = NULL, status = 'pending', expires_at = NULL
+WHERE status = 'processing'
     AND (
-        (last_checkpoint_at IS NOT NULL AND last_checkpoint_at < datetime("now", "utc", "-" || :threshold_seconds || " seconds"))
-        OR (last_checkpoint_at IS NULL AND created_at < datetime("now", "utc", "-" || :threshold_seconds || " seconds"))
+        (last_checkpoint_at IS NOT NULL AND last_checkpoint_at < datetime('now', 'utc', '-' || :threshold_seconds || ' seconds'))
+        OR (last_checkpoint_at IS NULL AND created_at < datetime('now', 'utc', '-' || :threshold_seconds || ' seconds'))
     );

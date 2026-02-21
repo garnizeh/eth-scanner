@@ -2,11 +2,13 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -79,6 +81,27 @@ func (w *statusCapturingResponseWriter) Write(b []byte) (int, error) {
 		return n, fmt.Errorf("response write: %w", err)
 	}
 	return n, nil
+}
+
+// Hijack implements the http.Hijacker interface.
+// This is required for WebSocket upgrades when the ResponseWriter is wrapped.
+func (w *statusCapturingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not implement http.Hijacker")
+	}
+	conn, rw, err := h.Hijack()
+	if err != nil {
+		return nil, nil, fmt.Errorf("hijack response: %w", err)
+	}
+	return conn, rw, nil
+}
+
+// Flush implements the http.Flusher interface.
+func (w *statusCapturingResponseWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // CORS sets permissive CORS headers for development and handles preflight OPTIONS.

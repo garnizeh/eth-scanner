@@ -12,7 +12,8 @@ void core0_system_task(void *pvParameters);
 void core1_worker_task(void *pvParameters);
 
 /**
- * @brief Spawns Core 0 and Core 1 tasks, and initializes the periodic checkpoint timer.
+ * @brief Spawns Core 0 and initializes the periodic checkpoint timer.
+ *        Core 1 is created dynamically only when WiFi is connected.
  */
 void start_core_tasks(void);
 

@@ -158,9 +158,9 @@ func TestDashboardAuthMiddleware(t *testing.T) {
 	cfg := &config.Config{DashboardPassword: password}
 	s, _ := New(cfg, nil)
 
-	handler := s.DashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := s.DashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("protected content"))
+		_, _ = w.Write([]byte("protected content"))
 	}))
 
 	t.Run("redirects to login if no cookie", func(t *testing.T) {
@@ -227,7 +227,7 @@ func TestGetSessionToken(t *testing.T) {
 func TestDashboardAuth_NoPassword(t *testing.T) {
 	// If DashboardPassword is empty, isAuthenticated should always return true.
 	s, _ := New(&config.Config{DashboardPassword: ""}, nil)
-	handler := s.DashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := s.DashboardAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
