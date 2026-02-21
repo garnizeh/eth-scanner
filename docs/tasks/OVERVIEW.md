@@ -197,7 +197,7 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 | P08-T100 | Implement result submission (Core 1 notifies Core 0 via **FreeRTOS Queue**). | High | P08-T090 | ✅ Completed |
 | P08-T110 | Optimize memory: Use `StaticTask_t` for worker tasks to ensure no heap churn. | Medium | P08-T070 | ✅ Completed |
 | P08-T120 | Validate NVS recovery and Task Watchdog (TWDT) resilience under 100% CPU load. | High | P07-T070 | ✅ Completed |
-| P08-T130 | Long-haul Stress Test (30-60m running against Master API + manual resets). | High | P08-T120 | [In Backlog] |
+| P08-T130 | Long-haul Stress Test (30-60m running against Master API + manual resets). | High | P08-T120 | ✅ Completed |
 
 ## Technical Notes
 
@@ -214,67 +214,49 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 ### Phase 09: Integration, Testing & Validation
 **Goal:** Ensure all components work together correctly with comprehensive testing.
 
-| Task ID | Description | Priority | Dependencies |
-|---------|-------------|----------|--------------|
-| P09-T010 | Write unit tests for `internal/jobs/manager.go` | High | P04-T010 |
-| P09-T020 | Write unit tests for `internal/worker/crypto.go` | High | P06-T020 |
-| P09-T030 | Write unit tests for nonce range allocation logic | High | P04-T030 |
-| P09-T040 | Write integration test: Master API + SQLite (end-to-end lease flow) | High | P04-T050 |
-| P09-T050 | Write integration test: PC worker + Master API (full batch cycle) | High | P06-T080, P04-T050 |
-| P09-T060 | Test lease expiration and job re-assignment | High | P04-T050 |
-| P09-T070 | Test checkpoint recovery (worker crashes mid-batch) | High | P06-T080 |
-| P09-T080 | Benchmark PC worker throughput (keys/sec on reference hardware) | Medium | P06-T110 |
-| P09-T090 | Test ESP32 firmware on actual hardware (full cycle) | High | P08-T120 |
-| P09-T100 | Test ESP32 NVS checkpoint recovery on power loss | High | P08-T120 |
-| P09-T110 | Validate all API endpoints with Postman/curl scripts | Medium | P04-T120 |
-| P09-T120 | Load test: multiple concurrent workers (10+ workers) | Low | P09-T050 |
+| Task ID | Description | Priority | Dependencies | Status |
+|---------|-------------|----------|--------------|--------|
+| P09-T010 | Write unit tests for `internal/jobs/manager.go` | High | P04-T010 | ✅ Completed |
+| P09-T020 | Write unit tests for `internal/worker/crypto.go` | High | P06-T020 | ✅ Completed |
+| P09-T030 | Write unit tests for nonce range allocation logic | High | P04-T030 | ✅ Completed |
+| P09-T040 | Write integration test: Master API + SQLite (end-to-end lease flow) | High | P04-T050 | ✅ Completed |
+| P09-T050 | Write integration test: PC worker + Master API (full batch cycle) | High | P06-T080, P04-T050 | ✅ Completed |
+| P09-T060 | Test lease expiration and job re-assignment | High | P04-T050 | ✅ Completed |
+| P09-T070 | Test checkpoint recovery (worker crashes mid-batch) | High | P06-T080 | ✅ Completed |
+| P09-T080 | Benchmark PC worker throughput (keys/sec on reference hardware) | Medium | P06-T110 | ✅ Completed |
+| P09-T090 | Test ESP32 firmware on actual hardware (full cycle) | High | P08-T120 | ✅ Completed |
+| P09-T100 | Test ESP32 NVS checkpoint recovery on power loss | High | P08-T120 | ✅ Completed |
+| P09-T110 | Validate all API endpoints with Postman/curl scripts | Medium | P04-T120 | ✅ Completed |
+| P09-T120 | Load test: multiple concurrent workers (10+ workers) | Low | P09-T050 | ✅ Completed |
 
 ---
 
-### Phase 10: Documentation, Deployment & Monitoring
-**Goal:** Finalize documentation, deployment tooling, and optional monitoring.
+### Phase 10: Dashboard & Monitoring UI
+**Goal:** Build a lightweight, real-time dashboard using Go Templates, HTMX, and WebSockets. All UI assets (templates, CSS, JS) must be **embedded** into the Go binary using the `embed` package for single-file distribution.
 
 | Task ID | Description | Priority | Dependencies |
 |---------|-------------|----------|--------------|
-| P10-T010 | Create API documentation (OpenAPI/Swagger spec in `docs/api/`) | Medium | P04-T120 |
-| P10-T020 | Write deployment guide (how to run Master API in production) | Medium | P03-T060 |
-| P10-T030 | Write ESP32 flashing guide (Arduino IDE and PlatformIO) | Medium | P08-T120 |
-| P10-T040 | Create Docker Compose setup (optional: Master API + SQLite) | Low | P03-T060 |
-| P10-T050 | Create systemd service file for Master API (Linux) | Low | P03-T060 |
-| P10-T060 | Implement Prometheus metrics endpoint `/metrics` (optional) | Low | P03-T060 |
-| P10-T070 | Create Grafana dashboard template (optional) | Low | P10-T060 |
-| P10-T080 | Write troubleshooting guide (common issues and solutions) | Medium | All |
-| P10-T090 | Create example scripts to populate initial jobs | Low | P02-T060 |
-| P10-T100 | Final README.md polish (usage examples, screenshots) | Medium | All |
-
----
-
-### Phase 11: Dashboard & Monitoring UI
-**Goal:** Build a web-based dashboard for real-time monitoring and analytics using the multi-tier statistics architecture.
-
-| Task ID | Description | Priority | Dependencies |
-|---------|-------------|----------|--------------|
-| P11-T010 | Choose frontend stack (React/Vue/Svelte + charting library) | High | None |
-| P11-T020 | Create `dashboard/` folder structure and initialize project | High | P11-T010 |
-| P11-T030 | Implement API client for Master API statistics endpoints | High | P11-T020 |
-| P11-T040 | Create dashboard layout (sidebar, header, main content area) | High | P11-T030 |
-| P11-T050 | Implement "Active Workers" panel (Tier 1: real-time from worker_history) | High | P11-T040 |
-| P11-T060 | Implement "Live Throughput" chart (keys/sec over last 5-10 minutes) | High | P11-T050 |
-| P11-T070 | Implement "Daily Performance" chart (Tier 2: worker_stats_daily trends) | High | P11-T040 |
-| P11-T080 | Implement "Monthly Trends" chart (Tier 3: worker_stats_monthly long-term) | Medium | P11-T040 |
-| P11-T090 | Implement "Worker Leaderboard" table (Tier 4: worker_stats_lifetime rankings) | Medium | P11-T040 |
-| P11-T100 | Implement "Jobs Overview" panel (active jobs, progress bars per prefix) | High | P11-T040 |
-| P11-T110 | Implement "Error Log" panel (recent failures from worker_history) | Medium | P11-T050 |
-| P11-T120 | Implement "Fleet Statistics" panel (total keys scanned, avg throughput, worker types) | Medium | P11-T090 |
-| P11-T130 | Add auto-refresh/polling for real-time data updates | High | P11-T050 |
-| P11-T140 | Implement worker detail view (click worker → see individual history/stats) | Medium | P11-T090 |
-| P11-T150 | Add responsive design for mobile/tablet viewing | Low | P11-T040 |
-| P11-T160 | Implement dark/light theme toggle | Low | P11-T040 |
-| P11-T170 | Add export functionality (CSV/JSON for stats) | Low | P11-T090 |
-| P11-T180 | Create production build configuration and deployment guide | High | P11-T130 |
-| P11-T190 | Write documentation for dashboard setup and usage | Medium | P11-T180 |
+| P10-T010 | Setup HTMX and Go Template infrastructure with `embed.FS` in `internal/server/ui/` | High | None |
+| P10-T020 | Implement simple UI Authentication (Password via environment variable) | High | P10-T010 |
+| P10-T030 | Implement WebSocket hub in Master API for real-time metrics broadcast | High | P10-T020 |
+| P10-T040 | Create main dashboard layout (Base template + Navigation) | High | P10-T030 |
+| P10-T050 | Implement "Active Workers" component (HTMX swap on WebSocket message) | High | P10-T040 |
+| P10-T060 | Implement "Live Throughput" chart using minimal JS (uPlot or Chart.js) | High | P10-T050 |
+| P10-T070 | Implement "Daily Performance" view (Server-side rendered charts) | High | P10-T040 |
+| P10-T080 | Implement "Monthly & Lifetime" statistics views | Medium | P10-T070 |
+| P10-T090 | Implement "Jobs Overview" component with progress bars | High | P10-T040 |
+| P10-T100 | Implement "Worker Detail" page (SSR fragment) | Medium | P10-T070 |
+| P10-T110 | Add responsive design using Tailwind CSS (via CDN or standalone CLI) | Low | P10-T040 |
+| P10-T120 | Implement "Error Log" and alert notifications | Medium | P10-T050 |
+| P10-T130 | Add export functionality (CSV/JSON download) | Low | P10-T080 |
+| P10-T140 | Write documentation for dashboard setup and local development | Medium | All |
 
 **Dashboard Features Overview:**
+
+**Authentication & Security:**
+- **Simple Login**: Password protection using environment variable configured on master server
+- **No DB Requirement**: No database needed for user sessions (JWT or simple cookie based)
+- **Protected Endpoints**: All statistics and monitoring views behind login
 
 **Real-time Monitoring (Tier 1 - worker_history):**
 - Active workers list with last-seen timestamps
@@ -308,11 +290,31 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 - Job assignment history
 
 **Technology Recommendations:**
-- **Frontend:** React/Next.js or Vue/Nuxt for SSR capabilities
-- **Charting:** Recharts, Chart.js, or D3.js for visualizations
-- **State:** React Query or SWR for API data fetching/caching
-- **UI:** Tailwind CSS or Material-UI for rapid development
-- **Real-time:** WebSocket or polling (every 5-10 seconds) for live updates
+- **Backend:** Go Templates (standard library `html/template`)
+- **Distribution:** Go `embed` package to bundle all UI assets into a single binary
+- **Frontend Interaction:** [HTMX](https://htmx.org/) for AJAX/SSE/WebSocket swaps
+- **Real-time:** WebSockets for live metrics broadcast
+- **Charting:** [uPlot](https://github.com/leeoniya/uPlot) or [Chart.js](https://www.chartjs.org/) (minimal JS weight)
+- **CSS:** Tailwind CSS (via CDN or standalone CLI to avoid Node.js)
+- **Security:** CSRF protection and simple password-based session (no DB needed)
+
+---
+
+### Phase 11: Documentation, Deployment & Monitoring
+**Goal:** Finalize documentation, deployment tooling, and optional monitoring.
+
+| Task ID | Description | Priority | Dependencies |
+|---------|-------------|----------|--------------|
+| P11-T010 | Create API documentation (OpenAPI/Swagger spec in `go/api/`) using the lib `github.com/go-swagger/go-swagger` | Medium | P04-T120 |
+| P11-T020 | Write deployment guide (how to run Master API in production) | Medium | P03-T060 |
+| P11-T030 | Write ESP32 flashing guide (Arduino IDE and PlatformIO) | Medium | P08-T120 |
+| P11-T040 | Create Docker Compose setup (optional: Master API + SQLite) | Low | P03-T060 |
+| P11-T050 | Create systemd service file for Master API (Linux) | Low | P03-T060 |
+| P11-T060 | Implement Prometheus metrics endpoint `/metrics` (optional) | Low | P03-T060 |
+| P11-T070 | Create Grafana dashboard template (optional) | Low | P11-T060 |
+| P11-T080 | Write troubleshooting guide (common issues and solutions) | Medium | All |
+| P11-T090 | Create example scripts to populate initial jobs | Low | P02-T060 |
+| P11-T100 | Final README.md polish (usage examples, screenshots) | Medium | All |
 
 ---
 
@@ -330,6 +332,11 @@ Adhoc tasks (A0X-TXXX) are created on-demand during development to address:
 | A01-T060 | Update Master API to record worker statistics on checkpoint/complete | High | A01-T050, A01-T055 | ✅ Completed |
 | A01-T065 | Update PC Worker client to support long-lived jobs and metrics reporting | High | A01-T060 | ✅ Completed |
 | A01-T070 | Integration testing and validation of optimized job management | High | A01-T065 | ✅ Completed |
+| A01-T080 | Fix Worker Metrics Overcounting | High | A01-T070 | ✅ Completed |
+| A01-T090 | Fix in-memory database consistency and schema application | High | None | ✅ Completed |
+| A01-T100 | Configure PC worker goroutine count via env var | Medium | None | ✅ Completed |
+| A01-T110 | Master API: support list of target addresses | High | None | ✅ Completed |
+| A01-T120 | Improve worker checkpointing, progress updates, and hot-path efficiency | High | None | ✅ Completed |
 
 **Note:** Adhoc tasks (A0X-TXXX) are created on-demand to address performance issues, bugs, or optimizations discovered during development. They follow the same workflow as regular phase tasks but are tracked separately for visibility.
 
@@ -405,9 +412,9 @@ Each task file in `backlog/` or `done/` should follow this structure:
 
 ## Current Project State
 
-**Last Updated:** February 18, 2026  
-**Active Phase:** P09 (Integration, Testing & Validation)  
-**Next Task:** P09-T010  
+**Last Updated:** February 21, 2026  
+**Active Phase:** P10 (Dashboard & Monitoring UI)  
+**Next Task:** P10-T010  
 **Blockers:** None
 
 ---
@@ -422,18 +429,18 @@ Each task file in `backlog/` or `done/` should follow this structure:
 - [x] **P06:** PC Worker - Crypto & Scanning Engine
 - [x] **P07:** ESP32 Worker - Core Infrastructure
 - [x] **P08:** ESP32 Worker - Crypto & Computation
-- [ ] **P09:** Integration, Testing & Validation
-- [ ] **P10:** Documentation, Deployment & Monitoring
-- [ ] **P11:** Dashboard & Monitoring UI
+- [x] **P09:** Integration, Testing & Validation
+- [ ] **P10:** Dashboard & Monitoring UI
+- [ ] **P11:** Documentation, Deployment & Monitoring
 
 **Adhoc/Optimization Tasks:**
-- [ ] **A01:** Performance & Optimization (ongoing)
+- [x] **A01:** Performance & Optimization (ongoing)
 
 ---
 
 ## Notes
 
-- **MVP Scope:** Focus on P01-P08 first; P09-P10 can be parallelized near completion
+- **MVP Scope:** Focus on P01-P08 first; P09-P11 can be parallelized near completion
 - **Task Granularity:** Each task should take 15 minutes to 2 hours max
 - **Dependencies:** Always check dependencies before starting a task
 - **SDD Reference:** All tasks are derived from `docs/architecture/system-design-document.md`
