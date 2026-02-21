@@ -15,7 +15,10 @@ const cleanupStaleJobs = `-- name: CleanupStaleJobs :exec
 UPDATE jobs
 SET worker_id = NULL, status = 'pending', expires_at = NULL
 WHERE status = 'processing'
-    AND last_checkpoint_at < datetime('now', 'utc', '-' || ?1 || ' seconds')
+    AND (
+        (last_checkpoint_at IS NOT NULL AND last_checkpoint_at < datetime('now', 'utc', '-' || ?1 || ' seconds'))
+        OR (last_checkpoint_at IS NULL AND created_at < datetime('now', 'utc', '-' || ?1 || ' seconds'))
+    )
 `
 
 // Clear worker assignment for long-stale processing jobs so they can be re-leased

@@ -245,8 +245,11 @@ ORDER BY w.total_keys_scanned DESC
 LIMIT ?;
 
 -- name: CleanupStaleJobs :exec
--- Clear worker assignment for long-stale processing jobs so they can be re-leased
+-- Clear worker assignment for long-stale processing jobs so they can be re-leased.
 UPDATE jobs
-SET worker_id = NULL, status = 'pending', expires_at = NULL
-WHERE status = 'processing'
-    AND last_checkpoint_at < datetime('now', 'utc', '-' || :threshold_seconds || ' seconds');
+SET worker_id = NULL, status = "pending", expires_at = NULL
+WHERE status = "processing"
+    AND (
+        (last_checkpoint_at IS NOT NULL AND last_checkpoint_at < datetime("now", "utc", "-" || :threshold_seconds || " seconds"))
+        OR (last_checkpoint_at IS NULL AND created_at < datetime("now", "utc", "-" || :threshold_seconds || " seconds"))
+    );
