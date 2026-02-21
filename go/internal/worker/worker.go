@@ -37,6 +37,10 @@ type RuntimeConfig struct {
 	InitialBatchSize         uint32
 }
 
+// ErrLeaseExpired is returned when the Master API reports the worker's lease
+// has expired (HTTP 410 Gone).
+var ErrLeaseExpired = errors.New("lease expired")
+
 // Worker orchestrates leasing jobs, scanning and reporting progress.
 type Worker struct {
 	client             *Client
@@ -426,38 +430,15 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		// Send a checkpoint for this chunk (reporting cumulative job-level metrics).
 		// We use a 10s throttle to avoid flooding the server on fast PCs.
 		if time.Since(lastCheckpointTime) >= minCheckpointInterval {
-			cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
-			currentTk := atomic.LoadUint64(&totalKeys)
-			currentDuration := time.Since(startTime).Milliseconds()
-			currentNonceVal := atomic.LoadUint32(&currentNonce)
-
-			if err := w.client.UpdateCheckpoint(cctx, lease.JobID, currentNonceVal, currentTk, startTime, currentDuration); err != nil {
-				ccancel()
-				if errors.Is(err, ErrUnauthorized) {
-					// fatal: stop processing and propagate
-					cancel()
-					<-doneCh
-					elapsed := time.Since(startTime)
-					return elapsed, currentTk, ErrUnauthorized
-				}
-				var apiErr *APIError
-				if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
-					// Lease expired on master side: stop and re-request work
-					cancel()
-					<-doneCh
-					elapsed := time.Since(startTime)
-					return elapsed, currentTk, ErrLeaseExpired
-				}
-				// Non-fatal checkpoint failure: log and continue. The ticker will
-				// continue attempting periodic checkpoints as well.
-				log.Printf("worker: checkpoint failed for job %s: %v", lease.JobID, err)
-			} else {
-				ccancel()
-				lastCheckpointTime = time.Now()
-				if !w.config.LogSampling {
-					log.Printf("worker: checkpoint sent job=%s nonce=%d total_keys=%d", lease.JobID, currentNonceVal, currentTk)
-				}
+			err := w.sendChunkCheckpoint(ctx, lease.JobID, startTime, &currentNonce, &totalKeys)
+			if err != nil {
+				cancel()
+				<-doneCh
+				elapsed := time.Since(startTime)
+				currentTk := atomic.LoadUint64(&totalKeys)
+				return elapsed, currentTk, err
 			}
+			lastCheckpointTime = time.Now()
 		}
 
 		// If a result was found we can stop scanning further chunks.
@@ -503,6 +484,35 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	}
 
 	return elapsed, tk, nil
+}
+
+// sendChunkCheckpoint sends a checkpoint for a chunk and handles errors.
+// It returns an error if the worker should stop processing the current lease.
+func (w *Worker) sendChunkCheckpoint(ctx context.Context, jobID string, startTime time.Time, currentNonce *uint32, totalKeys *uint64) error {
+	cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
+	defer ccancel()
+
+	currentTk := atomic.LoadUint64(totalKeys)
+	currentDuration := time.Since(startTime).Milliseconds()
+	currentNonceVal := atomic.LoadUint32(currentNonce)
+
+	if err := w.client.UpdateCheckpoint(cctx, jobID, currentNonceVal, currentTk, startTime, currentDuration); err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return ErrUnauthorized
+		}
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
+			return ErrLeaseExpired
+		}
+		// Non-fatal checkpoint failure: log and continue.
+		log.Printf("worker: checkpoint failed for job %s: %v", jobID, err)
+		return nil
+	}
+
+	if !w.config.LogSampling {
+		log.Printf("worker: checkpoint sent job=%s nonce=%d total_keys=%d", jobID, currentNonceVal, currentTk)
+	}
+	return nil
 }
 
 // isRetryable determines whether an error should be retried.
