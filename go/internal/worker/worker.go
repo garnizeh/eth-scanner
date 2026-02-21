@@ -207,8 +207,13 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	defer cancel()
 
 	// Use atomics for values shared between goroutine and main flow to avoid races.
+	startNonce := lease.NonceStart
+	if lease.CurrentNonce != nil {
+		startNonce = *lease.CurrentNonce
+	}
+
 	var (
-		currentNonce = lease.NonceStart
+		currentNonce = startNonce
 		totalKeys    uint64
 		// unauthorizedFlag is set to 1 when checkpointing returns ErrUnauthorized
 		// so the main flow can abort and propagate ErrUnauthorized.
@@ -353,8 +358,9 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		internalBatch = w.config.InternalBatchSize
 	}
 
-	// Iterate over the lease range in chunks.
-	start := lease.NonceStart
+	// Iterate over the lease range in chunks, starting from the last checkpoint
+	// if this is a resumption.
+	start := startNonce
 	var foundResult *ScanResult
 	stopEarly := false
 	for start <= lease.NonceEnd {

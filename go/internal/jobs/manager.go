@@ -30,11 +30,41 @@ func New(db *database.Queries) *Manager {
 }
 
 // LeaseExistingJob attempts to find an available (pending or expired) job
-// and lease it to the provided workerID. If no job is available, returns (nil, nil).
+// and lease it to the provided workerID.
+// It also checks if the worker already has an active, unexpired job they
+// are already assigned to, in case they are resuming after a crash.
+// If no job is available, returns (nil, nil).
 // Lease duration defaults to 1 hour.
 func (m *Manager) LeaseExistingJob(ctx context.Context, workerID, workerType string) (*database.Job, error) {
 	if m == nil || m.db == nil {
 		return nil, fmt.Errorf("manager or db is nil")
+	}
+
+	// First, check if this worker already has an active, unexpired lease.
+	// This supports worker crash recovery before the lease expires.
+	userJobs, err := m.db.GetJobsByWorker(ctx, sql.NullString{String: workerID, Valid: true})
+	if err == nil {
+		for _, j := range userJobs {
+			if j.Status == "processing" && j.ExpiresAt.Valid && j.ExpiresAt.Time.UTC().After(time.Now().UTC()) {
+				// Extend the lease duration slightly to ensure they have enough time to actually resume.
+				// This is optional but good practice.
+				leaseSeconds := int64((1 * time.Hour).Seconds())
+				p := database.LeaseBatchParams{
+					WorkerID:     sql.NullString{String: workerID, Valid: true},
+					WorkerType:   sql.NullString{String: workerType, Valid: workerType != ""},
+					LeaseSeconds: sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
+					ID:           j.ID,
+				}
+				_, _ = m.db.LeaseBatch(ctx, p)
+
+				// Re-load to return current record
+				updated, err := m.db.GetJobByID(ctx, j.ID)
+				if err == nil {
+					return &updated, nil
+				}
+				return &j, nil
+			}
+		}
 	}
 
 	// Lease duration
