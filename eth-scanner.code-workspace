@@ -65,6 +65,10 @@
       "/^pio test -e esp32doit-devkit-v1 -v$/": {
         "approve": true,
         "matchCommandLine": true
+      },
+      "/^cd /home/userone/Code/github/eth-scanner/go && make build$/": {
+        "approve": true,
+        "matchCommandLine": true
       }
     }
   }
