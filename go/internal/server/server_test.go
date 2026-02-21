@@ -17,7 +17,10 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	s := New(&config.Config{}, nil)
+	s, err := New(&config.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -49,7 +52,10 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestRegisterRoutes(t *testing.T) {
-	s := New(&config.Config{}, nil)
+	s, err := New(&config.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	s.RegisterRoutes()
 
 	// health should return 200
@@ -74,7 +80,10 @@ func TestRegisterRoutes(t *testing.T) {
 // wrapping context.Canceled.
 func TestStartGracefulShutdown(t *testing.T) {
 	cfg := &config.Config{Port: "0"}
-	s := New(cfg, nil)
+	s, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -89,7 +98,7 @@ func TestStartGracefulShutdown(t *testing.T) {
 	// Trigger graceful shutdown
 	cancel()
 
-	err := <-done
+	err = <-done
 	if err == nil {
 		t.Fatalf("expected error from Start after cancel, got nil")
 	}
@@ -126,7 +135,10 @@ func TestShutdownWaitsForInFlightRequests(t *testing.T) {
 	}
 	// don't defer close; server will close DB on shutdown
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -233,7 +245,10 @@ func TestShutdownRespectsTimeout(t *testing.T) {
 		t.Fatalf("InitDB failed: %v", err)
 	}
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	// handler that sleeps longer than shutdown timeout
 	srv.router.HandleFunc("/sleep", func(w http.ResponseWriter, _ *http.Request) {
@@ -307,7 +322,10 @@ func TestDBClosedOnShutdown(t *testing.T) {
 		t.Fatalf("InitDB failed: %v", err)
 	}
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	runCtx, cancel := context.WithCancel(context.Background())

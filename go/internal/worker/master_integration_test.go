@@ -49,7 +49,10 @@ func TestWorkerMasterIntegration(t *testing.T) {
 	}
 	defer func() { _ = database.CloseDB(db) }()
 
-	srv := server.New(cfg, db)
+	srv, err := server.New(cfg, db)
+	if err != nil {
+		t.Fatalf("server.New failed: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	serverErrCh := make(chan error, 1)

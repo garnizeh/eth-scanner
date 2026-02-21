@@ -29,7 +29,10 @@ func setupServerWithDB(t *testing.T) (*Server, *sql.DB) {
 	if err != nil {
 		t.Fatalf("InitDB failed: %v", err)
 	}
-	s := New(&config.Config{}, db)
+	s, err := New(&config.Config{}, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	s.RegisterRoutes()
 	t.Cleanup(func() {
 		err := db.Close()

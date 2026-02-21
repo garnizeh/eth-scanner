@@ -14,7 +14,10 @@ import (
 
 func TestHandleHealth_File(t *testing.T) {
 	t.Run("no db configured", func(t *testing.T) {
-		s := New(&config.Config{}, nil)
+		s, err := New(&config.Config{}, nil)
+		if err != nil {
+			t.Fatalf("failed to create server: %v", err)
+		}
 
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/health", nil)
@@ -52,7 +55,10 @@ func TestHandleHealth_File(t *testing.T) {
 		}
 		defer db.Close()
 
-		s := New(&config.Config{}, db)
+		s, err := New(&config.Config{}, db)
+		if err != nil {
+			t.Fatalf("failed to create server: %v", err)
+		}
 
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/health", nil)
@@ -90,7 +96,10 @@ func TestHandleHealth_File(t *testing.T) {
 			t.Fatalf("failed to close db: %v", err)
 		}
 
-		s := New(&config.Config{}, db)
+		s, err := New(&config.Config{}, db)
+		if err != nil {
+			t.Fatalf("failed to create server: %v", err)
+		}
 
 		rr := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/health", nil)

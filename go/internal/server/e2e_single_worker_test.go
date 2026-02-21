@@ -44,7 +44,10 @@ func TestE2E_SingleWorker_MultipleCheckpoints(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	runCtx, cancel := context.WithCancel(context.Background())

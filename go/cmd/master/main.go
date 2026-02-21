@@ -36,7 +36,10 @@ func main() {
 	}()
 
 	// Create server and register routes
-	srv := server.New(cfg, db)
+	srv, err := server.New(cfg, db)
+	if err != nil {
+		log.Fatalf("%s - error creating server: %v", time.Now().UTC().Format(time.RFC3339), err)
+	}
 	srv.RegisterRoutes()
 
 	log.Printf("%s - starting server on :%s", time.Now().UTC().Format(time.RFC3339), cfg.Port)
