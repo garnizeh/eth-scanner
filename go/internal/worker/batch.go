@@ -10,7 +10,7 @@ import "time"
 func CalculateBatchSize(keysPerSecond uint64, targetDuration time.Duration) uint32 {
 	const (
 		maxBatchSize = uint64(0xFFFFFFFF) // 2^32 - 1
-		minFallback  = uint64(1000000)    // conservative minimum
+		minFallback  = uint64(10000000)   // 10M keys conservative minimum for PCs
 		defaultSecs  = uint64(3600)       // 1 hour
 	)
 

@@ -22,7 +22,7 @@ func TestCalculateBatchSize(t *testing.T) {
 			name:           "zero throughput",
 			keysPerSecond:  0,
 			targetDuration: 1 * time.Hour,
-			expected:       1000000,
+			expected:       10000000,
 		},
 		{
 			name:           "overflow",
