@@ -30,4 +30,9 @@ esp_err_t save_checkpoint(nvs_handle_t handle, const job_checkpoint_t *checkpoin
  */
 esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint);
 
+/**
+ * @brief Clears the checkpoint from NVS.
+ */
+esp_err_t nvs_clear_checkpoint(nvs_handle_t handle);
+
 #endif // NVS_HANDLER_H

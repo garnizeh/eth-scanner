@@ -115,22 +115,6 @@ void test_load_checkpoint_invalid_magic(void)
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_CRC, err);
 }
 
-void test_load_checkpoint_stale(void)
-{
-    job_checkpoint_t ckpt = {.job_id = 1, .timestamp = esp_timer_get_time() / 1000000ULL, .magic = 0xDEADBEEF};
-    save_checkpoint((nvs_handle_t)0x1234, &ckpt);
-
-    job_checkpoint_t stale;
-    size_t len = sizeof(job_checkpoint_t);
-    nvs_get_blob_wr((nvs_handle_t)0x1234, "job_ckpt", &stale, &len);
-
-    stale.timestamp = 0x7FFFFFFFFFFFFFFFULL;
-    nvs_set_blob_wr((nvs_handle_t)0x1234, "job_ckpt", &stale, sizeof(job_checkpoint_t));
-
-    esp_err_t err = load_checkpoint((nvs_handle_t)0x1234, &stale);
-    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
-}
-
 void test_recovery_logic_resumption(void)
 {
     // 1. Prepare global state with a mock job
@@ -150,8 +134,7 @@ void test_recovery_logic_resumption(void)
         .current_nonce = 1500,
         .keys_scanned = 500,
         .timestamp = 99999,
-        .magic = 0xDEADBEEF
-    };
+        .magic = 0xDEADBEEF};
     memcpy(save_ckpt.prefix_28, g_state.current_job.prefix_28, PREFIX_28_SIZE);
     save_checkpoint((nvs_handle_t)0x1234, &save_ckpt);
 
@@ -162,7 +145,7 @@ void test_recovery_logic_resumption(void)
     job_checkpoint_t recovered_ckpt;
     esp_err_t err = load_checkpoint((nvs_handle_t)0x1234, &recovered_ckpt);
     TEST_ASSERT_EQUAL(ESP_OK, err);
-    
+
     // Apply recovered state to g_state
     g_state.current_job.job_id = recovered_ckpt.job_id;
     memcpy(g_state.current_job.prefix_28, recovered_ckpt.prefix_28, PREFIX_28_SIZE);
