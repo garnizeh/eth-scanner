@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"math"
 	"path/filepath"
 	"testing"
@@ -472,4 +473,155 @@ VALUES (?, ?, ?, 'completed', datetime('now','utc'), datetime('now','utc'))`
 	if job.RequestedBatchSize.Int64 != allocated {
 		t.Fatalf("requested_batch_size stored mismatch: got %d want %d", job.RequestedBatchSize.Int64, allocated)
 	}
+}
+
+func TestUpdateCheckpoint_Success(t *testing.T) {
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+	// Create a processing job for worker-1
+	res, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, requested_batch_size) VALUES (?, 0, 999, 0, 'processing', 'worker-1', 1000)", prefix)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	err = m.UpdateCheckpoint(ctx, id, "worker-1", 500, 500, 1000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	updated, _ := q.GetJobByID(ctx, id)
+	if updated.CurrentNonce.Int64 != 500 {
+		t.Errorf("expected current_nonce 500, got %d", updated.CurrentNonce.Int64)
+	}
+	if updated.KeysScanned.Int64 != 500 {
+		t.Errorf("expected keys_scanned 500, got %d", updated.KeysScanned.Int64)
+	}
+}
+
+func TestUpdateCheckpoint_Errors(t *testing.T) {
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+	// Create a processing job for worker-1 [1000, 1999], current = 1000
+	res, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, requested_batch_size) VALUES (?, 1000, 1999, 1000, 'processing', 'worker-1', 1000)", prefix)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	t.Run("NotFound", func(t *testing.T) {
+		err := m.UpdateCheckpoint(ctx, id+999, "worker-1", 1500, 500, 1000)
+		if err == nil || !errors.Is(err, ErrJobNotFound) {
+			t.Errorf("expected ErrJobNotFound, got %v", err)
+		}
+	})
+
+	t.Run("WorkerMismatch", func(t *testing.T) {
+		err := m.UpdateCheckpoint(ctx, id, "wrong-worker", 1500, 500, 1000)
+		if err == nil || !errors.Is(err, ErrWorkerMismatch) {
+			t.Errorf("expected ErrWorkerMismatch, got %v", err)
+		}
+	})
+
+	t.Run("InvalidNonceRange_TooSmall", func(t *testing.T) {
+		err := m.UpdateCheckpoint(ctx, id, "worker-1", 500, 500, 1000)
+		if err == nil || !errors.Is(err, ErrInvalidNonce) {
+			t.Errorf("expected ErrInvalidNonce, got %v", err)
+		}
+	})
+
+	t.Run("InvalidNonceRange_TooLarge", func(t *testing.T) {
+		err := m.UpdateCheckpoint(ctx, id, "worker-1", 2500, 500, 1000)
+		if err == nil || !errors.Is(err, ErrInvalidNonce) {
+			t.Errorf("expected ErrInvalidNonce, got %v", err)
+		}
+	})
+
+	t.Run("BackwardNonce", func(t *testing.T) {
+		// Set current nonce to 1500
+		_, _ = db.ExecContext(ctx, "UPDATE jobs SET current_nonce = 1500 WHERE id = ?", id)
+		err := m.UpdateCheckpoint(ctx, id, "worker-1", 1200, 500, 1000)
+		if err == nil || !errors.Is(err, ErrInvalidNonce) {
+			t.Errorf("expected ErrInvalidNonce (backward), got %v", err)
+		}
+	})
+
+	t.Run("NotProcessing", func(t *testing.T) {
+		_, _ = db.ExecContext(ctx, "UPDATE jobs SET status = 'completed' WHERE id = ?", id)
+		err := m.UpdateCheckpoint(ctx, id, "worker-1", 1800, 500, 1000)
+		if err == nil || !errors.Is(err, ErrJobNotProcessing) {
+			t.Errorf("expected ErrJobNotProcessing, got %v", err)
+		}
+	})
+}
+
+func TestCompleteJob_Success(t *testing.T) {
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+	// Create a processing job for worker-1
+	res, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, requested_batch_size) VALUES (?, 0, 999, 500, 'processing', 'worker-1', 1000)", prefix)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	err = m.CompleteJob(ctx, id, "worker-1", 1000, 2000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	updated, _ := q.GetJobByID(ctx, id)
+	if updated.Status != "completed" {
+		t.Errorf("expected status completed, got %s", updated.Status)
+	}
+	if updated.CurrentNonce.Int64 != updated.NonceEnd {
+		t.Errorf("expected current_nonce %d, got %d", updated.NonceEnd, updated.CurrentNonce.Int64)
+	}
+	if !updated.CompletedAt.Valid {
+		t.Errorf("expected completed_at to be valid")
+	}
+}
+
+func TestCompleteJob_Errors(t *testing.T) {
+	ctx := t.Context()
+	db, q := setupInMemoryDB(t)
+	m := New(q)
+
+	prefix := make([]byte, 28)
+	res, err := db.ExecContext(ctx, "INSERT INTO jobs (prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, requested_batch_size) VALUES (?, 0, 999, 0, 'processing', 'worker-1', 1000)", prefix)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	t.Run("NotFound", func(t *testing.T) {
+		err := m.CompleteJob(ctx, id+999, "worker-1", 1000, 2000)
+		if err == nil || !errors.Is(err, ErrJobNotFound) {
+			t.Errorf("expected ErrJobNotFound, got %v", err)
+		}
+	})
+
+	t.Run("WorkerMismatch", func(t *testing.T) {
+		err := m.CompleteJob(ctx, id, "wrong-worker", 1000, 2000)
+		if err == nil || !errors.Is(err, ErrWorkerMismatch) {
+			t.Errorf("expected ErrWorkerMismatch, got %v", err)
+		}
+	})
+
+	t.Run("NotProcessing", func(t *testing.T) {
+		_, _ = db.ExecContext(ctx, "UPDATE jobs SET status = 'completed' WHERE id = ?", id)
+		err := m.CompleteJob(ctx, id, "worker-1", 1000, 2000)
+		if err == nil || !errors.Is(err, ErrJobNotProcessing) {
+			t.Errorf("expected ErrJobNotProcessing, got %v", err)
+		}
+	})
 }
