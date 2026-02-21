@@ -240,6 +240,72 @@ func (q *Queries) FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (
 	return i, err
 }
 
+const getActiveWorkerDetails = `-- name: GetActiveWorkerDetails :many
+SELECT 
+    w.id,
+    w.worker_type,
+    w.last_seen,
+    w.total_keys_scanned,
+    j.prefix_28 as active_prefix,
+    j.current_nonce,
+    j.nonce_start,
+    j.nonce_end,
+    (SELECT h.keys_per_second 
+     FROM worker_history h 
+     WHERE h.worker_id = w.id 
+     ORDER BY h.finished_at DESC LIMIT 1) as last_kps
+FROM workers w
+LEFT JOIN jobs j ON j.worker_id = w.id AND j.status = 'processing'
+WHERE w.last_seen > datetime('now', '-5 minutes')
+ORDER BY w.last_seen DESC
+`
+
+type GetActiveWorkerDetailsRow struct {
+	ID               string          `json:"id"`
+	WorkerType       string          `json:"worker_type"`
+	LastSeen         time.Time       `json:"last_seen"`
+	TotalKeysScanned sql.NullInt64   `json:"total_keys_scanned"`
+	ActivePrefix     []byte          `json:"active_prefix"`
+	CurrentNonce     sql.NullInt64   `json:"current_nonce"`
+	NonceStart       sql.NullInt64   `json:"nonce_start"`
+	NonceEnd         sql.NullInt64   `json:"nonce_end"`
+	LastKps          sql.NullFloat64 `json:"last_kps"`
+}
+
+// Get detailed info about currently active workers for dashboard
+func (q *Queries) GetActiveWorkerDetails(ctx context.Context) ([]GetActiveWorkerDetailsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActiveWorkerDetails)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetActiveWorkerDetailsRow{}
+	for rows.Next() {
+		var i GetActiveWorkerDetailsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerType,
+			&i.LastSeen,
+			&i.TotalKeysScanned,
+			&i.ActivePrefix,
+			&i.CurrentNonce,
+			&i.NonceStart,
+			&i.NonceEnd,
+			&i.LastKps,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getActiveWorkers = `-- name: GetActiveWorkers :many
 SELECT id, worker_type, last_seen, total_keys_scanned, metadata, created_at, updated_at FROM workers
 WHERE last_seen > datetime('now', '-' || ? || ' minutes')

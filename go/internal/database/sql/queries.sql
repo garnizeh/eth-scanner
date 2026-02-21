@@ -172,6 +172,26 @@ SELECT * FROM workers
 WHERE last_seen > datetime('now', '-' || ? || ' minutes')
 ORDER BY last_seen DESC;
 
+-- name: GetActiveWorkerDetails :many
+-- Get detailed info about currently active workers for dashboard
+SELECT 
+    w.id,
+    w.worker_type,
+    w.last_seen,
+    w.total_keys_scanned,
+    j.prefix_28 as active_prefix,
+    j.current_nonce,
+    j.nonce_start,
+    j.nonce_end,
+    (SELECT h.keys_per_second 
+     FROM worker_history h 
+     WHERE h.worker_id = w.id 
+     ORDER BY h.finished_at DESC LIMIT 1) as last_kps
+FROM workers w
+LEFT JOIN jobs j ON j.worker_id = w.id AND j.status = 'processing'
+WHERE w.last_seen > datetime('now', '-5 minutes')
+ORDER BY w.last_seen DESC;
+
 -- name: GetWorkersByType :many
 -- Get all workers of a specific type
 SELECT * FROM workers

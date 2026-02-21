@@ -186,12 +186,14 @@ func (s *Server) Broadcast(message []byte) {
 // broadcastStats is called periodically or when an update happens to broadcast
 // refreshed stats to all connected dashboard clients.
 func (s *Server) broadcastStats(ctx context.Context) {
-	q := database.NewQueries(s.db)
+	q := database.New(s.db)
 	stats, err := q.GetStats(ctx)
 	if err != nil {
 		log.Printf("failed to get stats for broadcast: %v", err)
 		return
 	}
+
+	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
 
 	// Normalize total keys scanned to int64
 	var totalKeys int64
@@ -227,6 +229,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		PendingJobCount     int64
 		TotalWorkers        int64
 		GlobalKeysPerSecond float64
+		ActiveWorkersList   []database.GetActiveWorkerDetailsRow
 	}{
 		ActiveWorkers:       stats.ActiveWorkers,
 		TotalKeysScanned:    totalKeys,
@@ -235,12 +238,20 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		PendingJobCount:     stats.PendingBatches,
 		TotalWorkers:        stats.TotalWorkers,
 		GlobalKeysPerSecond: globalThroughput,
+		ActiveWorkersList:   activeWorkers,
 	}
 
 	var buf strings.Builder
 	if err := s.renderer.RenderFragment(&buf, "fragments.html", "fleet-stats", data); err != nil {
 		log.Printf("failed to render stats fragment: %v", err)
-		return
+		// continue anyway to try other fragments
+	}
+
+	// Also render the active workers table for the dashboard
+	if err := s.renderer.RenderFragment(&buf, "active_workers.html", "active-workers", map[string]any{
+		"ActiveWorkers": activeWorkers,
+	}); err != nil {
+		log.Printf("failed to render active workers fragment: %v", err)
 	}
 
 	s.Broadcast([]byte(buf.String()))
