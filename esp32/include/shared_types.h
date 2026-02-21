@@ -79,8 +79,9 @@ typedef struct
     volatile bool job_active;
 
     // Atomic progress counters (accessed from Core 1 hot loop)
-    atomic_ullong current_nonce; // Current nonce being processed
-    atomic_ullong keys_scanned;  // Keys scanned in current batch
+    atomic_ullong current_nonce;  // Current nonce being processed
+    atomic_ullong keys_scanned;   // Keys scanned in current batch
+    atomic_ullong batch_start_ms; // Start time of current batch in ms
 
     // Worker identification
     char worker_id[WORKER_ID_MAX_LEN];

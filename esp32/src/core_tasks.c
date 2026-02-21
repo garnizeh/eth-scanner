@@ -12,6 +12,7 @@
 #include "batch_calculator.h"
 #include "api_client.h"
 #include "eth_crypto.h"
+#include "esp_timer.h"
 #include <string.h>
 #include <time.h>
 #include "core_tasks.h"
@@ -210,7 +211,8 @@ void core0_system_task(void *pvParameters)
                 // If WiFi is connected, report to API as well
                 if (g_state.wifi_connected)
                 {
-                    esp_err_t err = api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, 0); // TODO: Track actual duration
+                    uint64_t duration = (esp_timer_get_time() / 1000) - atomic_load(&g_state.batch_start_ms);
+                    esp_err_t err = api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, duration);
                     if (err == ESP_ERR_NOT_FOUND)
                     {
                         ESP_LOGW(TAG, "Job %lld not found on server! Abandoning.", cp.job_id);
@@ -232,7 +234,8 @@ void core0_system_task(void *pvParameters)
             {
                 uint64_t current = atomic_load(&g_state.current_nonce);
                 uint64_t scanned = atomic_load(&g_state.keys_scanned);
-                api_complete(g_state.current_job.job_id, g_state.worker_id, current, scanned, 0);
+                uint64_t duration = (esp_timer_get_time() / 1000) - atomic_load(&g_state.batch_start_ms);
+                api_complete(g_state.current_job.job_id, g_state.worker_id, current, scanned, duration);
             }
 
             // Clear job information AFTER reporting to API to avoid reporting ID 0
@@ -284,6 +287,7 @@ void core0_system_task(void *pvParameters)
         {
             ESP_LOGI(TAG, "RECOVERY: Activating recovered job %lld from nonce %llu (Initial Status: Offline-ready)",
                      g_state.current_job.job_id, (unsigned long long)atomic_load(&g_state.current_nonce));
+            atomic_store(&g_state.batch_start_ms, esp_timer_get_time() / 1000);
             g_state.job_active = true;
             if (g_state.core1_task_handle != NULL)
             {
@@ -310,6 +314,7 @@ void core0_system_task(void *pvParameters)
                 memcpy(&(g_state.current_job), &new_job, sizeof(job_info_t));
                 atomic_store(&g_state.current_nonce, new_job.nonce_start);
                 atomic_store(&g_state.keys_scanned, 0);
+                atomic_store(&g_state.batch_start_ms, esp_timer_get_time() / 1000);
                 g_state.job_active = true;
 
                 // Create initial checkpoint to allow recovery if we crash shortly after leasing
