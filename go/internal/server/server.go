@@ -14,12 +14,14 @@ import (
 
 	"github.com/garnizeh/eth-scanner/internal/config"
 	"github.com/garnizeh/eth-scanner/internal/database"
+	"github.com/garnizeh/eth-scanner/internal/server/ui"
 )
 
 // Server is the HTTP server for the Master API.
 type Server struct {
 	cfg        *config.Config
 	db         *sql.DB
+	renderer   *ui.TemplateRenderer
 	router     *http.ServeMux
 	handler    http.Handler
 	httpServer *http.Server
@@ -29,15 +31,21 @@ type Server struct {
 
 // New constructs a new Server instance. Routes must be registered with
 // RegisterRoutes before calling Start.
-func New(cfg *config.Config, db *sql.DB) *Server {
+func New(cfg *config.Config, db *sql.DB) (*Server, error) {
 	mux := http.NewServeMux()
-	s := &Server{
-		cfg:    cfg,
-		db:     db,
-		router: mux,
-		conns:  make(map[net.Conn]struct{}),
+	renderer, err := ui.NewTemplateRenderer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize renderer: %w", err)
 	}
-	return s
+
+	s := &Server{
+		cfg:      cfg,
+		db:       db,
+		renderer: renderer,
+		router:   mux,
+		conns:    make(map[net.Conn]struct{}),
+	}
+	return s, nil
 }
 
 // Start runs the HTTP server and blocks until context cancellation or server error.

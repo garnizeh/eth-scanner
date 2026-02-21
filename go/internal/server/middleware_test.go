@@ -111,7 +111,10 @@ func newServerWithCfg(t *testing.T, cfg *config.Config) *Server {
 	if err != nil {
 		t.Fatalf("InitDB: %v", err)
 	}
-	s := New(cfg, db)
+	s, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	s.RegisterRoutes()
 	return s
 }
@@ -144,7 +147,7 @@ func TestAPIKeyMiddleware_RejectsMissingOrInvalid(t *testing.T) {
 	defer ts.Close()
 
 	// missing header
-	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+"/api/v1/jobs/lease", nil)
 	cli := &http.Client{}
 	//nolint:gosec // false positive: SSRF in test
 	resp, err := cli.Do(req1)
@@ -157,7 +160,7 @@ func TestAPIKeyMiddleware_RejectsMissingOrInvalid(t *testing.T) {
 	}
 
 	// invalid header
-	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/health", nil)
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, ts.URL+"/api/v1/jobs/lease", nil)
 	req2.Header.Set("X-API-KEY", "wrong")
 	//nolint:gosec // false positive: SSRF in test
 	resp2, err := cli.Do(req2)

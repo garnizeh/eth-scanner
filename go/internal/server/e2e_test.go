@@ -53,7 +53,10 @@ func TestServerE2E(t *testing.T) {
 		}
 	}()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	// Start server in background

@@ -1,0 +1,45 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{template "title" .}} - EthScanner</title>
+    <!-- Tailwind CSS (via local static) -->
+    <script src="/static/tailwind.3.4.17.min.js"></script>
+    <!-- HTMX -->
+    <script src="/static/htmx.1.9.10.min.js"></script>
+    <!-- HTMX WebSocket Extension -->
+    <script src="/static/htmx.ws.2.0.8.min.js"></script>
+    <style>
+        [vx-cloak] {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-gray-800 text-white shadow-lg p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">EthScanner Dashboard</h1>
+            <nav>
+                <ul class="flex space-x-4">
+                    <li><a href="/dashboard" class="hover:underline">Home</a></li>
+                    <li><a href="/dashboard/stats" class="hover:underline">Stats</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4">
+        {{template "content" .}}
+    </main>
+
+    <footer class="bg-gray-200 text-center p-4 text-sm text-gray-600 border-t border-gray-300 mt-auto">
+        &copy; 2026 EthScanner Distributed. For educational purposes only.
+    </footer>
+</body>
+
+</html>
+{{end}}

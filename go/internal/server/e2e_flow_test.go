@@ -44,7 +44,10 @@ func TestE2EFlow(t *testing.T) {
 	}
 	defer func() { _ = database.CloseDB(db) }()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	errCh := make(chan error, 1)

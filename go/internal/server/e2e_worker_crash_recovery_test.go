@@ -49,7 +49,10 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	runCtx, cancelSrv := context.WithCancel(context.Background())

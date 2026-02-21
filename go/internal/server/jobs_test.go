@@ -23,7 +23,10 @@ func setupServer(t *testing.T) (*Server, *sql.DB, *database.Queries) {
 	}
 	q := database.NewQueries(db)
 	cfg := &config.Config{Port: "0", DBPath: ":memory:"}
-	s := New(cfg, db)
+	s, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	s.RegisterRoutes()
 	t.Cleanup(func() {
 		if err := database.CloseDB(db); err != nil {

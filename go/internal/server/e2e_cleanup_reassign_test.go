@@ -56,7 +56,10 @@ func TestCleanupAndReassign(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	// start server
@@ -276,7 +279,10 @@ func TestLeaseExpirationReassign(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 
-	srv := New(cfg, db)
+	srv, err := New(cfg, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 	srv.RegisterRoutes()
 
 	// start server

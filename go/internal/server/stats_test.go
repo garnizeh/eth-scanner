@@ -24,7 +24,11 @@ func TestHandleStats(t *testing.T) {
 		t.Fatalf("InitDB failed: %v", err)
 	}
 
-	s := New(&config.Config{}, db)
+	s, err := New(&config.Config{}, db)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
 	s.RegisterRoutes()
 
 	rr := httptest.NewRecorder()
@@ -69,7 +73,11 @@ func TestHandleStats(t *testing.T) {
 }
 
 func TestHandleStats_NoDB(t *testing.T) {
-	s := New(&config.Config{}, nil)
+	s, err := New(&config.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
 	s.RegisterRoutes()
 
 	rr := httptest.NewRecorder()

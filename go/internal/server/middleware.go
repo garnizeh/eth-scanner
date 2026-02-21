@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -140,6 +141,14 @@ func (s *Server) apiKeyMiddleware(next http.Handler) http.Handler {
 
 		if s == nil || s.cfg == nil || s.cfg.APIKey == "" {
 			// Not configured — allow through
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Allow /health, /dashboard and /static routes to pass through without API key.
+		// These provide the UI and system monitoring endpoints.
+		p := r.URL.Path
+		if p == "/health" || strings.HasPrefix(p, "/dashboard") || strings.HasPrefix(p, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}

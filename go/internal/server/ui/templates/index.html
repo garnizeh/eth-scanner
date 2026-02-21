@@ -1,0 +1,37 @@
+{{template "base" .}}
+
+{{define "title"}}Overview{{end}}
+
+{{define "content"}}
+<div class="bg-white p-6 rounded-lg shadow-md mb-6">
+    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Welcome to EthScanner Dashboard</h2>
+    <p class="text-gray-600 mb-6">Real-time distributed Ethereum brute-force monitoring.</p>
+
+    <div class="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-700">
+        <p class="font-bold">Info</p>
+        <p>This is a placeholder for the real-time workers list. Once HTMX and WebSockets are fully integrated, updates
+            will appear here automatically.</p>
+    </div>
+
+    <!-- Hello World verification block -->
+    <div class="mt-8 flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-md">
+        <span class="text-green-800 font-medium">System Health:</span>
+        <span class="px-2 py-1 bg-green-200 text-green-900 rounded-full text-xs font-bold uppercase">Online</span>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="font-bold text-lg mb-2">Total Workers</h3>
+        <p class="text-3xl font-bold text-blue-600">0</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="font-bold text-lg mb-2">Active Jobs</h3>
+        <p class="text-3xl font-bold text-green-600">0</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h3 class="font-bold text-lg mb-2">Global Throughput</h3>
+        <p class="text-3xl font-bold text-purple-600">0 k/s</p>
+    </div>
+</div>
+{{end}}

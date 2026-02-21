@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strings"
+
+	"github.com/garnizeh/eth-scanner/internal/server/ui"
 )
 
 // RegisterRoutes registers all HTTP routes and applies global middleware.
@@ -60,6 +62,13 @@ func (s *Server) RegisterRoutes() {
 		}
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
+
+	// UI Dashboard routes
+	s.router.HandleFunc("/dashboard", s.handleDashboard)
+	s.router.HandleFunc("/dashboard/", s.handleDashboard)
+
+	// Static files serving from embedded FS
+	s.router.Handle("/static/", http.FileServer(http.FS(ui.FS)))
 
 	// Apply middleware chain in the required order: APIKey -> RequestID -> Logger -> CORS
 	// The ServeMux implements http.Handler so we can wrap it. apiKeyMiddleware
