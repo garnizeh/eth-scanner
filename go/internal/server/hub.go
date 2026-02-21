@@ -230,6 +230,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		TotalWorkers        int64
 		GlobalKeysPerSecond float64
 		ActiveWorkersList   []database.GetActiveWorkerDetailsRow
+		NowTimestamp        int64
 	}{
 		ActiveWorkers:       stats.ActiveWorkers,
 		TotalKeysScanned:    totalKeys,
@@ -239,6 +240,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		TotalWorkers:        stats.TotalWorkers,
 		GlobalKeysPerSecond: globalThroughput,
 		ActiveWorkersList:   activeWorkers,
+		NowTimestamp:        time.Now().Unix(),
 	}
 
 	var buf strings.Builder

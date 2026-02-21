@@ -231,6 +231,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 
 	// Track start time to compute throughput (keys/sec) for the scanned range.
 	startTime := time.Now()
+	var lastCheckpointTime time.Time
+	const minCheckpointInterval = 10 * time.Second
 
 	doneCh := make(chan struct{})
 	go func() {
@@ -385,15 +387,8 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 		subJob.NonceStart = start
 		subJob.NonceEnd = end
 
-		// Snapshot total keys before scanning this chunk
-		beforeKeys := atomic.LoadUint64(&totalKeys)
-		batchStart := time.Now()
 		res, err := ScanRangeParallel(leaseCtx, subJob, targets, progressFn, numWorkers)
 		flushProgress(end) // Flush any pending keys from this chunk
-
-		batchDurationMs := time.Since(batchStart).Milliseconds()
-		afterKeys := atomic.LoadUint64(&totalKeys)
-		keysThisChunk := afterKeys - beforeKeys
 
 		// If scanning returned an error, stop and propagate
 		if err != nil {
@@ -401,6 +396,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 			cancel()
 			<-doneCh
 			elapsed := time.Since(startTime)
+			afterKeys := atomic.LoadUint64(&totalKeys)
 			return elapsed, afterKeys, fmt.Errorf("scan failed: %w", err)
 		}
 
@@ -417,6 +413,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 					cancel()
 					<-doneCh
 					elapsed := time.Since(startTime)
+					afterKeys := atomic.LoadUint64(&totalKeys)
 					return elapsed, afterKeys, ErrUnauthorized
 				}
 				log.Printf("worker: failed to submit result: %v", err)
@@ -426,33 +423,40 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 			foundResult = res
 		}
 
-		// Send a checkpoint for this chunk (reporting chunk-level metrics).
-		// Per-call timeout for chunk checkpoint
-		cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
-		if err := w.client.UpdateCheckpoint(cctx, lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk, batchStart, batchDurationMs); err != nil {
-			ccancel()
-			if errors.Is(err, ErrUnauthorized) {
-				// fatal: stop processing and propagate
-				cancel()
-				<-doneCh
-				elapsed := time.Since(startTime)
-				return elapsed, afterKeys, ErrUnauthorized
-			}
-			var apiErr *APIError
-			if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
-				// Lease expired on master side: stop and re-request work
-				cancel()
-				<-doneCh
-				elapsed := time.Since(startTime)
-				return elapsed, afterKeys, ErrLeaseExpired
-			}
-			// Non-fatal checkpoint failure: log and continue. The ticker will
-			// continue attempting periodic checkpoints as well.
-			log.Printf("worker: checkpoint failed for chunk [%d,%d]: %v", start, end, err)
-		} else {
-			ccancel()
-			if !w.config.LogSampling {
-				log.Printf("worker: chunk checkpoint sent job=%s nonce=%d keys_chunk=%d", lease.JobID, atomic.LoadUint32(&currentNonce), keysThisChunk)
+		// Send a checkpoint for this chunk (reporting cumulative job-level metrics).
+		// We use a 10s throttle to avoid flooding the server on fast PCs.
+		if time.Since(lastCheckpointTime) >= minCheckpointInterval {
+			cctx, ccancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
+			currentTk := atomic.LoadUint64(&totalKeys)
+			currentDuration := time.Since(startTime).Milliseconds()
+			currentNonceVal := atomic.LoadUint32(&currentNonce)
+
+			if err := w.client.UpdateCheckpoint(cctx, lease.JobID, currentNonceVal, currentTk, startTime, currentDuration); err != nil {
+				ccancel()
+				if errors.Is(err, ErrUnauthorized) {
+					// fatal: stop processing and propagate
+					cancel()
+					<-doneCh
+					elapsed := time.Since(startTime)
+					return elapsed, currentTk, ErrUnauthorized
+				}
+				var apiErr *APIError
+				if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
+					// Lease expired on master side: stop and re-request work
+					cancel()
+					<-doneCh
+					elapsed := time.Since(startTime)
+					return elapsed, currentTk, ErrLeaseExpired
+				}
+				// Non-fatal checkpoint failure: log and continue. The ticker will
+				// continue attempting periodic checkpoints as well.
+				log.Printf("worker: checkpoint failed for job %s: %v", lease.JobID, err)
+			} else {
+				ccancel()
+				lastCheckpointTime = time.Now()
+				if !w.config.LogSampling {
+					log.Printf("worker: checkpoint sent job=%s nonce=%d total_keys=%d", lease.JobID, currentNonceVal, currentTk)
+				}
 			}
 		}
 
