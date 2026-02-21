@@ -53,7 +53,7 @@ func TestCheckpointRecordsDeltas(t *testing.T) {
 
 	// wait for async insert
 	var got int
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		row := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM worker_history WHERE worker_id = ?", workerID)
 		_ = row.Scan(&got)
 		if got >= 1 {
@@ -72,7 +72,7 @@ func TestCheckpointRecordsDeltas(t *testing.T) {
 	}
 
 	// wait for second async insert
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		row := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM worker_history WHERE worker_id = ?", workerID)
 		_ = row.Scan(&got)
 		if got >= 2 {

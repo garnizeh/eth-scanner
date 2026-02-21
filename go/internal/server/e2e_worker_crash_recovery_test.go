@@ -55,8 +55,7 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	}
 	srv.RegisterRoutes()
 
-	runCtx, cancelSrv := context.WithCancel(context.Background())
-	defer cancelSrv()
+	runCtx := t.Context()
 	go func() { _ = srv.Start(runCtx) }()
 
 	// Wait for server to be healthy
@@ -138,8 +137,7 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	// 4. Restart Worker (Worker 2 with same ID)
 	// We want to see if it resumes from lastCheckpoint
 	w2 := worker.NewWorker(workerCfg)
-	w2Ctx, cancelW2 := context.WithCancel(context.Background())
-	defer cancelW2()
+	w2Ctx := t.Context()
 
 	go func() {
 		_ = w2.Run(w2Ctx)

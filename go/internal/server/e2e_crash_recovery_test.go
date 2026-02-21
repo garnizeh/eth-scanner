@@ -165,7 +165,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 
 	// Wait for cleanup to expire the lease (job should become pending and worker_id cleared)
 	cleaned := false
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		got, err := q.GetJobByID(context.Background(), jobID)
 		if err != nil {
 			t.Fatalf("GetJobByID failed while waiting cleanup: %v", err)
@@ -182,7 +182,7 @@ func TestE2E_CrashRecovery_LeaseAndResume(t *testing.T) {
 
 	// Ensure worker_history contains a record for worker-A (the checkpoint goroutine may take a moment)
 	foundHistory := false
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		var cnt int
 		if err := db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM worker_history WHERE worker_id = ?", "worker-A").Scan(&cnt); err != nil {
 			t.Fatalf("query worker_history failed: %v", err)

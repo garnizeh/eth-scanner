@@ -116,7 +116,7 @@ func TestPruneDailyStatsPerWorker(t *testing.T) {
 	workerB := "worker-prune-B"
 
 	// Insert 1001 daily rows for workerA
-	for i := 0; i < 1001; i++ {
+	for i := range 1001 {
 		d := time.Now().UTC().AddDate(0, 0, -i).Format("2006-01-02")
 		if _, err := db.ExecContext(ctx, "INSERT INTO worker_stats_daily (worker_id, stats_date, total_batches) VALUES (?, ?, 1)", workerA, d); err != nil {
 			t.Fatalf("insert daily row workerA: %v", err)
@@ -124,7 +124,7 @@ func TestPruneDailyStatsPerWorker(t *testing.T) {
 	}
 
 	// Insert 10 daily rows for workerB
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		d := time.Now().UTC().AddDate(0, 0, -i).Format("2006-01-02")
 		if _, err := db.ExecContext(ctx, "INSERT INTO worker_stats_daily (worker_id, stats_date, total_batches) VALUES (?, ?, 1)", workerB, d); err != nil {
 			t.Fatalf("insert daily row workerB: %v", err)
@@ -155,7 +155,7 @@ func TestPruneMonthlyStatsPerWorker(t *testing.T) {
 	worker := "worker-monthly-prune"
 
 	// Insert 1001 monthly rows (different months) for the worker
-	for i := 0; i < 1001; i++ {
+	for i := range 1001 {
 		// Use month offsets
 		dt := time.Now().UTC().AddDate(0, -i, 0)
 		m := dt.Format("2006-01")

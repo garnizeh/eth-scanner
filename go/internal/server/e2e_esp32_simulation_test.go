@@ -63,8 +63,7 @@ func TestESP32FullCycleSimulation(t *testing.T) {
 	}
 	srv.RegisterRoutes()
 
-	runCtx, cancelSrv := context.WithCancel(context.Background())
-	defer cancelSrv()
+	runCtx := t.Context()
 	go func() { _ = srv.Start(runCtx) }()
 
 	// Wait for server to be healthy
