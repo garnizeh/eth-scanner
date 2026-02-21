@@ -39,10 +39,7 @@ func (b *Backoff) Next() time.Duration {
 	d := float64(b.current) * (1 + jitter)
 
 	// Prepare next delay
-	next := b.current * 2
-	if next > b.maxDelay {
-		next = b.maxDelay
-	}
+	next := min(b.current*2, b.maxDelay)
 	b.current = next
 
 	// Ensure returned duration is at least 0

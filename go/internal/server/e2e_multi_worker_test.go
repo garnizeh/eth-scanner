@@ -83,7 +83,7 @@ func TestE2E_MultipleWorkers_DifferentPrefixes(t *testing.T) {
 	workers := 3
 	wg.Add(workers)
 
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		go func(id int) {
 			defer wg.Done()
 			// create distinct 28-byte prefix

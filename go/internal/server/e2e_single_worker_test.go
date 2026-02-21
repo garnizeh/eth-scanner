@@ -101,7 +101,7 @@ func TestE2E_SingleWorker_MultipleCheckpoints(t *testing.T) {
 	jobID := out.JobID
 
 	// Send multiple checkpoints within the range
-	for i := int64(0); i < 5; i++ {
+	for i := range int64(5) {
 		chkURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/jobs/%d/checkpoint", port, jobID)
 		nonce := out.NonceStart + i
 		chk := map[string]any{"worker_id": "single-worker", "current_nonce": nonce, "keys_scanned": 1, "started_at": time.Now().UTC().Format(time.RFC3339), "duration_ms": 1}

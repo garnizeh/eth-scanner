@@ -147,7 +147,7 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 			kps = float64(dk) / (float64(dd) / 1000.0)
 		}
 
-		var batchSize interface{}
+		var batchSize any
 		if updated.RequestedBatchSize.Valid {
 			batchSize = updated.RequestedBatchSize.Int64
 		} else {

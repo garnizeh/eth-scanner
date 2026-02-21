@@ -107,8 +107,8 @@ func Load() (*Config, error) {
 	if rawAddresses == "" {
 		cfg.TargetAddresses = []string{"0x000000000000000000000000000000000000dEaD"}
 	} else {
-		parts := strings.Split(rawAddresses, ",")
-		for _, p := range parts {
+		parts := strings.SplitSeq(rawAddresses, ",")
+		for p := range parts {
 			addr := strings.ToLower(strings.TrimSpace(p))
 			if addr != "" {
 				cfg.TargetAddresses = append(cfg.TargetAddresses, addr)

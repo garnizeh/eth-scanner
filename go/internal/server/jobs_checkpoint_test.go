@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -210,13 +211,7 @@ func TestJobCheckpoint_Concurrent(t *testing.T) {
 	if !job.CurrentNonce.Valid {
 		t.Fatalf("expected current_nonce to be set")
 	}
-	found := false
-	for _, v := range values {
-		if job.CurrentNonce.Int64 == v {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(values, job.CurrentNonce.Int64)
 	if !found {
 		t.Fatalf("current_nonce not one of submitted values: %d", job.CurrentNonce.Int64)
 	}
