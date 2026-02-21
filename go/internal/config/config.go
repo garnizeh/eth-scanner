@@ -50,6 +50,10 @@ type Config struct {
 
 	// WorkerMonthlyStatsLimit is the per-worker cap for monthly aggregation
 	WorkerMonthlyStatsLimit int
+
+	// DashboardPassword is the password required to access the dashboard UI.
+	// If empty, dashboard authentication is disabled.
+	DashboardPassword string //nolint:gosec // false positive
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -163,6 +167,12 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid WORKER_MONTHLY_STATS_LIMIT: %w", err)
 		}
 		cfg.WorkerMonthlyStatsLimit = n
+	}
+
+	// Dashboard password
+	cfg.DashboardPassword = strings.TrimSpace(os.Getenv("DASHBOARD_PASSWORD"))
+	if cfg.DashboardPassword == "" {
+		return nil, fmt.Errorf("DASHBOARD_PASSWORD is required")
 	}
 
 	// Validate retention values and warn for low sizes

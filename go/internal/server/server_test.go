@@ -66,6 +66,17 @@ func TestRegisterRoutes(t *testing.T) {
 		t.Fatalf("/health expected 200 got %d", rr.Code)
 	}
 
+	// / should redirect to /dashboard
+	rrR := httptest.NewRecorder()
+	reqR := httptest.NewRequest("GET", "/", nil)
+	s.router.ServeHTTP(rrR, reqR)
+	if rrR.Code != http.StatusSeeOther {
+		t.Fatalf("/ expected 303 got %d", rrR.Code)
+	}
+	if loc := rrR.Header().Get("Location"); loc != "/dashboard" {
+		t.Fatalf("/ redirect location expected /dashboard got %q", loc)
+	}
+
 	// /api/v1/ placeholder should return 501
 	rr2 := httptest.NewRecorder()
 	req2 := httptest.NewRequest("GET", "/api/v1/", nil)

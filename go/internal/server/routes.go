@@ -10,6 +10,15 @@ import (
 // RegisterRoutes registers all HTTP routes and applies global middleware.
 // This keeps route registration separate from server bootstrap.
 func (s *Server) RegisterRoutes() {
+	// Redirect root to dashboard
+	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	})
+
 	// Register handlers on the underlying ServeMux
 	s.router.HandleFunc("/health", s.handleHealth)
 
@@ -63,11 +72,15 @@ func (s *Server) RegisterRoutes() {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 
-	// UI Dashboard routes
-	s.router.HandleFunc("/dashboard", s.handleDashboard)
-	s.router.HandleFunc("/dashboard/", s.handleDashboard)
+	// Dashboard Authentication routes
+	s.router.HandleFunc("/login", s.handleLogin)
+	s.router.HandleFunc("/logout", s.handleLogout)
 
-	// Static files serving from embedded FS
+	// UI Dashboard routes (protected by DashboardAuth)
+	s.router.Handle("/dashboard", s.DashboardAuth(http.HandlerFunc(s.handleDashboard)))
+	s.router.Handle("/dashboard/", s.DashboardAuth(http.HandlerFunc(s.handleDashboard)))
+
+	// Static files serving from embedded FS (public)
 	s.router.Handle("/static/", http.FileServer(http.FS(ui.FS)))
 
 	// Apply middleware chain in the required order: APIKey -> RequestID -> Logger -> CORS
