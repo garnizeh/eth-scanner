@@ -71,7 +71,8 @@ func (r *TemplateRenderer) loadTemplates() error {
 		// Page file must come first so ParseFS names the template set after it.
 		// When tmpl.Execute() is called, it will run the page template, which
 		// in turn invokes the "base" layout template.
-		files := []string{filepath.Join("templates", name)}
+		files := make([]string, 0, 1+len(layoutFiles))
+		files = append(files, filepath.Join("templates", name))
 		files = append(files, layoutFiles...)
 
 		tmpl, err := template.ParseFS(FS, files...)
