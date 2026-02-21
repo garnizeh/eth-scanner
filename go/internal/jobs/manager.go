@@ -180,6 +180,7 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 		if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
 			return 0, 0, fmt.Errorf("nonce range overflow")
 		}
+		//nolint:gosec // G115: overflow checked above
 		return uint32(nonceStart), uint32(nonceEnd64), nil
 	}
 
@@ -207,6 +208,7 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 	if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
 		return 0, 0, fmt.Errorf("nonce range overflow")
 	}
+	//nolint:gosec // G115: overflow checked above
 	return uint32(nonceStart), uint32(nonceEnd64), nil
 }
 
