@@ -131,6 +131,7 @@ type JobLease struct {
 	Prefix28        []byte
 	NonceStart      uint32
 	NonceEnd        uint32
+	CurrentNonce    *uint32
 	TargetAddresses []string
 	ExpiresAt       time.Time
 }
@@ -186,6 +187,7 @@ func (c *Client) LeaseBatch(ctx context.Context, requestedBatchSize uint32) (*Jo
 		Prefix28:        prefix28,
 		NonceStart:      resp.NonceStart,
 		NonceEnd:        resp.NonceEnd,
+		CurrentNonce:    resp.CurrentNonce,
 		TargetAddresses: resp.TargetAddresses,
 		ExpiresAt:       expiresAt.UTC(),
 	}, nil
@@ -204,6 +206,7 @@ type leaseResponse struct {
 	NonceStart      uint32    `json:"nonce_start"`
 	NonceEnd        uint32    `json:"nonce_end"`
 	TargetAddresses []string  `json:"target_addresses"`
+	CurrentNonce    *uint32   `json:"current_nonce,omitempty"`
 	ExpiresAt       string    `json:"expires_at"`
 }
 
