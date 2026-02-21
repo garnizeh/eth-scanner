@@ -139,3 +139,73 @@ func TestConstructPrivateKey(t *testing.T) {
 		})
 	}
 }
+
+// TestDeriveEthereumAddress_Overflow verifies that a key above the secp256k1
+// group order returns an error.
+func TestDeriveEthereumAddress_Overflow(t *testing.T) {
+	t.Parallel()
+
+	// secp256k1 group order is:
+	// FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+	// We'll use all Fs to ensure overflow.
+	var overflow [32]byte
+	for i := range 32 {
+		overflow[i] = 0xFF
+	}
+
+	_, err := DeriveEthereumAddress(overflow)
+	if err == nil {
+		t.Fatalf("expected error for overflow private key, got nil")
+	}
+
+	hasher := crypto.NewKeccakState()
+	var pubBuf [64]byte
+	var hashBuf [32]byte
+	_, err = DeriveEthereumAddressFast(overflow, hasher, &pubBuf, &hashBuf)
+	if err == nil {
+		t.Fatalf("expected error for overflow private key (fast), got nil")
+	}
+}
+
+// TestDeriveEthereumAddressFast_InvalidKey verifies that an invalid (zero) key
+// is caught by the fast implementation.
+func TestDeriveEthereumAddressFast_InvalidKey(t *testing.T) {
+	t.Parallel()
+
+	var zero [32]byte
+	hasher := crypto.NewKeccakState()
+	var pubBuf [64]byte
+	var hashBuf [32]byte
+	_, err := DeriveEthereumAddressFast(zero, hasher, &pubBuf, &hashBuf)
+	if err == nil {
+		t.Fatalf("expected error for zero private key (fast), got nil")
+	}
+}
+
+func TestConstructPrivateKey_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("AllZeros", func(t *testing.T) {
+		var prefix [28]byte
+		got := ConstructPrivateKey(prefix, 0)
+		var expected [32]byte
+		if !bytes.Equal(got[:], expected[:]) {
+			t.Fatalf("expected all zeros, got %x", got)
+		}
+	})
+
+	t.Run("AllOnes", func(t *testing.T) {
+		var prefix [28]byte
+		for i := range 28 {
+			prefix[i] = 0xFF
+		}
+		got := ConstructPrivateKey(prefix, 0xFFFFFFFF)
+		var expected [32]byte
+		for i := range 32 {
+			expected[i] = 0xFF
+		}
+		if !bytes.Equal(got[:], expected[:]) {
+			t.Fatalf("expected all ones, got %x", got)
+		}
+	})
+}
