@@ -20,8 +20,8 @@ import (
 
 const (
 	// maxBatchSize is a conservative upper bound for requested batch sizes.
-	// Workers must request a positive value <= this limit.
-	maxBatchSize  = 10_000_000
+	// We allow up to 4 billion keys to accommodate fast PC workers (1 hour @ 1M keys/sec).
+	maxBatchSize  = 4_000_000_000
 	leaseDuration = time.Hour
 )
 

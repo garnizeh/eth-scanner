@@ -22,10 +22,14 @@ var scanBenchCases = []scanBenchCase{
 func BenchmarkScanRange_Single(b *testing.B) {
 	target := common.Address{0x1} // practically no match; exercises full scan path
 	ctx := context.Background()
+	var prefix [28]byte
+	for i := range 28 {
+		prefix[i] = byte(i + 1)
+	}
 
 	for _, tc := range scanBenchCases {
 		b.Run(tc.name, func(b *testing.B) {
-			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
+			job := Job{Prefix28: prefix, NonceStart: 0, NonceEnd: tc.nonceEnd}
 			numKeys := uint64(tc.nonceEnd) + 1
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -43,10 +47,14 @@ func BenchmarkScanRange_Single(b *testing.B) {
 func BenchmarkScanRange_Parallel(b *testing.B) {
 	target := common.Address{0x1} // practically no match; exercises full scan path
 	ctx := context.Background()
+	var prefix [28]byte
+	for i := range 28 {
+		prefix[i] = byte(i + 1)
+	}
 
 	for _, tc := range scanBenchCases {
 		b.Run(tc.name, func(b *testing.B) {
-			job := Job{NonceStart: 0, NonceEnd: tc.nonceEnd}
+			job := Job{Prefix28: prefix, NonceStart: 0, NonceEnd: tc.nonceEnd}
 			numKeys := uint64(tc.nonceEnd) + 1
 			b.ReportAllocs()
 			b.ResetTimer()
