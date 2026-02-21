@@ -9,13 +9,16 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png">
     <link rel="manifest" href="/static/img/site.webmanifest">
-    <title>{{template "title" .}} - EthScanner</title>
+    <title>{{template "title" .}} - EthScanner</title>  
     <!-- Tailwind CSS (via local static) -->
     <script src="/static/tailwind.3.4.17.min.js"></script>
     <!-- HTMX -->
     <script src="/static/htmx.1.9.10.min.js"></script>
     <!-- HTMX WebSocket Extension -->
     <script src="/static/htmx.ws.2.0.8.min.js"></script>
+    <!-- uPlot (Live Charting) -->
+    <link rel="stylesheet" href="/static/uplot.1.6.30.min.css">
+    <script src="/static/uplot.1.6.30.min.js"></script>
     <style>
         [hx-cloak] {
             display: none !important;

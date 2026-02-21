@@ -94,9 +94,150 @@
         </div>
     </div>
 
+    <!-- Live Throughput Chart -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Live Throughput
+                </h3>
+                <p class="text-[10px] text-gray-500 font-medium">REAL-TIME KEYS PER SECOND (10m WINDOW)</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="inline-block h-2 w-2 rounded-full bg-purple-500"></span>
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fleet Aggregate</span>
+            </div>
+        </div>
+        <div id="throughput-chart" class="w-full h-48 sm:h-64"></div>
+        <!-- Hidden data bridge for HTMX/Chart -->
+        <div id="bridge-container">
+            <div id="throughput-bridge" class="hidden" hx-swap-oob="true" data-throughput="{{ .GlobalKeysPerSecond }}"
+                data-time="{{ .NowTimestamp }}"></div>
+        </div>
+    </div>
+
     <!-- Active Workers Table (Active Fleet Status) -->
     <div id="active-workers-container" class="transition-all duration-500">
         {{template "active-workers" .}}
     </div>
 </div>
+
+<script>
+    (function () {
+        let chart;
+        let data = [
+            [], // x (timestamps)
+            [], // y (throughput)
+        ];
+
+        function initChart() {
+            const container = document.getElementById('throughput-chart');
+            if (!container) return;
+
+            const opts = {
+                id: "chart1",
+                width: container.offsetWidth,
+                height: container.offsetHeight,
+                cursor: {
+                    show: false
+                },
+                select: {
+                    show: false
+                },
+                legend: {
+                    show: false
+                },
+                scales: {
+                    x: {
+                        time: true,
+                    },
+                    y: {
+                        auto: true,
+                        range: (u, min, max) => [0, max * 1.1 + 10]
+                    }
+                },
+                series: [
+                    {},
+                    {
+                        stroke: "#8b5cf6",
+                        width: 2,
+                        fill: "rgba(139, 92, 246, 0.1)",
+                        points: { show: false }
+                    },
+                ],
+                axes: [
+                    {
+                        stroke: "#94a3b8",
+                        grid: { stroke: "#f1f5f9", width: 1 },
+                        ticks: { stroke: "#cbd5e1", width: 1 }
+                    },
+                    {
+                        stroke: "#94a3b8",
+                        grid: { stroke: "#f1f5f9", width: 1 },
+                        ticks: { stroke: "#cbd5e1", width: 1 },
+                        values: (u, vals) => vals.map(v => v >= 1000 ? (v / 1000).toFixed(1) + "k" : v)
+                    }
+                ]
+            };
+
+            chart = new uPlot(opts, data, container);
+
+            window.addEventListener("resize", () => {
+                chart.setSize({
+                    width: container.offsetWidth,
+                    height: container.offsetHeight,
+                });
+            });
+        }
+
+        function updateChart() {
+            const bridge = document.getElementById('throughput-bridge');
+            if (!bridge || !chart) return;
+
+            const throughput = parseFloat(bridge.getAttribute('data-throughput')) || 0;
+            const time = parseInt(bridge.getAttribute('data-time')) || Math.floor(Date.now() / 1000);
+
+            // Add new point
+            data[0].push(time);
+            data[1].push(throughput);
+
+            // Keep only last 10 minutes (assuming 1s resolution, though it might be slower)
+            // If we broadcast every checkpoint/complete, it can be frequent.
+            const windowSize = 600; // 10 minutes
+            const minTime = time - windowSize;
+
+            while (data[0].length > 0 && data[0][0] < minTime) {
+                data[0].shift();
+                data[1].shift();
+            }
+
+            chart.setData(data);
+        }
+
+        // Initialize on load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChart);
+        } else {
+            initChart();
+        }
+
+        // Watch for throughput-bridge updates via HTMX
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' || mutation.type === 'childList') {
+                    updateChart();
+                }
+            });
+        });
+
+        // Small delay to ensure bridge is there
+        setTimeout(() => {
+            const bridgeContainer = document.getElementById('bridge-container');
+            if (bridgeContainer) {
+                observer.observe(bridgeContainer, { childList: true });
+                // Initial update
+                updateChart();
+            }
+        }, 500);
+    })();
+</script>
 {{end}}

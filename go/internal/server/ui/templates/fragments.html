@@ -43,4 +43,8 @@
 <p id="total-workers" hx-swap-oob="innerHTML">{{ .TotalWorkers }}</p>
 <p id="active-jobs" hx-swap-oob="innerHTML">{{ .ProcessingJobCount }}</p>
 <p id="global-throughput" hx-swap-oob="innerHTML">{{ printf "%.1f" .GlobalKeysPerSecond }} k/s</p>
+
+<!-- Throughput bridge for the live chart -->
+<div id="throughput-bridge" hx-swap-oob="true" class="hidden" data-throughput="{{ .GlobalKeysPerSecond }}"
+    data-time="{{ .NowTimestamp }}"></div>
 {{end}}

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/garnizeh/eth-scanner/internal/database"
 )
@@ -36,6 +37,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"CompletedJobCount":   stats.CompletedBatches,
 		"ProcessingJobCount":  stats.ProcessingBatches,
 		"GlobalKeysPerSecond": stats.GlobalKeysPerSecond,
+		"NowTimestamp":        time.Now().Unix(),
 	}
 
 	s.renderer.Handler(tmpl, data).ServeHTTP(w, r)
