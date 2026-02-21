@@ -5,8 +5,21 @@
 #include "nvs_flash.h"
 #include <string.h>
 
+extern void set_mock_http_response(int status, const char *json_body);
+
 void test_api_lease_success()
 {
+    // Mock response for leasing a job
+    const char *mock_response =
+        "{"
+        "\"job_id\": 42,"
+        "\"nonce_start\": 1000,"
+        "\"nonce_end\": 2000,"
+        "\"prefix_28\": \"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHA==\","
+        "\"target_addresses\": [\"742d35Cc6634C0532925a3b844Bc454e4438f44e\"]"
+        "}";
+    set_mock_http_response(200, mock_response);
+
     job_info_t job;
     esp_err_t err = api_lease_job("test-worker", 5000, &job);
     TEST_ASSERT_EQUAL(ESP_OK, err);
@@ -30,18 +43,21 @@ void test_api_lease_success()
 
 void test_api_checkpoint()
 {
+    set_mock_http_response(200, NULL);
     esp_err_t err = api_checkpoint(42, "test-worker", 1500, 500, 10000);
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
 
 void test_api_complete()
 {
+    set_mock_http_response(200, NULL);
     esp_err_t err = api_complete(42, "test-worker", 2000, 1000, 20000);
     TEST_ASSERT_EQUAL(ESP_OK, err);
 }
 
 void test_api_submit_result()
 {
+    set_mock_http_response(200, NULL);
     uint8_t priv_key[32];
     uint8_t address[20];
     memset(priv_key, 0x01, sizeof(priv_key));
@@ -56,8 +72,7 @@ void test_api_submit_result()
 void test_checkpoint_404_rejected()
 {
     // Simulate server returning 404 for a checkpoint
-    extern int g_mock_http_status;
-    g_mock_http_status = 404;
+    set_mock_http_response(404, NULL);
 
     esp_err_t err = api_checkpoint(999, "test-worker", 500, 500, 1000);
     // Should return ESP_ERR_INVALID_STATE based on our recent changes
@@ -67,8 +82,7 @@ void test_checkpoint_404_rejected()
 void test_checkpoint_410_rejected()
 {
     // Simulate server returning 410 (Gone) for a checkpoint
-    extern int g_mock_http_status;
-    g_mock_http_status = 410;
+    set_mock_http_response(410, NULL);
 
     esp_err_t err = api_checkpoint(999, "test-worker", 500, 500, 1000);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
@@ -76,8 +90,7 @@ void test_checkpoint_410_rejected()
 
 void test_complete_410_rejected()
 {
-    extern int g_mock_http_status;
-    g_mock_http_status = 410;
+    set_mock_http_response(410, NULL);
 
     esp_err_t err = api_complete(999, "test-worker", 10000, 10000, 5000);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_STATE, err);
