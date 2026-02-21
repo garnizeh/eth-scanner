@@ -22,6 +22,8 @@ type Querier interface {
 	FindAvailableBatch(ctx context.Context) (Job, error)
 	// Find an existing non-completed (macro) job for a given prefix
 	FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (Job, error)
+	// Get detailed info about currently active workers for dashboard
+	GetActiveWorkerDetails(ctx context.Context) ([]GetActiveWorkerDetailsRow, error)
 	// Get workers active in the last N minutes
 	GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString) ([]Worker, error)
 	// Get all results (limited)

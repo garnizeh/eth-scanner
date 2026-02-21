@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"database/sql"
 	"fmt"
 	"html/template"
 	"io"
@@ -71,37 +72,96 @@ func (r *TemplateRenderer) loadTemplates() error {
 	}
 
 	var layoutFiles []string
+	var partialFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && entry.Name() == "base.html" {
+		if entry.IsDir() {
+			continue
+		}
+		if entry.Name() == "base.html" {
 			layoutFiles = append(layoutFiles, filepath.Join("templates", entry.Name()))
+		} else if entry.Name() == "fragments.html" || entry.Name() == "active_workers.html" {
+			partialFiles = append(partialFiles, filepath.Join("templates", entry.Name()))
 		}
 	}
 
-	// For each template file that isn't base.html, parse it together with base.html
+	// For each template file that isn't a shared one, parse it together with shared ones
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "base.html" {
-			continue
+		if entry.IsDir() || entry.Name() == "base.html" || entry.Name() == "fragments.html" || entry.Name() == "active_workers.html" {
+			// We still want to parse fragments and active_workers as their own sets so RenderFragment works
+			if entry.Name() == "base.html" {
+				continue
+			}
 		}
 
 		name := entry.Name()
 		// Page file must come first so ParseFS names the template set after it.
-		// When tmpl.Execute() is called, it will run the page template, which
-		// in turn invokes the "base" layout template.
-		files := append([]string{filepath.Join("templates", name)}, layoutFiles...)
+		files := []string{filepath.Join("templates", name)}
+		files = append(files, layoutFiles...)
+		files = append(files, partialFiles...)
 
 		tmpl := template.New(name).Funcs(template.FuncMap{
-			"navClass": func(current, target string, isSidebar bool) string {
-				if isSidebar {
-					if current == target {
-						return "group flex items-center px-3 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-900 border-l-4 border-blue-600"
-					}
-					return "group flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+			"navAttr": func(current, target string, extraClasses string) template.HTMLAttr {
+				classes := "px-3 py-2 rounded-md text-sm font-medium transition"
+				if extraClasses != "" {
+					classes += " " + extraClasses
 				}
-				// Top Nav
+				if current == target {
+					classes += " bg-gray-700 text-white"
+				} else {
+					classes += " text-gray-300 hover:text-white hover:bg-gray-700"
+				}
+				return template.HTMLAttr(fmt.Sprintf(`class="%s"`, classes))
+			},
+			"navClass": func(current, target string) string {
 				if current == target {
 					return "px-3 py-2 rounded-md text-sm font-medium bg-gray-700 text-white transition"
 				}
 				return "px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition"
+			},
+			"multiply": func(a, b float64) float64 {
+				return a * b
+			},
+			"percentage": func(current, start, end int64) float64 {
+				if end == start {
+					return 0
+				}
+				p := float64(current-start) / float64(end-start)
+				if p < 0 {
+					return 0
+				}
+				if p > 1 {
+					return 1
+				}
+				return p
+			},
+			"progressStyle": func(current, start, end int64) template.HTMLAttr {
+				if end == start {
+					return template.HTMLAttr("style=\"width: 0%\"")
+				}
+				p := float64(current-start) / float64(end-start)
+				if p < 0 {
+					p = 0
+				}
+				if p > 1 {
+					p = 1
+				}
+				return template.HTMLAttr(fmt.Sprintf("style=\"width: %.1f%%\"", p*100))
+			},
+			"workerIconClass": func(workerType interface{}) string {
+				wt := ""
+				switch v := workerType.(type) {
+				case string:
+					wt = v
+				case sql.NullString:
+					if v.Valid {
+						wt = v.String
+					}
+				}
+
+				if wt == "pc" {
+					return "flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-blue-100 text-blue-600"
+				}
+				return "flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-purple-100 text-purple-600"
 			},
 		})
 

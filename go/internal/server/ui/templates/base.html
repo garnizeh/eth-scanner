@@ -41,17 +41,26 @@
                 {{if not .HideNav}}
                 <div class="hidden md:block">
                     <div class="ml-10 flex items-baseline space-x-4">
-                        <a href="/dashboard" class="{{navClass .CurrentPath " /dashboard" false}}">Overview</a>
-                        <a href="/dashboard/workers" class="{{navClass .CurrentPath " /dashboard/workers"
-                            false}}">Workers</a>
-                        <a href="/dashboard/settings" class="{{navClass .CurrentPath " /dashboard/settings"
-                            false}}">Settings</a>
+                        <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "" }}>Overview</a>
+                        <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "" }}>Workers</a>
+                        <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "" }}>Settings</a>
                     </div>
                 </div>
                 {{end}}
 
-                <!-- User actions -->
-                <div class="flex items-center space-x-3">
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center">
+                    <button type="button" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')"
+                        class="bg-gray-800 p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- User actions (Desktop Only) -->
+                <div class="hidden md:flex items-center space-x-3">
                     {{if not .HideNav}}
                     <form action="/logout" method="POST" class="inline">
                         <button type="submit"
@@ -65,50 +74,47 @@
                 </div>
             </div>
         </div>
-    </header>
 
-    <!-- Content Area with optional Sidebar layout -->
-    <div class="flex-grow">
-        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            {{if not .HideNav}}
-            <div class="flex flex-col lg:flex-row gap-8">
-                <!-- Simple Sidebar for Desktop -->
-                <aside class="hidden lg:block w-64 flex-shrink-0">
-                    <nav class="space-y-1">
-                        <a href="/dashboard" class="{{navClass .CurrentPath " /dashboard" true}}">
-                            Dashboard Overview
-                        </a>
-                        <a href="/dashboard/workers" class="{{navClass .CurrentPath " /dashboard/workers" true}}">
-                            Connected Workers
-                        </a>
-                        <a href="/dashboard/settings" class="{{navClass .CurrentPath " /dashboard/settings" true}}">
-                            System Settings
-                        </a>
-                    </nav>
-                </aside>
-
-                <!-- Page Content -->
-                <div class="flex-1" hx-ext="ws" ws-connect="/api/v1/ws">
-                    {{template "content" .}}
+        <!-- Mobile Menu (Hidden by default) -->
+        {{if not .HideNav}}
+        <div id="mobile-menu" class="hidden md:hidden border-t border-gray-800 bg-gray-900 absolute w-full shadow-lg">
+            <div class="px-4 py-3 space-y-2">
+                <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "block w-full" }}>Overview</a>
+                <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "block w-full" }}>Workers</a>
+                <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "block w-full"
+                    }}>Settings</a>
+                <div class="border-t border-gray-700 pt-2 mt-2">
+                    <form action="/logout" method="POST" class="w-full">
+                        <button type="submit"
+                            class="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-800 rounded-md text-sm font-medium transition">
+                            Logout
+                        </button>
+                    </form>
                 </div>
             </div>
-            {{else}}
-            <!-- No sidebar layout (e.g. for Login) -->
-            {{template "content" .}}
-            {{end}}
         </div>
-    </div>
+        {{end}}
+    </header>
+
+    <!-- Content Area -->
+    <main class="flex-grow w-full overflow-x-hidden">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6">
+            <div hx-ext="ws" ws-connect="/api/v1/ws">
+                {{template "content" .}}
+            </div>
+        </div>
+    </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 mt-auto">
+    <footer class="bg-white border-t border-gray-200 mt-auto w-full">
         <div
-            class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm">
+            class="max-w-7xl mx-auto py-6 px-4 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm">
             <p>&copy; 2026 EthScanner Distributed. All rights reserved.</p>
-            <div class="flex space-x-6 mt-4 md:mt-0">
+            <div class="flex space-x-6 mt-4 md:mt-0 items-center">
                 <a href="https://github.com/garnizeh/eth-scanner"
                     class="hover:text-gray-900 transition underline underline-offset-4">GitHub</a>
                 <span class="hidden md:inline text-gray-300">|</span>
-                <span class="font-mono text-xs uppercase tracking-tighter">Distributed ETH Key Search Engine</span>
+                <span class="font-mono text-[10px] uppercase tracking-tighter">Distributed ETH Key Search Engine</span>
             </div>
         </div>
     </footer>
