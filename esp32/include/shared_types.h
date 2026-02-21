@@ -26,6 +26,11 @@
 #define NOTIFY_BIT_WIFI_STATUS (1 << 3)  // Signal to check WiFi status
 #define NOTIFY_BIT_RESULT_FOUND (1 << 4) // Private key found!
 
+// Notification bits for Core 1 (Worker)
+#define NOTIFY_BIT_RESUME_SCAN (1 << 5)    // Signal to start/resume scan
+#define NOTIFY_BIT_CHECKPOINT_ACK (1 << 6) // Signal that checkpoint is done, continue scanning
+#define NOTIFY_BIT_STOP_SCAN (1 << 7)      // Signal to stop scan immediately (fatal error)
+
 // Job information structure
 typedef struct
 {

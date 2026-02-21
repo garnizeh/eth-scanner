@@ -45,3 +45,34 @@ esp_err_t __attribute__((weak)) nvs_commit_wr(nvs_handle_t handle)
 {
     return nvs_commit(handle);
 }
+
+// Weak wrappers for HTTP client functions.
+esp_http_client_handle_t __attribute__((weak)) esp_http_client_init_wr(const esp_http_client_config_t *config)
+{
+    return esp_http_client_init(config);
+}
+
+esp_err_t __attribute__((weak)) esp_http_client_cleanup_wr(esp_http_client_handle_t client)
+{
+    return esp_http_client_cleanup(client);
+}
+
+esp_err_t __attribute__((weak)) esp_http_client_perform_wr(esp_http_client_handle_t client)
+{
+    return esp_http_client_perform(client);
+}
+
+int __attribute__((weak)) esp_http_client_get_status_code_wr(esp_http_client_handle_t client)
+{
+    return esp_http_client_get_status_code(client);
+}
+
+esp_err_t __attribute__((weak)) esp_http_client_set_header_wr(esp_http_client_handle_t client, const char *field, const char *value)
+{
+    return esp_http_client_set_header(client, field, value);
+}
+
+esp_err_t __attribute__((weak)) esp_http_client_set_post_field_wr(esp_http_client_handle_t client, const char *data, int len)
+{
+    return esp_http_client_set_post_field(client, data, len);
+}

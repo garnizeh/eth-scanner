@@ -68,37 +68,14 @@ static void stop_core1_task(void)
     vTaskDelete(g_state.core1_task_handle);
     g_state.core1_task_handle = NULL;
     set_led_status(LED_WIFI_CONNECTING);
-    ESP_LOGW(TAG, "Core 1 worker task stopped due to WiFi disconnect.");
-}
-
-/* Timer callback for periodic checkpoints */
-static void checkpoint_timer_callback(TimerHandle_t xTimer)
-{
-    if (g_state.job_active && g_state.core0_task_handle != NULL)
-    {
-        ESP_LOGI(TAG, "Checkpoint timer fired! Signaling Core 0...");
-        xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_CHECKPOINT, eSetBits);
-    }
+    ESP_LOGW(TAG, "Core 1 worker task stopped.");
 }
 
 /**
- * @brief Spawns Core 0 and Core 1 tasks, and initializes the periodic checkpoint timer.
+ * @brief Spawns Core 0 task. Core 1 will start after WiFi connects.
  */
 void start_core_tasks(void)
 {
-    // Create checkpoint timer
-    g_state.checkpoint_timer = xTimerCreate("checkpoint_timer",
-                                            pdMS_TO_TICKS(CHECKPOINT_INTERVAL_MS),
-                                            pdTRUE, // Auto-reload
-                                            (void *)0,
-                                            checkpoint_timer_callback);
-
-    if (g_state.checkpoint_timer != NULL)
-    {
-        xTimerStart(g_state.checkpoint_timer, 0);
-        ESP_LOGI(TAG, "Checkpoint timer initialized (interval: %d ms)", CHECKPOINT_INTERVAL_MS);
-    }
-
     // Create tasks pinned to cores — Core 0 handles system and interrupts
     // Core 0: PRO_CPU (Networking, API, Misc)
     g_state.core0_task_handle = xTaskCreateStaticPinnedToCore(
@@ -212,13 +189,35 @@ void core0_system_task(void *pvParameters)
                 if (g_state.wifi_connected)
                 {
                     uint64_t duration = (esp_timer_get_time() / 1000) - atomic_load(&g_state.batch_start_ms);
-                    esp_err_t err = api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, duration);
-                    if (err == ESP_ERR_NOT_FOUND)
+                    esp_err_t api_err = api_checkpoint(cp.job_id, g_state.worker_id, current, scanned, duration);
+
+                    if (api_err == ESP_ERR_INVALID_STATE)
                     {
-                        ESP_LOGW(TAG, "Job %lld not found on server! Abandoning.", cp.job_id);
+                        ESP_LOGE(TAG, "Job %lld rejected by server (404/410). Stopping.", cp.job_id);
                         g_state.job_active = false;
                         g_state.current_job.job_id = 0;
                         nvs_clear_checkpoint(g_state.nvs_handle);
+                        // Tell worker to abort immediately
+                        if (g_state.core1_task_handle != NULL)
+                        {
+                            xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_STOP_SCAN, eSetBits);
+                        }
+                    }
+                    else
+                    {
+                        // Signal worker that checkpoint is confirmed or ignored due to network error
+                        if (g_state.core1_task_handle != NULL)
+                        {
+                            xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_CHECKPOINT_ACK, eSetBits);
+                        }
+                    }
+                }
+                else
+                {
+                    // No WiFi: just ACK locally so worker continues
+                    if (g_state.core1_task_handle != NULL)
+                    {
+                        xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_CHECKPOINT_ACK, eSetBits);
                     }
                 }
             }
@@ -474,7 +473,7 @@ void core1_worker_task(void *pvParameters)
                         led_trigger_activity();
                     }
 
-                    // Progress Logging (every 2500 keys, adjust as needed based on throughput)
+                    // Progress Logging & Mandatory Checkpoint (every 2500 keys)
                     if (progress > 0 && (progress % 2500 == 0))
                     {
                         uint32_t percent = total > 0 ? (progress * 100 / total) : 0;
@@ -482,13 +481,41 @@ void core1_worker_task(void *pvParameters)
                                  (unsigned long)progress, (unsigned long)total,
                                  (unsigned long)percent, (unsigned long)current,
                                  (unsigned long)session_scanned);
+
+                        // Mandatory synchronous checkpoint - don't continue until Master acknowledges
+                        xTaskNotify(g_state.core0_task_handle, NOTIFY_BIT_CHECKPOINT, eSetBits);
+
+                        // Wait for Core 0 to finish checkpointing
+                        uint32_t ack_notif = 0;
+                        if (xTaskNotifyWait(0, 0xFFFFFFFF, &ack_notif, pdMS_TO_TICKS(10000)) == pdTRUE)
+                        {
+                            if (ack_notif & NOTIFY_BIT_STOP_SCAN)
+                            {
+                                ESP_LOGE(TAG, "Core 1: Fatal checkpoint error. Stopping scan.");
+                                break;
+                            }
+                            // Continue scanning on ACK
+                        }
+                        else
+                        {
+                            ESP_LOGW(TAG, "Core 1: Checkpoint ACK timeout. Carrying on...");
+                        }
                     }
 
                     // Frequently yield to allow system tasks and IDLE to reset WDT.
-                    // Yielding every 128 keys (approx once every 150-250ms) is a good balance.
                     if ((progress & 0x7F) == 0)
                     {
                         vTaskDelay(1);
+                        // Also check for STOP_SCAN signal between yields
+                        uint32_t async_notif = 0;
+                        if (xTaskNotifyWait(0, 0xFFFFFFFF, &async_notif, 0) == pdTRUE)
+                        {
+                            if (async_notif & NOTIFY_BIT_STOP_SCAN)
+                            {
+                                ESP_LOGE(TAG, "Core 1: External STOP signal received.");
+                                break;
+                            }
+                        }
                     }
                 }
             }
