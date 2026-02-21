@@ -95,7 +95,8 @@ func (r *TemplateRenderer) loadTemplates() error {
 
 		name := entry.Name()
 		// Page file must come first so ParseFS names the template set after it.
-		files := []string{filepath.Join("templates", name)}
+		files := make([]string, 0, 1+len(layoutFiles)+len(partialFiles))
+		files = append(files, filepath.Join("templates", name))
 		files = append(files, layoutFiles...)
 		files = append(files, partialFiles...)
 
@@ -110,6 +111,7 @@ func (r *TemplateRenderer) loadTemplates() error {
 				} else {
 					classes += " text-gray-300 hover:text-white hover:bg-gray-700"
 				}
+				// #nosec G203 -- classes are hardcoded or controlled internal strings
 				return template.HTMLAttr(fmt.Sprintf(`class="%s"`, classes))
 			},
 			"navClass": func(current, target string) string {
@@ -136,6 +138,7 @@ func (r *TemplateRenderer) loadTemplates() error {
 			},
 			"progressStyle": func(current, start, end int64) template.HTMLAttr {
 				if end == start {
+					// #nosec G203 -- hardcoded safe attribute
 					return template.HTMLAttr("style=\"width: 0%\"")
 				}
 				p := float64(current-start) / float64(end-start)
@@ -145,9 +148,10 @@ func (r *TemplateRenderer) loadTemplates() error {
 				if p > 1 {
 					p = 1
 				}
+				// #nosec G203 -- calculated width percentage is safe
 				return template.HTMLAttr(fmt.Sprintf("style=\"width: %.1f%%\"", p*100))
 			},
-			"workerIconClass": func(workerType interface{}) string {
+			"workerIconClass": func(workerType any) string {
 				wt := ""
 				switch v := workerType.(type) {
 				case string:
