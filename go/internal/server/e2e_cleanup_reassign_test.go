@@ -240,3 +240,153 @@ func TestCleanupAndReassign(t *testing.T) {
 		t.Fatalf("server did not shutdown within timeout")
 	}
 }
+
+// TestLeaseExpirationReassign matches the criteria for P09-T060:
+// 1. Worker A leases via API.
+// 2. Wait for TTL to expire (no checkpoint).
+// 3. Worker B leases via API.
+// 4. Verify Worker B got the same job that was leased to Worker A.
+func TestLeaseExpirationReassign(t *testing.T) {
+	ctx := t.Context()
+
+	lc := &net.ListenConfig{}
+	l, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find free port: %v", err)
+	}
+	addr := l.Addr().(*net.TCPAddr)
+	port := addr.Port
+	_ = l.Close()
+
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "e2e_p09_t060.db")
+
+	cfg := &config.Config{
+		Port:                     fmt.Sprintf("%d", port),
+		DBPath:                   dbPath,
+		LogLevel:                 "debug",
+		StaleJobThresholdSeconds: 1, // 1s threshold for fast tests
+		CleanupIntervalSeconds:   1, // run cleanup every 1s
+		ShutdownTimeout:          3 * time.Second,
+	}
+
+	db, err := database.InitDB(context.Background(), cfg.DBPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	srv := New(cfg, db)
+	srv.RegisterRoutes()
+
+	// start server
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Start(runCtx) }()
+
+	// wait for /health
+	client := &http.Client{Timeout: 2 * time.Second}
+	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	ok := false
+	for range 20 {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+		//nolint:gosec // false positive
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			ok = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !ok {
+		cancel()
+		t.Fatalf("server did not become healthy in time")
+	}
+
+	q := database.NewQueries(db)
+	leaseURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/jobs/lease", port)
+
+	// Step 1: Worker A leases via API
+	leaseReqA := map[string]any{
+		"worker_id":            "worker-a",
+		"requested_batch_size": 100,
+	}
+	ba, _ := json.Marshal(leaseReqA)
+	reqA, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(ba))
+	reqA.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive
+	respA, err := client.Do(reqA)
+	if err != nil {
+		t.Fatalf("lease A request failed: %v", err)
+	}
+	defer respA.Body.Close()
+	if respA.StatusCode != http.StatusOK {
+		t.Fatalf("lease A response status not OK: %d", respA.StatusCode)
+	}
+	var outA struct {
+		JobID int64 `json:"job_id"`
+	}
+	if err := json.NewDecoder(respA.Body).Decode(&outA); err != nil {
+		t.Fatalf("failed to decode lease A response: %v", err)
+	}
+	jobIDA := outA.JobID
+
+	// Step 2: Wait for TTL to expire (no checkpoint)
+	// We wait for cleanup to mark it as pending
+	var expired bool
+	for range 40 {
+		j, err := q.GetJobByID(context.Background(), jobIDA)
+		if err != nil {
+			t.Fatalf("GetJobByID failed: %v", err)
+		}
+		if j.Status == "pending" && !j.WorkerID.Valid {
+			expired = true
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if !expired {
+		t.Fatalf("job A did not expire in time")
+	}
+
+	// Step 3: Worker B leases via API
+	leaseReqB := map[string]any{
+		"worker_id":            "worker-b",
+		"requested_batch_size": 100,
+	}
+	bb, _ := json.Marshal(leaseReqB)
+	reqB, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, leaseURL, bytes.NewReader(bb))
+	reqB.Header.Set("Content-Type", "application/json")
+	//nolint:gosec // false positive
+	respB, err := client.Do(reqB)
+	if err != nil {
+		t.Fatalf("lease B request failed: %v", err)
+	}
+	defer respB.Body.Close()
+	if respB.StatusCode != http.StatusOK {
+		t.Fatalf("lease B response status not OK: %d", respB.StatusCode)
+	}
+	var outB struct {
+		JobID int64 `json:"job_id"`
+	}
+	if err := json.NewDecoder(respB.Body).Decode(&outB); err != nil {
+		t.Fatalf("failed to decode lease B response: %v", err)
+	}
+	jobIDB := outB.JobID
+
+	// Step 4: Verify same job ID
+	if jobIDB != jobIDA {
+		t.Fatalf("expected re-assigned job ID %d, got %d", jobIDA, jobIDB)
+	}
+
+	// Check final state
+	jFinal, err := q.GetJobByID(context.Background(), jobIDB)
+	if err != nil {
+		t.Fatalf("GetJobByID final failed: %v", err)
+	}
+	if jFinal.Status != "processing" || jFinal.WorkerID.String != "worker-b" {
+		t.Fatalf("unexpected final job state: status=%s, worker=%v", jFinal.Status, jFinal.WorkerID)
+	}
+}
