@@ -87,11 +87,25 @@ func (r *TemplateRenderer) loadTemplates() error {
 		// Page file must come first so ParseFS names the template set after it.
 		// When tmpl.Execute() is called, it will run the page template, which
 		// in turn invokes the "base" layout template.
-		files := make([]string, 0, 1+len(layoutFiles))
-		files = append(files, filepath.Join("templates", name))
-		files = append(files, layoutFiles...)
+		files := append([]string{filepath.Join("templates", name)}, layoutFiles...)
 
-		tmpl, err := template.ParseFS(FS, files...)
+		tmpl := template.New(name).Funcs(template.FuncMap{
+			"navClass": func(current, target string, isSidebar bool) string {
+				if isSidebar {
+					if current == target {
+						return "group flex items-center px-3 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-900 border-l-4 border-blue-600"
+					}
+					return "group flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+				}
+				// Top Nav
+				if current == target {
+					return "px-3 py-2 rounded-md text-sm font-medium bg-gray-700 text-white transition"
+				}
+				return "px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition"
+			},
+		})
+
+		tmpl, err = tmpl.ParseFS(FS, files...)
 		if err != nil {
 			return fmt.Errorf("failed to parse template %s: %w", name, err)
 		}
