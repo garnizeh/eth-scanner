@@ -16,7 +16,13 @@ type Manager struct {
 	db *database.Queries
 }
 
-var ErrPrefixExhausted = errors.New("requested prefix is already fully scanned or unavailable")
+var (
+	ErrPrefixExhausted  = errors.New("requested prefix is already fully scanned or unavailable")
+	ErrJobNotFound      = errors.New("job not found")
+	ErrJobNotProcessing = errors.New("job not processing")
+	ErrWorkerMismatch   = errors.New("worker mismatch")
+	ErrInvalidNonce     = errors.New("invalid nonce: outside range or smaller than current")
+)
 
 // New constructs a new Manager with the provided database queries.
 func New(db *database.Queries) *Manager {
@@ -285,4 +291,85 @@ func (m *Manager) FindOrCreateMacroJob(ctx context.Context, prefix28 []byte, wor
 		return nil, fmt.Errorf("get job after lease: %w", err)
 	}
 	return &updated, nil
+}
+
+// UpdateCheckpoint validates and updates job progress.
+func (m *Manager) UpdateCheckpoint(ctx context.Context, jobID int64, workerID string, currentNonce int64, keysScanned int64, durationMs int64) error {
+	if m == nil || m.db == nil {
+		return fmt.Errorf("manager or db is nil")
+	}
+
+	job, err := m.db.GetJobByID(ctx, jobID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrJobNotFound
+		}
+		return fmt.Errorf("get job: %w", err)
+	}
+
+	if job.Status != "processing" {
+		return ErrJobNotProcessing
+	}
+
+	if !job.WorkerID.Valid || job.WorkerID.String != workerID {
+		return ErrWorkerMismatch
+	}
+
+	// Nonce validation
+	if currentNonce < job.NonceStart || currentNonce > job.NonceEnd {
+		return fmt.Errorf("%w: %d is outside range [%d, %d]", ErrInvalidNonce, currentNonce, job.NonceStart, job.NonceEnd)
+	}
+	// Maintain monotonicity: nonce should not go backwards
+	if job.CurrentNonce.Valid && currentNonce < job.CurrentNonce.Int64 {
+		return fmt.Errorf("%w: %d is smaller than current %d", ErrInvalidNonce, currentNonce, job.CurrentNonce.Int64)
+	}
+
+	params := database.UpdateCheckpointParams{
+		CurrentNonce: sql.NullInt64{Int64: currentNonce, Valid: true},
+		KeysScanned:  sql.NullInt64{Int64: keysScanned, Valid: true},
+		DurationMs:   sql.NullInt64{Int64: durationMs, Valid: true},
+		ID:           jobID,
+		WorkerID:     sql.NullString{String: workerID, Valid: true},
+	}
+	if err := m.db.UpdateCheckpoint(ctx, params); err != nil {
+		return fmt.Errorf("update checkpoint: %w", err)
+	}
+
+	return nil
+}
+
+// CompleteJob validates and marks a job as completed.
+func (m *Manager) CompleteJob(ctx context.Context, jobID int64, workerID string, keysScanned int64, durationMs int64) error {
+	if m == nil || m.db == nil {
+		return fmt.Errorf("manager or db is nil")
+	}
+
+	job, err := m.db.GetJobByID(ctx, jobID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrJobNotFound
+		}
+		return fmt.Errorf("get job: %w", err)
+	}
+
+	if job.Status != "processing" {
+		return ErrJobNotProcessing
+	}
+
+	if !job.WorkerID.Valid || job.WorkerID.String != workerID {
+		return ErrWorkerMismatch
+	}
+
+	// Set complete status using sqcl-generated method
+	params := database.CompleteBatchParams{
+		KeysScanned: sql.NullInt64{Int64: keysScanned, Valid: true},
+		DurationMs:  sql.NullInt64{Int64: durationMs, Valid: true},
+		ID:          jobID,
+		WorkerID:    sql.NullString{String: workerID, Valid: true},
+	}
+	if err := m.db.CompleteBatch(ctx, params); err != nil {
+		return fmt.Errorf("complete batch: %w", err)
+	}
+
+	return nil
 }
