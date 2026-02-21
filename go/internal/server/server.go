@@ -21,6 +21,7 @@ import (
 type Server struct {
 	cfg        *config.Config
 	db         *sql.DB
+	hub        *Hub // WebSocket hub
 	renderer   *ui.TemplateRenderer
 	router     *http.ServeMux
 	handler    http.Handler
@@ -41,6 +42,7 @@ func New(cfg *config.Config, db *sql.DB) (*Server, error) {
 	s := &Server{
 		cfg:      cfg,
 		db:       db,
+		hub:      newHub(),
 		renderer: renderer,
 		router:   mux,
 		conns:    make(map[net.Conn]struct{}),
@@ -55,6 +57,23 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.handler != nil {
 		h = s.handler
 	}
+
+	// Start WebSocket Hub in background
+	go s.hub.run(ctx)
+
+	// Start background heartbeat for real-time fleet metrics (broadcast every 10s)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.broadcastStats(context.Background())
+			}
+		}
+	}()
 
 	s.httpServer = &http.Server{
 		Addr:              addr,

@@ -44,6 +44,22 @@ func (r *TemplateRenderer) Render(w io.Writer, name string, data any) error {
 	return nil
 }
 
+// RenderFragment renders a specific template from a set by name.
+func (r *TemplateRenderer) RenderFragment(w io.Writer, fileName string, templateName string, data any) error {
+	r.mu.RLock()
+	tmpl, ok := r.templates[fileName]
+	r.mu.RUnlock()
+
+	if !ok {
+		return fmt.Errorf("template set %s not found", fileName)
+	}
+
+	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
+		return fmt.Errorf("failed to execute fragment %s in %s: %w", templateName, fileName, err)
+	}
+	return nil
+}
+
 func (r *TemplateRenderer) loadTemplates() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

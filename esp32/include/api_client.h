@@ -54,6 +54,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
  * @return ESP_OK on success, appropriate error code otherwise
  */
 esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
-                            const uint8_t *private_key, const uint8_t *address);
+                            const uint8_t *private_key, const uint8_t *address,
+                            uint64_t nonce);
 
 #endif // API_CLIENT_H

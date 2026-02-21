@@ -470,6 +470,14 @@ SELECT
     (SELECT COUNT(*) FROM workers WHERE worker_type = 'pc') AS pc_workers,
     (SELECT COUNT(*) FROM workers WHERE worker_type = 'esp32') AS esp32_workers,
     
+    -- Global throughput (sum of latest KPS for each worker active in last 10m)
+    (SELECT COALESCE(SUM(keys_per_second), 0) FROM (
+        SELECT keys_per_second, MAX(finished_at)
+        FROM worker_history
+        WHERE finished_at > datetime('now', '-10 minutes')
+        GROUP BY worker_id
+    )) AS global_keys_per_second,
+
     -- Prefix progress (distinct prefixes being worked on)
     COUNT(DISTINCT prefix_28) AS active_prefixes
 FROM jobs;

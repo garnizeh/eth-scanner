@@ -43,6 +43,7 @@ typedef struct
 {
     int64_t job_id;
     uint8_t private_key[32];
+    uint64_t nonce_found;
 } found_result_t;
 
 // Checkpoint structure (for NVS persistence)

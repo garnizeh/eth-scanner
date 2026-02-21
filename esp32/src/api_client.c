@@ -245,7 +245,16 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
     if (err == ESP_OK)
     {
         int status = esp_http_client_get_status_code(client);
-        if (status != 200)
+        if (status == 200)
+        {
+            // Success
+        }
+        else if (status == 404)
+        {
+            ESP_LOGW(TAG, "Checkpoint failed: Job %lld not found (404)", job_id);
+            err = ESP_ERR_NOT_FOUND;
+        }
+        else
         {
             ESP_LOGE(TAG, "Checkpoint failed with HTTP status %d", status);
             err = ESP_FAIL;
@@ -306,7 +315,16 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
     if (err == ESP_OK)
     {
         int status = esp_http_client_get_status_code(client);
-        if (status != 200)
+        if (status == 200)
+        {
+            // Success
+        }
+        else if (status == 404)
+        {
+            ESP_LOGW(TAG, "Complete failed: Job %lld not found (404)", job_id);
+            err = ESP_ERR_NOT_FOUND;
+        }
+        else
         {
             ESP_LOGE(TAG, "Complete failed with HTTP status %d", status);
             err = ESP_FAIL;
@@ -325,10 +343,12 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
 }
 
 esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
-                            const uint8_t *private_key, const uint8_t *address)
+                            const uint8_t *private_key, const uint8_t *address,
+                            uint64_t nonce)
 {
-    const char *url = CONFIG_ETHSCANNER_API_URL "/api/v1/results";
-    ESP_LOGI(TAG, "!!! MATCH FOUND !!! Submitting result for job %lld to %s", job_id, url);
+    char url[256];
+    snprintf(url, sizeof(url), "%s/api/v1/results", CONFIG_ETHSCANNER_API_URL);
+    ESP_LOGI(TAG, "!!! MATCH FOUND !!! Submitting result for job %lld (nonce: %llu) to %s", job_id, (unsigned long long)nonce, url);
 
     esp_http_client_config_t config = {
         .url = url,
@@ -358,6 +378,7 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
     cJSON_AddNumberToObject(root, "job_id", (double)job_id);
     cJSON_AddStringToObject(root, "private_key", priv_hex);
     cJSON_AddStringToObject(root, "address", addr_hex);
+    cJSON_AddNumberToObject(root, "nonce", (double)nonce);
 
     char *json_str = cJSON_PrintUnformatted(root);
     if (!json_str)

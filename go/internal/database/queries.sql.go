@@ -21,7 +21,7 @@ WHERE status = 'processing'
     )
 `
 
-// Clear worker assignment for long-stale processing jobs so they can be re-leased
+// Clear worker assignment for long-stale processing jobs so they can be re-leased.
 func (q *Queries) CleanupStaleJobs(ctx context.Context, thresholdSeconds sql.NullString) error {
 	_, err := q.db.ExecContext(ctx, cleanupStaleJobs, thresholdSeconds)
 	return err
@@ -321,6 +321,7 @@ SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration
 ORDER BY total_keys_scanned DESC
 `
 
+// Get lifetime stats for all workers, ordered by total keys scanned
 func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error) {
 	rows, err := q.db.QueryContext(ctx, getAllWorkerLifetimeStats)
 	if err != nil {
@@ -560,6 +561,7 @@ type GetRecentWorkerHistoryParams struct {
 	Limit   int64          `json:"limit"`
 }
 
+// Get recent worker history records for the last N seconds
 func (q *Queries) GetRecentWorkerHistory(ctx context.Context, arg GetRecentWorkerHistoryParams) ([]WorkerHistory, error) {
 	rows, err := q.db.QueryContext(ctx, getRecentWorkerHistory, arg.Column1, arg.Limit)
 	if err != nil {
@@ -657,7 +659,7 @@ func (q *Queries) GetResultsByAddress(ctx context.Context, address string) ([]Re
 }
 
 const getStats = `-- name: GetStats :one
-SELECT pending_batches, processing_batches, completed_batches, total_batches, total_keys_scanned, avg_pc_batch_size, avg_esp32_batch_size, results_found, total_workers, active_workers, pc_workers, esp32_workers, active_prefixes FROM stats_summary
+SELECT pending_batches, processing_batches, completed_batches, total_batches, total_keys_scanned, avg_pc_batch_size, avg_esp32_batch_size, results_found, total_workers, active_workers, pc_workers, esp32_workers, global_keys_per_second, active_prefixes FROM stats_summary
 `
 
 // Get aggregated statistics
@@ -677,6 +679,7 @@ func (q *Queries) GetStats(ctx context.Context) (StatsSummary, error) {
 		&i.ActiveWorkers,
 		&i.PcWorkers,
 		&i.Esp32Workers,
+		&i.GlobalKeysPerSecond,
 		&i.ActivePrefixes,
 	)
 	return i, err
@@ -777,6 +780,7 @@ SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration
 WHERE worker_id = ? LIMIT 1
 `
 
+// Get lifetime stats for a worker
 func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error) {
 	row := q.db.QueryRowContext(ctx, getWorkerLifetimeStats, workerID)
 	var i WorkerStatsLifetime
@@ -806,6 +810,7 @@ type GetWorkerMonthlyStatsParams struct {
 	StatsMonth string `json:"stats_month"`
 }
 
+// Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
 func (q *Queries) GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error) {
 	rows, err := q.db.QueryContext(ctx, getWorkerMonthlyStats, arg.WorkerID, arg.StatsMonth)
 	if err != nil {
