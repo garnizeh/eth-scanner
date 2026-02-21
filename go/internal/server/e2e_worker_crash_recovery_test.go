@@ -59,12 +59,18 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	// Wait for server to be healthy
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	ok := false
+	client := &http.Client{Timeout: 500 * time.Millisecond}
 	for range 20 {
-		resp, err := http.Get(healthURL)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, healthURL, nil)
+		//nolint:gosec // health URL is local and trusted
+		resp, err := client.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			_ = resp.Body.Close()
 			ok = true
 			break
+		}
+		if err == nil {
+			_ = resp.Body.Close()
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
