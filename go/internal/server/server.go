@@ -131,10 +131,17 @@ func (s *Server) Start(ctx context.Context) error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
+		// Also start a ticker for periodic dashboard stats broadcast
+		// This ensures the dashboard updates even if no workers are active/checkpointing.
+		statsTicker := time.NewTicker(10 * time.Second)
+		defer statsTicker.Stop()
+
 		for {
 			select {
 			case <-cleanupCtx.Done():
 				return
+			case <-statsTicker.C:
+				s.broadcastStats(cleanupCtx)
 			case <-ticker.C:
 				// perform cleanup with threshold from config
 				threshold := int64(604800)
