@@ -9,8 +9,8 @@
 
 static const char *TAG = "api_client";
 
-// Maximum response buffer size (1KB should be plenty for our responses)
-#define MAX_HTTP_RECV_BUFFER 1024
+// Maximum response buffer size (increased to 8KB for safety with many target addresses)
+#define MAX_HTTP_RECV_BUFFER 8192
 
 typedef struct
 {
@@ -66,7 +66,16 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
 {
     const char *url = CONFIG_ETHSCANNER_API_URL "/api/v1/jobs/lease";
     ESP_LOGI(TAG, "Requesting lease for worker: %s (URL: %s)", worker_id, url);
-    char response_buffer[MAX_HTTP_RECV_BUFFER] = {0};
+
+    // Use heap for large response buffer instead of stack (prevent overflow on worker tasks)
+    char *response_buffer = (char *)malloc(MAX_HTTP_RECV_BUFFER);
+    if (!response_buffer)
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for HTTP response buffer");
+        return ESP_ERR_NO_MEM;
+    }
+    memset(response_buffer, 0, MAX_HTTP_RECV_BUFFER);
+
     response_data_t res = {
         .buffer = response_buffer,
         .buffer_len = 0};
@@ -76,12 +85,14 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
         .method = HTTP_METHOD_POST,
         .event_handler = http_event_handler,
         .user_data = &res,
+        .timeout_ms = 5000,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL)
     {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
+        free(response_buffer);
         return ESP_FAIL;
     }
 
@@ -94,7 +105,10 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
     char *json_str = cJSON_PrintUnformatted(root);
 
     esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, json_str, strlen(json_str));
+    if (json_str)
+    {
+        esp_http_client_set_post_field(client, json_str, strlen(json_str));
+    }
 
     esp_err_t err = esp_http_client_perform(client);
 
@@ -103,16 +117,24 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
         int status = esp_http_client_get_status_code(client);
         if (status == 200)
         {
-            cJSON *resp = cJSON_Parse(response_buffer);
-            if (resp)
+            cJSON *resp_json = cJSON_Parse(response_buffer);
+            if (resp_json)
             {
-                out_job->job_id = (int64_t)cJSON_GetObjectItem(resp, "job_id")->valuedouble;
-                out_job->nonce_start = (uint64_t)cJSON_GetObjectItem(resp, "nonce_start")->valuedouble;
-                out_job->nonce_end = (uint64_t)cJSON_GetObjectItem(resp, "nonce_end")->valuedouble;
+                cJSON *item = cJSON_GetObjectItem(resp_json, "job_id");
+                if (item && cJSON_IsNumber(item))
+                    out_job->job_id = (int64_t)item->valuedouble;
+
+                item = cJSON_GetObjectItem(resp_json, "nonce_start");
+                if (item && cJSON_IsNumber(item))
+                    out_job->nonce_start = (uint64_t)item->valuedouble;
+
+                item = cJSON_GetObjectItem(resp_json, "nonce_end");
+                if (item && cJSON_IsNumber(item))
+                    out_job->nonce_end = (uint64_t)item->valuedouble;
 
                 // Load target addresses
                 out_job->num_targets = 0;
-                cJSON *targets = cJSON_GetObjectItem(resp, "target_addresses");
+                const cJSON *targets = cJSON_GetObjectItem(resp_json, "target_addresses");
                 if (cJSON_IsArray(targets))
                 {
                     int size = cJSON_GetArraySize(targets);
@@ -120,25 +142,34 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
                         size = MAX_TARGET_ADDRESSES;
                     for (int i = 0; i < size; i++)
                     {
-                        cJSON *item = cJSON_GetArrayItem(targets, i);
-                        if (cJSON_IsString(item))
+                        const cJSON *target_ptr = cJSON_GetArrayItem(targets, i);
+                        if (cJSON_IsString(target_ptr))
                         {
-                            hex_to_bytes(item->valuestring, out_job->target_addresses[out_job->num_targets++], 20);
+                            hex_to_bytes(target_ptr->valuestring, out_job->target_addresses[out_job->num_targets++], 20);
                         }
                     }
                 }
 
-                const char *prefix_b64 = cJSON_GetObjectItem(resp, "prefix_28")->valuestring;
-                size_t olen = 0;
-                int ret = mbedtls_base64_decode(out_job->prefix_28, sizeof(out_job->prefix_28), &olen,
-                                                (const unsigned char *)prefix_b64, strlen(prefix_b64));
-
-                if (ret != 0 || olen != 28)
+                cJSON *prefix_item = cJSON_GetObjectItem(resp_json, "prefix_28");
+                if (prefix_item && cJSON_IsString(prefix_item))
                 {
-                    ESP_LOGE(TAG, "Failed to decode prefix_28: %d (len=%d)", ret, (int)olen);
+                    const char *prefix_b64 = prefix_item->valuestring;
+                    size_t olen = 0;
+                    int decode_ret = mbedtls_base64_decode(out_job->prefix_28, sizeof(out_job->prefix_28), &olen,
+                                                           (const unsigned char *)prefix_b64, strlen(prefix_b64));
+
+                    if (decode_ret != 0 || olen != 28)
+                    {
+                        ESP_LOGE(TAG, "Failed to decode prefix_28: %d (len=%d)", decode_ret, (int)olen);
+                        err = ESP_FAIL;
+                    }
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "Missing prefix_28 in lease response");
                     err = ESP_FAIL;
                 }
-                cJSON_Delete(resp);
+                cJSON_Delete(resp_json);
             }
             else
             {
@@ -166,6 +197,7 @@ esp_err_t api_lease_job(const char *worker_id, uint32_t batch_size,
     if (json_str)
         free(json_str);
     esp_http_client_cleanup(client);
+    free(response_buffer);
 
     return err;
 }
@@ -181,6 +213,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_PATCH,
+        .timeout_ms = 5000,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -195,9 +228,14 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
     cJSON_AddNumberToObject(root, "current_nonce", (double)current_nonce);
     cJSON_AddNumberToObject(root, "keys_scanned", (double)keys_scanned);
     cJSON_AddNumberToObject(root, "duration_ms", (double)duration_ms);
-    // Server expects StartedAt but we don't have it synchronized, it will use zero value
 
     char *json_str = cJSON_PrintUnformatted(root);
+    if (!json_str)
+    {
+        cJSON_Delete(root);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
 
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, json_str, strlen(json_str));
@@ -219,8 +257,7 @@ esp_err_t api_checkpoint(int64_t job_id, const char *worker_id,
     }
 
     cJSON_Delete(root);
-    if (json_str)
-        free(json_str);
+    free(json_str);
     esp_http_client_cleanup(client);
 
     return err;
@@ -237,6 +274,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_POST,
+        .timeout_ms = 5000,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -253,6 +291,12 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
     cJSON_AddNumberToObject(root, "duration_ms", (double)duration_ms);
 
     char *json_str = cJSON_PrintUnformatted(root);
+    if (!json_str)
+    {
+        cJSON_Delete(root);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
 
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, json_str, strlen(json_str));
@@ -274,8 +318,7 @@ esp_err_t api_complete(int64_t job_id, const char *worker_id,
     }
 
     cJSON_Delete(root);
-    if (json_str)
-        free(json_str);
+    free(json_str);
     esp_http_client_cleanup(client);
 
     return err;
@@ -290,6 +333,7 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
     esp_http_client_config_t config = {
         .url = url,
         .method = HTTP_METHOD_POST,
+        .timeout_ms = 10000, // Longer timeout for critical submission
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -316,6 +360,12 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
     cJSON_AddStringToObject(root, "address", addr_hex);
 
     char *json_str = cJSON_PrintUnformatted(root);
+    if (!json_str)
+    {
+        cJSON_Delete(root);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
 
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_post_field(client, json_str, strlen(json_str));
@@ -341,8 +391,7 @@ esp_err_t api_submit_result(int64_t job_id, const char *worker_id,
     }
 
     cJSON_Delete(root);
-    if (json_str)
-        free(json_str);
+    free(json_str);
     esp_http_client_cleanup(client);
 
     return err;

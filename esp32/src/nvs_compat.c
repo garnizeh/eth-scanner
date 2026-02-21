@@ -36,6 +36,11 @@ esp_err_t __attribute__((weak)) nvs_get_blob_wr(nvs_handle_t handle, const char 
     return nvs_get_blob(handle, key, out_value, length);
 }
 
+esp_err_t __attribute__((weak)) nvs_erase_key_wr(nvs_handle_t handle, const char *key)
+{
+    return nvs_erase_key(handle, key);
+}
+
 esp_err_t __attribute__((weak)) nvs_commit_wr(nvs_handle_t handle)
 {
     return nvs_commit(handle);

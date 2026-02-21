@@ -31,7 +31,6 @@ extern void test_save_checkpoint_commit_error(void);
 extern void test_load_checkpoint_success(void);
 extern void test_load_checkpoint_not_found(void);
 extern void test_load_checkpoint_invalid_magic(void);
-extern void test_load_checkpoint_stale(void);
 extern void test_recovery_logic_resumption(void);
 
 extern void test_benchmark_positive_throughput(void);
@@ -88,7 +87,6 @@ void app_main(void)
     RUN_TEST(test_load_checkpoint_success);
     RUN_TEST(test_load_checkpoint_not_found);
     RUN_TEST(test_load_checkpoint_invalid_magic);
-    RUN_TEST(test_load_checkpoint_stale);
     RUN_TEST(test_recovery_logic_resumption);
     RUN_TEST(test_benchmark_positive_throughput);
     RUN_TEST(test_benchmark_repeatability);

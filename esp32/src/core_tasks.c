@@ -19,7 +19,7 @@
 #include "led_manager.h"
 
 /* Static task buffers for Core 0 (System management) */
-#define CORE0_STACK_SIZE 4096
+#define CORE0_STACK_SIZE 12288 // Increased from 4096 to accommodate JSON/HTTP stack usage
 static StackType_t core0_stack[CORE0_STACK_SIZE];
 static StaticTask_t core0_task_buffer;
 
@@ -108,7 +108,6 @@ void core0_system_task(void *pvParameters)
     while (1)
     {
         // Wait for notifications or 1s timeout for basic maintenance
-        notifications = 0;
         xTaskNotifyWait(0, 0xFFFFFFFF, &notifications, pdMS_TO_TICKS(1000));
 
         // Check WiFi status and update global state
@@ -161,12 +160,24 @@ void core0_system_task(void *pvParameters)
                 uint64_t scanned = atomic_load(&g_state.keys_scanned);
                 api_complete(g_state.current_job.job_id, g_state.worker_id, current, scanned, 0);
             }
+
+            // Clear job information AFTER reporting to API to avoid reporting ID 0
+            g_state.current_job.job_id = 0;
+            atomic_store(&g_state.current_nonce, 0);
+            atomic_store(&g_state.keys_scanned, 0);
+
+            // Clear NVS checkpoint so we don't try to resume a finished job on reboot
+            nvs_clear_checkpoint(g_state.nvs_handle);
         }
 
         // Handle Result Found Signal
         if (notifications & NOTIFY_BIT_RESULT_FOUND)
         {
             ESP_LOGI(TAG, "!!! MATCH FOUND Signal received from Core 1 !!!");
+
+            // Clear checkpoint to prevent resuming an already handled match
+            nvs_clear_checkpoint(g_state.nvs_handle);
+            g_state.current_job.job_id = 0;
 
             found_result_t res;
             while (xQueueReceive(g_state.found_results_queue, &res, 0) == pdTRUE)
@@ -194,19 +205,17 @@ void core0_system_task(void *pvParameters)
             continue;
         }
 
+        // P08-T120: Check if we just recovered a job from NVS and activate it immediately (even offline)
+        if (!g_state.job_active && !g_state.should_stop && g_state.current_job.job_id != 0)
+        {
+            ESP_LOGI(TAG, "RECOVERY: Activating recovered job %lld from nonce %llu (Initial Status: Offline-ready)",
+                     g_state.current_job.job_id, (unsigned long long)atomic_load(&g_state.current_nonce));
+            g_state.job_active = true;
+            xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
+        }
+
         if (g_state.wifi_connected && !g_state.job_active)
         {
-            // P08-T120: Check if we just recovered a job from NVS
-            if (g_state.current_job.job_id != 0 && atomic_load(&g_state.current_nonce) != 0)
-            {
-                ESP_LOGI(TAG, "RECOVERY: Activating recovered job %lld from nonce %llu",
-                         g_state.current_job.job_id, (unsigned long long)atomic_load(&g_state.current_nonce));
-                g_state.job_active = true;
-                xTaskNotify(g_state.core1_task_handle, NOTIFY_BIT_JOB_LEASED, eSetBits);
-                // Continue to avoid immediate re-lease
-                continue;
-            }
-
             ESP_LOGI(TAG, "Device idle, requesting new job lease...");
 
             // Calculate requested batch size based on startup benchmark
@@ -266,7 +275,7 @@ void core1_worker_task(void *pvParameters)
     ESP_LOGI(TAG, "Starting Computation Task on Core %d with priority %d",
              xPortGetCoreID(), uxTaskPriorityGet(NULL));
 
-    vTaskDelay(pdMS_TO_TICKS(10000)); // Initial delay to allow system setup and job leasing
+    vTaskDelay(pdMS_TO_TICKS(5000)); // Standard startup delay
 
     uint32_t notifications = 0;
     uint8_t priv_key[32] __attribute__((aligned(4))) = {0};
@@ -290,7 +299,6 @@ void core1_worker_task(void *pvParameters)
                 uint32_t start = (uint32_t)g_state.current_job.nonce_start;
                 uint32_t total = (end >= start) ? (end - start + 1) : 1;
 
-                uint32_t progress = 0;
                 uint32_t session_scanned = 0;
                 uint32_t throughput = g_state.stats.keys_per_second;
 
@@ -317,7 +325,7 @@ void core1_worker_task(void *pvParameters)
                         break;
                     }
 
-                    progress = (current >= start) ? (current - start) : 0;
+                    uint32_t progress = (current >= start) ? (current - start) : 0;
 
                     // Optimized byte-level nonce manipulation (P08-T080)
                     update_nonce_in_buffer(priv_key, current);

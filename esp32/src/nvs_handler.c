@@ -4,6 +4,7 @@
 #include "shared_types.h"
 #include "nvs_compat.h"
 #include <string.h>
+#include <time.h>
 
 static const char *TAG = "nvs-handler";
 
@@ -105,13 +106,12 @@ esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint)
     }
 
     // Check staleness (prevent resuming very old jobs)
-    uint64_t now = esp_timer_get_time() / 1000000ULL;
-    if (out_checkpoint->timestamp > now || (now - out_checkpoint->timestamp) > CHECKPOINT_MAX_AGE_SEC)
+    // On ESP32 without NTP, the timestamp check is only useful if time is synchronized.
+    // For MVP, if the magic and job_id are valid, we trust it to allow resume.
+    if (out_checkpoint->job_id == 0)
     {
-        uint64_t age = (out_checkpoint->timestamp > now) ? 0 : (now - out_checkpoint->timestamp);
-        ESP_LOGW(TAG, "Checkpoint stale or from future (age: %llu sec, now: %llu, ts: %llu), discarding",
-                 (unsigned long long)age, (unsigned long long)now, (unsigned long long)out_checkpoint->timestamp);
-        return ESP_ERR_INVALID_STATE;
+        ESP_LOGW(TAG, "Checkpoint has job_id 0, ignoring.");
+        return ESP_ERR_NOT_FOUND;
     }
 
     ESP_LOGI(TAG, "Checkpoint loaded: job_id=%lld, current_nonce=%llu",
@@ -119,6 +119,22 @@ esp_err_t load_checkpoint(nvs_handle_t handle, job_checkpoint_t *out_checkpoint)
 
     return ESP_OK;
 }
+
+esp_err_t nvs_clear_checkpoint(nvs_handle_t handle)
+{
+    esp_err_t err = nvs_erase_key_wr(handle, NVS_CHECKPOINT_KEY);
+    if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        return ESP_OK;
+    }
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to erase checkpoint: %s", esp_err_to_name(err));
+        return err;
+    }
+    return nvs_commit_wr(handle);
+}
+
 // Extracted helper so tests can exercise retry logic.
 esp_err_t nvs_init_with_retry(void)
 {

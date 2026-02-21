@@ -27,17 +27,22 @@ static void led_task(void *pvParameters)
 
         case LED_WIFI_CONNECTED:
             gpio_set_level(LED_PIN, 1);
-            vTaskDelay(pdMS_TO_TICKS(1));
+            vTaskDelay(pdMS_TO_TICKS(10)); // Ensure we always yield correctly
             gpio_set_level(LED_PIN, 0);
-            vTaskDelay(pdMS_TO_TICKS(9));
+            vTaskDelay(pdMS_TO_TICKS(100)); // Visible blinking for "connected" state
             break;
 
         case LED_SCANNING:
-            if (xSemaphoreTake(xActivitySemaphore, pdMS_TO_TICKS(10)) == pdTRUE)
+            if (xSemaphoreTake(xActivitySemaphore, pdMS_TO_TICKS(100)) == pdTRUE)
             {
                 gpio_set_level(LED_PIN, 1);
-                vTaskDelay(pdMS_TO_TICKS(5)); // Pulso mais curto para aguentar frequencia maior
+                vTaskDelay(pdMS_TO_TICKS(10));
                 gpio_set_level(LED_PIN, 0);
+            }
+            else
+            {
+                // Ensure we yield even if no activity
+                vTaskDelay(pdMS_TO_TICKS(10));
             }
             break;
 
@@ -66,8 +71,8 @@ static void led_task(void *pvParameters)
 void led_manager_init(void)
 {
     xActivitySemaphore = xSemaphoreCreateBinary();
-    // Pin to Core 0 with priority higher than 1 (let's use 3) to avoid starvation from Core 1 hot loop
-    xTaskCreatePinnedToCore(led_task, "led_task", 2048, NULL, 3, NULL, 0);
+    // Reduce priority to 1 (same as system task) to avoid starving the idle task on Core 0
+    xTaskCreatePinnedToCore(led_task, "led_task", 2048, NULL, 1, NULL, 0);
 }
 
 void set_led_status(led_status_t status)
