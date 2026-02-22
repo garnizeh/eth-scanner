@@ -35,11 +35,14 @@
                         Range</th>
                     <th class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Worker
                     </th>
-                    <th class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    <th
+                        class="hidden md:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Progress</th>
                     <th class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status
                     </th>
-                    <th class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last
+                    <th
+                        class="hidden lg:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Last
                         Activity</th>
                 </tr>
             </thead>
@@ -57,9 +60,10 @@
                     <td class="px-6 py-4 whitespace-nowrap">
                         {{if .WorkerID.Valid}}
                         <div class="flex items-center">
-                            <span {{workerBadgeAttr .WorkerType}}>{{.WorkerType.String}}</span>
+                            <span
+                                class="hidden sm:inline-flex {{workerBadgeAttr .WorkerType}}">{{.WorkerType.String}}</span>
                             <a {{workerLinkAttr .WorkerID.String}}
-                                class="ml-2 text-xs font-bold text-blue-600 hover:underline underline-offset-4 transition">
+                                class="sm:ml-2 text-xs font-bold text-blue-600 hover:underline underline-offset-4 transition">
                                 {{.WorkerID.String}}
                             </a>
                         </div>
@@ -67,7 +71,7 @@
                         <span class="text-xs font-bold text-gray-300 italic">Unassigned</span>
                         {{end}}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                         <div class="flex flex-col w-32">
                             <div class="flex items-center justify-between mb-1">
                                 <span class="text-[10px] font-black text-blue-600">{{printf "%.1f" (multiply (percentage
@@ -91,7 +95,7 @@
                             class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black bg-gray-100 text-gray-500 uppercase tracking-widest">{{.Status}}</span>
                         {{end}}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-medium">
+                    <td class="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-medium">
                         {{if .LastCheckpointAt.Valid}}
                         {{.LastCheckpointAt.Time.UTC.Format "2006-01-02 15:04:05"}} UTC
                         {{else}}

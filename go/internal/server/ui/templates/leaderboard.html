@@ -123,13 +123,13 @@
                         class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Worker
                         ID</th>
                     <th scope="col"
-                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        class="hidden sm:table-cell px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Platform</th>
                     <th scope="col"
                         class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total
                         Volume</th>
                     <th scope="col"
-                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        class="hidden md:table-cell px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Efficiency (Best K/s)</th>
                 </tr>
             </thead>
@@ -149,7 +149,7 @@
                             </a>
                         </div>
                     </td>
-                    <td class="px-8 py-5 whitespace-nowrap">
+                    <td class="hidden sm:table-cell px-8 py-5 whitespace-nowrap">
                         <span {{workerBadgeAttr .WorkerType}}>
                             {{.WorkerType}}
                         </span>
@@ -158,7 +158,7 @@
                         {{dataAttr "value" .TotalKeysScanned}}>
                         {{.TotalKeysScanned}}
                     </td>
-                    <td class="px-8 py-5 whitespace-nowrap text-sm text-gray-500 font-bold">
+                    <td class="hidden md:table-cell px-8 py-5 whitespace-nowrap text-sm text-gray-500 font-bold">
                         <div class="flex flex-col">
                             <span class="text-blue-600">{{printf "%.1f" (float64 .KeysPerSecondBest)}} k/s</span>
                             <span class="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">Average: {{printf
