@@ -58,7 +58,7 @@
                 <!-- Mobile Menu Button -->
                 <div class="md:hidden flex items-center">
                     <button type="button" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')"
-                        class="bg-gray-800 p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 transition">
+                        class="bg-gray-800 p-2 rounded-md text-gray-300 hover:text-white hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 6h16M4 12h16M4 18h16" />
@@ -82,27 +82,60 @@
             </div>
         </div>
 
-        <!-- Mobile Menu (Hidden by default) -->
+        <!-- Mobile Menu (Overlay) -->
         {{if not .HideNav}}
-        <div id="mobile-menu" class="hidden md:hidden border-t border-gray-800 bg-gray-900 absolute w-full shadow-lg">
-            <div class="px-4 py-3 space-y-2">
-                <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "block w-full" }}>Overview</a>
-                <a href="/dashboard/daily" {{navAttr .CurrentPath "/dashboard/daily" "block w-full" }}>Daily</a>
-                <a href="/dashboard/monthly" {{navAttr .CurrentPath "/dashboard/monthly" "block w-full" }}>Monthly</a>
-                <a href="/dashboard/leaderboard" {{navAttr .CurrentPath "/dashboard/leaderboard" "block w-full" }}>Hall
-                    of Fame</a>
-                <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "block w-full" }}>Workers</a>
-                <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "block w-full"
-                    }}>Settings</a>
-                <div class="border-t border-gray-700 pt-2 mt-2">
+        <div id="mobile-menu" class="hidden md:hidden fixed inset-0 z-50">
+            <!-- Backdrop -->
+            <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm"
+                onclick="document.getElementById('mobile-menu').classList.add('hidden')"></div>
+
+            <!-- Sidebar Panel -->
+            <nav
+                class="fixed inset-y-0 right-0 w-64 max-w-xs bg-gray-900 shadow-xl overflow-y-auto border-l border-gray-800 flex flex-col transition-all duration-300">
+                <div class="px-6 py-5 flex items-center justify-between border-b border-gray-800">
+                    <div class="flex items-center">
+                        <img class="h-8 w-8 rounded-md" src="/static/img/apple-touch-icon.png" alt="EthScanner Logo">
+                        <span class="ml-3 text-sm font-bold uppercase tracking-widest">Navigation</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('mobile-menu').classList.add('hidden')"
+                        class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition">
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="px-4 py-6 space-y-2 flex-grow">
+                    <a href="/dashboard" {{navAttr
+                        .CurrentPath "/dashboard" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Overview</a>
+                    <a href="/dashboard/daily" {{navAttr
+                        .CurrentPath "/dashboard/daily" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Daily Stats</a>
+                    <a href="/dashboard/monthly" {{navAttr
+                        .CurrentPath "/dashboard/monthly" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Monthly Stats</a>
+                    <a href="/dashboard/leaderboard" {{navAttr
+                        .CurrentPath "/dashboard/leaderboard" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Leaderboard</a>
+                    <a href="/dashboard/workers" {{navAttr
+                        .CurrentPath "/dashboard/workers" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Workers</a>
+                    <a href="/dashboard/settings" {{navAttr
+                        .CurrentPath "/dashboard/settings" "block w-full py-3 px-4 rounded-lg text-sm font-bold" }}
+                        onclick="document.getElementById('mobile-menu').classList.add('hidden')">Settings</a>
+                </div>
+
+                <div class="p-4 border-t border-gray-800">
                     <form action="/logout" method="POST" class="w-full">
                         <button type="submit"
-                            class="w-full text-left px-3 py-2 text-red-400 hover:bg-gray-800 rounded-md text-sm font-medium transition">
+                            class="w-full text-center px-4 py-3 bg-red-600/10 text-red-400 hover:bg-red-600/20 rounded-lg text-xs font-bold transition uppercase tracking-widest border border-red-900/50">
                             Logout
                         </button>
                     </form>
                 </div>
-            </div>
+            </nav>
         </div>
         {{end}}
     </header>

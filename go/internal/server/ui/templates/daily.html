@@ -117,13 +117,15 @@
                         class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date
                     </th>
                     <th scope="col"
-                        class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status
+                        class="hidden sm:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Status
                     </th>
                     <th scope="col"
                         class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Volume
                         (Keys)</th>
                     <th scope="col"
-                        class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Errors
+                        class="hidden md:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Errors
                     </th>
                 </tr>
             </thead>
@@ -131,7 +133,7 @@
                 {{range .DailyStats}}
                 <tr class="hover:bg-gray-50/50 transition leading-none">
                     <td class="px-6 py-4 text-sm font-bold text-gray-600 font-mono">{{.StatsDate}}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500">
+                    <td class="hidden sm:table-cell px-6 py-4 text-sm text-gray-500">
                         {{if .TotalKeysScanned}}
                         <div class="flex items-center">
                             <span class="h-1.5 w-1.5 rounded-full bg-green-400 mr-2"></span>
@@ -143,7 +145,8 @@
                     </td>
                     <td class="px-6 py-4 text-sm font-black text-gray-800 tracking-tight">
                         {{printf "%.0f" (float64 .TotalKeysScanned)}}</td>
-                    <td {{errorStatusAttr .TotalErrors}} class="px-6 py-4 text-sm uppercase tracking-tighter">
+                    <td {{errorStatusAttr .TotalErrors}}
+                        class="hidden md:table-cell px-6 py-4 text-sm uppercase tracking-tighter">
                         {{printf "%.0f" (float64 .TotalErrors)}}</td>
                 </tr>
                 {{else}}

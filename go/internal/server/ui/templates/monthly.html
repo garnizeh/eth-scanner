@@ -117,16 +117,18 @@
                         class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Month
                     </th>
                     <th scope="col"
-                        class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        class="hidden md:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Batches</th>
                     <th scope="col"
                         class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Volume
                         (Keys)</th>
                     <th scope="col"
-                        class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Avg
+                        class="hidden sm:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Avg
                         Throughput</th>
                     <th scope="col"
-                        class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Errors
+                        class="hidden md:table-cell px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Errors
                     </th>
                 </tr>
             </thead>
@@ -134,12 +136,15 @@
                 {{range .MonthlyStats}}
                 <tr class="hover:bg-gray-50/50 transition">
                     <td class="px-6 py-4 text-sm font-bold text-gray-600 font-mono">{{.StatsMonth}}</td>
-                    <td class="px-6 py-4 text-sm text-gray-500 font-bold">{{printf "%.0f" .TotalBatches.Float64}}</td>
+                    <td class="hidden md:table-cell px-6 py-4 text-sm text-gray-500 font-bold">{{printf "%.0f"
+                        .TotalBatches.Float64}}</td>
                     <td class="px-6 py-4 text-sm font-black text-gray-800 tracking-tight">{{printf "%.0f"
                         .TotalKeysScanned.Float64}}</td>
-                    <td class="px-6 py-4 text-sm text-blue-600 font-bold">{{printf "%.1f" .KeysPerSecondAvg.Float64}}
+                    <td class="hidden sm:table-cell px-6 py-4 text-sm text-blue-600 font-bold">{{printf "%.1f"
+                        .KeysPerSecondAvg.Float64}}
                         k/s</td>
-                    <td {{errorStatusAttr .TotalErrors.Float64}} class="px-6 py-4 text-sm uppercase tracking-tighter">
+                    <td {{errorStatusAttr .TotalErrors.Float64}}
+                        class="hidden md:table-cell px-6 py-4 text-sm uppercase tracking-tighter">
                         {{printf "%.0f" .TotalErrors.Float64}}
                     </td>
                 </tr>

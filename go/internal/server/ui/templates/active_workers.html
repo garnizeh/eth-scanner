@@ -27,13 +27,13 @@
                                 class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 Status</th>
                             <th scope="col"
-                                class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                class="hidden md:table-cell px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 Workload</th>
                             <th scope="col"
                                 class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 Throughput</th>
                             <th scope="col"
-                                class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                class="hidden lg:table-cell px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                 Last Activity</th>
                         </tr>
                     </thead>
@@ -42,7 +42,7 @@
                         <tr class="hover:bg-gray-50 transition-colors">
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
-                                    <div class="{{workerIconClass .WorkerType}}">
+                                    <div class="{{workerIconClass .WorkerType}} flex-shrink-0">
                                         {{if eq .WorkerType "pc"}}
                                         <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -55,8 +55,8 @@
                                         </svg>
                                         {{end}}
                                     </div>
-                                    <div class="ml-4">
-                                        <div class="text-sm font-bold text-gray-900 leading-none mb-1">
+                                    <div class="ml-4 truncate">
+                                        <div class="text-sm font-bold text-gray-900 leading-none mb-1 truncate">
                                             <a {{workerLinkAttr .ID}}
                                                 class="hover:text-blue-600 hover:underline underline-offset-4 transition">
                                                 {{.ID}}
@@ -73,7 +73,7 @@
                                     ACTIVE
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                                 {{if .CurrentNonce.Valid}}
                                 <div class="flex flex-col">
                                     <span class="text-xs font-mono text-gray-500 mb-1">Prefix: 0x{{printf "%x"
@@ -98,7 +98,7 @@
                                 <div class="text-sm text-gray-300 font-mono">---</div>
                                 {{end}}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <td class="hidden lg:table-cell px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="text-xs text-gray-500 font-mono">{{.LastSeen.UTC.Format "15:04:05"}} UTC
                                 </div>
                             </td>
