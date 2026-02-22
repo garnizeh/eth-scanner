@@ -132,7 +132,7 @@ func TestWorkerRun_LeaseExpiresBeforeCompletion(t *testing.T) {
 		ExpiresAt: time.Now().Add(500 * time.Millisecond).UTC(),
 	}
 
-	_, _, err := w.processBatch(context.Background(), lease)
+	_, _, _, err := w.processBatch(context.Background(), lease)
 	if err != nil {
 		t.Logf("processBatch returned: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestProcessBatch_CompleteUnauthorizedReturnsErrUnauthorized(t *testing.T) {
 		t.Fatalf("lease failed: %v", err)
 	}
 
-	_, _, err = w.processBatch(context.Background(), lease)
+	_, _, _, err = w.processBatch(context.Background(), lease)
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("expected ErrUnauthorized, got %v", err)
 	}

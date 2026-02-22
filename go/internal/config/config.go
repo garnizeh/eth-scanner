@@ -54,6 +54,11 @@ type Config struct {
 	// DashboardPassword is the password required to access the dashboard UI.
 	// If empty, dashboard authentication is disabled.
 	DashboardPassword string //nolint:gosec // false positive
+
+	// WinScenario enables the "Win" debug scenario: instead of random prefixes,
+	// the master will always allocate a job with a 28-byte zero prefix and small
+	// nonce range containing nonce 1 (the winning key 0x1).
+	WinScenario bool
 }
 
 // Load reads configuration from environment variables, applies defaults and
@@ -190,6 +195,12 @@ func Load() (*Config, error) {
 	if cfg.WorkerMonthlyStatsLimit <= 0 {
 		log.Printf("WARNING: WORKER_MONTHLY_STATS_LIMIT must be > 0, using default 1000")
 		cfg.WorkerMonthlyStatsLimit = 1000
+	}
+
+	// Win Scenario (defaults to false)
+	cfg.WinScenario = strings.ToLower(strings.TrimSpace(os.Getenv("MASTER_WIN_SCENARIO"))) == "true"
+	if cfg.WinScenario {
+		log.Printf("WARNING: MASTER_WIN_SCENARIO is active. All workers will receive nonce 1 winning job.")
 	}
 
 	return cfg, nil

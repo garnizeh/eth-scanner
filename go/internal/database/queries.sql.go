@@ -512,6 +512,66 @@ func (q *Queries) GetBestMonthRecord(ctx context.Context) (GetBestMonthRecordRow
 	return i, err
 }
 
+const getDetailedResults = `-- name: GetDetailedResults :many
+SELECT 
+    r.id,
+    r.private_key,
+    r.address,
+    r.worker_id,
+    r.job_id,
+    r.nonce_found,
+    r.found_at,
+    j.prefix_28
+FROM results r
+JOIN jobs j ON r.job_id = j.id
+ORDER BY r.found_at DESC
+LIMIT ?
+`
+
+type GetDetailedResultsRow struct {
+	ID         int64     `json:"id"`
+	PrivateKey string    `json:"private_key"`
+	Address    string    `json:"address"`
+	WorkerID   string    `json:"worker_id"`
+	JobID      int64     `json:"job_id"`
+	NonceFound int64     `json:"nonce_found"`
+	FoundAt    time.Time `json:"found_at"`
+	Prefix28   []byte    `json:"prefix_28"`
+}
+
+// Get results with job details for dashboard display
+func (q *Queries) GetDetailedResults(ctx context.Context, limit int64) ([]GetDetailedResultsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getDetailedResults, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetDetailedResultsRow{}
+	for rows.Next() {
+		var i GetDetailedResultsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrivateKey,
+			&i.Address,
+			&i.WorkerID,
+			&i.JobID,
+			&i.NonceFound,
+			&i.FoundAt,
+			&i.Prefix28,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGlobalDailyStats = `-- name: GetGlobalDailyStats :many
 SELECT 
     stats_date,
@@ -1558,6 +1618,8 @@ func (q *Queries) GetWorkersByType(ctx context.Context, workerType string) ([]Wo
 const insertResult = `-- name: InsertResult :one
 INSERT INTO results (private_key, address, worker_id, job_id, nonce_found)
 VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (private_key) DO UPDATE SET 
+    found_at = results.found_at -- No change, just to satisfy the syntax and RETURNING
 RETURNING id, private_key, address, worker_id, job_id, nonce_found, found_at
 `
 
@@ -1569,7 +1631,8 @@ type InsertResultParams struct {
 	NonceFound int64  `json:"nonce_found"`
 }
 
-// Insert a new result (found key)
+// Insert a new result (found key).
+// Idempotent using ON CONFLICT to allow multiple workers to report the same key without error.
 func (q *Queries) InsertResult(ctx context.Context, arg InsertResultParams) (Result, error) {
 	row := q.db.QueryRowContext(ctx, insertResult,
 		arg.PrivateKey,
@@ -1693,6 +1756,29 @@ func (q *Queries) RecordWorkerStats(ctx context.Context, arg RecordWorkerStatsPa
 		arg.FinishedAt,
 		arg.ErrorMessage,
 	)
+	return err
+}
+
+const resetWinScenarioJob = `-- name: ResetWinScenarioJob :exec
+UPDATE jobs 
+SET status = 'pending', current_nonce = NULL 
+WHERE prefix_28 = ? AND nonce_start = 0
+`
+
+// Reset win scenario: set status to pending for nonce_start = 0
+func (q *Queries) ResetWinScenarioJob(ctx context.Context, prefix28 []byte) error {
+	_, err := q.db.ExecContext(ctx, resetWinScenarioJob, prefix28)
+	return err
+}
+
+const resetWinScenarioPrefix = `-- name: ResetWinScenarioPrefix :exec
+DELETE FROM jobs 
+WHERE prefix_28 = ? AND nonce_start > 0
+`
+
+// Reset win scenario: delete nonces > 0 for a specific prefix
+func (q *Queries) ResetWinScenarioPrefix(ctx context.Context, prefix28 []byte) error {
+	_, err := q.db.ExecContext(ctx, resetWinScenarioPrefix, prefix28)
 	return err
 }
 

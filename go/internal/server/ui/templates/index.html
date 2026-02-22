@@ -9,12 +9,18 @@
         <p class="mt-1 text-sm text-gray-500">Real-time distributed Ethereum brute-force monitoring.</p>
     </div>
 
-    <div class="flex items-center space-x-2 bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 shadow-sm">
-        <span class="relative flex h-3 w-3">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-        </span>
-        <span class="text-xs font-bold text-green-800 uppercase tracking-widest">Live Monitoring</span>
+    <div class="flex items-center space-x-2">
+        <div id="found-badge-container">
+            {{template "found-badge" .}}
+        </div>
+        <div class="flex items-center space-x-2 bg-green-50 border border-green-100 rounded-lg px-3 py-1.5 shadow-sm">
+            <span class="relative flex h-3 w-3">
+                <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span class="text-xs font-bold text-green-800 uppercase tracking-widest">Live Monitoring</span>
+        </div>
     </div>
 </div>
 
@@ -72,7 +78,7 @@
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Global Throughput</h3>
                 <p id="global-throughput" class="text-4xl font-black text-purple-600 tracking-tighter">{{ printf "%.1f"
-                    .GlobalKeysPerSecond }} k/s</p>
+                    (float64 .GlobalKeysPerSecond) }} k/s</p>
             </div>
             <div
                 class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
@@ -80,6 +86,11 @@
                 <span class="text-purple-500 tracking-widest text-right">Aggregated Fleet</span>
             </div>
         </div>
+    </div>
+
+    <!-- Found Results Section -->
+    <div id="found-results-container" class="transition-all duration-500">
+        {{template "found-results" .}}
     </div>
 
     <!-- Live Stats Grid (updated via WebSocket: Live Active Workers, Keys Scanned, Completed Batches) -->

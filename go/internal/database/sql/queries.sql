@@ -115,9 +115,12 @@ ORDER BY created_at DESC
 LIMIT ?;
 
 -- name: InsertResult :one
--- Insert a new result (found key)
+-- Insert a new result (found key).
+-- Idempotent using ON CONFLICT to allow multiple workers to report the same key without error.
 INSERT INTO results (private_key, address, worker_id, job_id, nonce_found)
 VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (private_key) DO UPDATE SET 
+    found_at = results.found_at -- No change, just to satisfy the syntax and RETURNING
 RETURNING *;
 
 -- name: GetResultByPrivateKey :one
@@ -137,10 +140,37 @@ SELECT * FROM results
 WHERE worker_id = ?
 ORDER BY found_at DESC;
 
+-- name: ResetWinScenarioPrefix :exec
+-- Reset win scenario: delete nonces > 0 for a specific prefix
+DELETE FROM jobs 
+WHERE prefix_28 = ? AND nonce_start > 0;
+
+-- name: ResetWinScenarioJob :exec
+-- Reset win scenario: set status to pending for nonce_start = 0
+UPDATE jobs 
+SET status = 'pending', current_nonce = NULL 
+WHERE prefix_28 = ? AND nonce_start = 0;
+
 -- name: GetAllResults :many
 -- Get all results (limited)
 SELECT * FROM results
 ORDER BY found_at DESC
+LIMIT ?;
+
+-- name: GetDetailedResults :many
+-- Get results with job details for dashboard display
+SELECT 
+    r.id,
+    r.private_key,
+    r.address,
+    r.worker_id,
+    r.job_id,
+    r.nonce_found,
+    r.found_at,
+    j.prefix_28
+FROM results r
+JOIN jobs j ON r.job_id = j.id
+ORDER BY r.found_at DESC
 LIMIT ?;
 
 -- name: GetWorkerLastPrefix :one

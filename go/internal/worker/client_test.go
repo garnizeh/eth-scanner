@@ -559,11 +559,14 @@ func TestSubmitResult_Success(t *testing.T) {
 		if len(req.PrivateKey) != 64 {
 			t.Fatalf("unexpected private key length: %d", len(req.PrivateKey))
 		}
-		if req.EthereumAddress == "" {
-			t.Fatalf("missing ethereum address")
+		if req.Address == "" {
+			t.Fatalf("missing address")
 		}
-		if _, err := time.Parse(time.RFC3339, req.FoundAt); err != nil {
-			t.Fatalf("invalid found_at timestamp: %v", err)
+		if req.JobID != 123 {
+			t.Fatalf("expected job_id 123, got %d", req.JobID)
+		}
+		if req.Nonce != 456 {
+			t.Fatalf("expected nonce 456, got %d", req.Nonce)
 		}
 		w.WriteHeader(http.StatusCreated)
 	}))
@@ -571,14 +574,14 @@ func TestSubmitResult_Success(t *testing.T) {
 
 	c := NewClient(&Config{APIURL: server.URL, WorkerID: "test-worker", APIKey: "test-key"})
 	privateKey := make([]byte, 32)
-	if err := c.SubmitResult(context.Background(), privateKey, "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"); err != nil {
+	if err := c.SubmitResult(context.Background(), "123", privateKey, "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", 456); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestSubmitResult_InvalidPrivateKeyLength(t *testing.T) {
 	c := NewClient(&Config{APIURL: "http://example.com", WorkerID: "w", APIKey: ""})
-	err := c.SubmitResult(context.Background(), make([]byte, 16), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	err := c.SubmitResult(context.Background(), "123", make([]byte, 16), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", 456)
 	if err == nil {
 		t.Fatalf("expected error for invalid private key length")
 	}
@@ -599,7 +602,7 @@ func TestSubmitResult_UnauthorizedReturnsErrUnauthorized(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: "bad"}
 	c := NewClient(cfg)
 
-	err := c.SubmitResult(context.Background(), make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	err := c.SubmitResult(context.Background(), "123", make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", 456)
 	if err == nil {
 		t.Fatalf("expected ErrUnauthorized")
 	}
@@ -620,7 +623,7 @@ func TestSubmitResult_APIErrorWrapped(t *testing.T) {
 	cfg := &Config{APIURL: srv.URL, WorkerID: "w", APIKey: ""}
 	c := NewClient(cfg)
 
-	err := c.SubmitResult(context.Background(), make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+	err := c.SubmitResult(context.Background(), "123", make([]byte, 32), "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb", 456)
 	if err == nil {
 		t.Fatalf("expected wrapped API error")
 	}

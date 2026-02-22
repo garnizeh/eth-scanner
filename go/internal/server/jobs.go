@@ -58,16 +58,34 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 	q := database.NewQueries(s.db)
 	m := jobs.New(q)
 
+	var job *database.Job
+	var err error
+
+	// If Win Scenario is active, we ensure the "win job" (zero prefix, nonce 1)
+	// exists and is available for this worker. This works by resetting any
+	// existing job for the zero prefix/nonce 0 range and clearing siblings.
+	if s.cfg.WinScenario {
+		log.Printf("[WIN-SCENARIO] Forcing Win job for worker %s", req.WorkerID)
+		zeroPrefix := make([]byte, 28)
+		// 1. Delete all other jobs for this prefix to avoid "running away" nonces.
+		if err := q.ResetWinScenarioPrefix(ctx, zeroPrefix); err != nil {
+			log.Printf("[WIN-SCENARIO] error resetting win prefix: %v", err)
+		}
+		// 2. Reset the main job [0, 99] to pending so it can be re-leased.
+		if err := q.ResetWinScenarioJob(ctx, zeroPrefix); err != nil {
+			log.Printf("[WIN-SCENARIO] error resetting win job: %v", err)
+		}
+	}
+
 	// Try to lease an existing available job first (pass worker type so the
 	// database record can be annotated).
-	job, err := m.LeaseExistingJob(ctx, req.WorkerID, req.WorkerType)
+	job, err = m.LeaseExistingJob(ctx, req.WorkerID, req.WorkerType)
 	if err != nil {
 		http.Error(w, "failed to lease existing job", http.StatusInternalServerError)
 		return
 	}
 
-	// If none available, create and lease a new batch (extracted to helper to
-	// reduce nesting and cyclomatic complexity).
+	// If none available (or forced by win-scenario if first time), create and lease a new batch
 	if job == nil {
 		job, err = s.createAndLeaseBatch(ctx, m, q, req.WorkerID, req.WorkerType, req.Prefix28, req.RequestedBatchSize)
 		if err != nil {
@@ -97,6 +115,22 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt       *string  `json:"expires_at,omitempty"`
 	}
 
+	targets := s.cfg.TargetAddresses
+	if s.cfg.WinScenario {
+		// Ensure the winner address is in the targets list for this job
+		winAddr := "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+		found := false
+		for _, a := range targets {
+			if strings.EqualFold(a, winAddr) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			targets = append([]string{winAddr}, targets...)
+		}
+	}
+
 	var cur *int64
 	if job.CurrentNonce.Valid {
 		v := job.CurrentNonce.Int64
@@ -113,7 +147,7 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 		Prefix28:        base64.StdEncoding.EncodeToString(job.Prefix28),
 		NonceStart:      job.NonceStart,
 		NonceEnd:        job.NonceEnd,
-		TargetAddresses: s.cfg.TargetAddresses,
+		TargetAddresses: targets,
 		CurrentNonce:    cur,
 		ExpiresAt:       exp,
 	}
@@ -130,8 +164,12 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *database.Queries, workerID, workerType string, prefixOpt *string, batchSize uint32) (*database.Job, error) {
 	var prefix28 []byte
 
-	// If client provided a prefix, validate and use it.
-	if prefixOpt != nil {
+	// Win Scenario override: always use 28 bytes of zeros and small nonce range
+	if s.cfg.WinScenario {
+		prefix28 = make([]byte, 28) // zeros
+		batchSize = 100             // Ensure it doesn't take long to find (0-100 contains nonce 1)
+		log.Printf("[WIN-SCENARIO] Forcing zero-prefix and small batch for worker %s", workerID)
+	} else if prefixOpt != nil {
 		decoded, err := base64.StdEncoding.DecodeString(*prefixOpt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid base64 prefix_28: %w", err)
@@ -144,6 +182,9 @@ func (s *Server) createAndLeaseBatch(ctx context.Context, m *jobs.Manager, q *da
 
 	// Helper: attempt to find a worker-specific prefix with remaining nonces.
 	getWorkerAvailablePrefix := func() []byte {
+		if s.cfg.WinScenario {
+			return nil // Don't use worker's last prefix in win mode
+		}
 		last, err := q.GetWorkerLastPrefix(ctx, sql.NullString{String: workerID, Valid: true})
 		if err != nil || last.HighestNonce == nil {
 			return nil

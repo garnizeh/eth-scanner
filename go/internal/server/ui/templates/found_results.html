@@ -1,0 +1,135 @@
+{{define "found-results"}}
+<div id="found-results-section" class="space-y-4">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Discovered Keys</h3>
+            <span
+                class="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-black uppercase tracking-widest animate-pulse border border-yellow-200">WINNERS</span>
+        </div>
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest opacity-60">Verified On-Chain
+            Ready</span>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition hover:shadow-md">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50/50">
+                    <tr>
+                        <th scope="col"
+                            class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Ethereum Address</th>
+                        <th scope="col"
+                            class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Prefix & Nonce</th>
+                        <th scope="col"
+                            class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Worker</th>
+                        <th scope="col"
+                            class="px-6 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Found At (UTC)</th>
+                        <th scope="col"
+                            class="px-6 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            Details</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                    {{range .Results}}
+                    <tr class="hover:bg-yellow-50/30 transition group">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div
+                                    class="h-8 w-8 rounded-lg bg-yellow-400 flex items-center justify-center mr-3 shadow-sm border border-yellow-500">
+                                    <svg class="h-5 w-5 text-yellow-900" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd"
+                                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                                            clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="flex flex-col">
+                                    <span
+                                        class="text-sm font-black text-gray-900 font-mono tracking-tighter">{{.Address}}</span>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Full
+                                        Match Discovered</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex flex-col">
+                                <span class="text-xs font-mono text-blue-600 font-bold">0x{{printf "%x"
+                                    .Prefix28}}</span>
+                                <span class="text-[10px] text-gray-400 font-mono">Nonce: {{.NonceFound}}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <span
+                                    class="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">{{.WorkerID}}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-medium">
+                            {{.FoundAt.UTC.Format "2006-01-02 15:04:05"}}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">
+                            <button onclick="toggleKey('key-{{.ID}}')"
+                                class="text-[10px] font-black bg-gray-900 text-white px-3 py-1 rounded hover:bg-gray-800 transition uppercase tracking-widest shadow-sm">Show
+                                Private Key</button>
+                        </td>
+                    </tr>
+                    <tr id="key-{{.ID}}" class="hidden bg-gray-900">
+                        <td colspan="5" class="px-6 py-4">
+                            <div class="flex flex-col space-y-2">
+                                <span
+                                    class="text-[10px] font-black text-yellow-400 uppercase tracking-widest mb-1">Confidential
+                                    Private Key (HEX)</span>
+                                <div
+                                    class="bg-black/50 p-3 rounded border border-gray-700 flex items-center justify-between">
+                                    <code class="text-sm font-mono text-green-400 break-all">{{.PrivateKey}}</code>
+                                    <button onclick="copyToClipboard('{{.PrivateKey}}')"
+                                        class="ml-4 text-gray-400 hover:text-white">
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center">
+                            <div class="flex flex-col items-center">
+                                <svg class="h-12 w-12 text-gray-200 mb-3" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <p class="text-sm text-gray-400 italic font-medium uppercase tracking-widest">Searching
+                                    for the winning combination...</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleKey(id) {
+        const el = document.getElementById(id);
+        if (el.classList.contains('hidden')) {
+            el.classList.remove('hidden');
+        } else {
+            el.classList.add('hidden');
+        }
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Private key copied to clipboard!');
+        });
+    }
+</script>
+{{end}}

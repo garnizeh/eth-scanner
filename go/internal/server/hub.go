@@ -195,6 +195,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 
 	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
 	prefixProgress, _ := q.GetPrefixProgress(ctx)
+	results, _ := q.GetDetailedResults(ctx, 10)
 
 	// Normalize total keys scanned to int64
 	var totalKeys int64
@@ -232,6 +233,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		GlobalKeysPerSecond float64
 		ActiveWorkers       []database.GetActiveWorkerDetailsRow
 		PrefixProgress      []database.GetPrefixProgressRow
+		Results             []database.GetDetailedResultsRow
 		NowTimestamp        int64
 	}{
 		ActiveWorkerCount:   stats.ActiveWorkers,
@@ -243,6 +245,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		GlobalKeysPerSecond: globalThroughput,
 		ActiveWorkers:       activeWorkers,
 		PrefixProgress:      prefixProgress,
+		Results:             results,
 		NowTimestamp:        time.Now().Unix(),
 	}
 

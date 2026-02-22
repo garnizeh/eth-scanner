@@ -69,7 +69,7 @@ func ScanRange(ctx context.Context, job Job, targetAddresses []common.Address) (
 
 		// Reuse key buffer
 		copy(key[:28], job.Prefix28[:])
-		binary.LittleEndian.PutUint32(key[28:], nonce)
+		binary.BigEndian.PutUint32(key[28:], nonce)
 
 		// Use fast, allocation-free derivation path
 		addr, err := DeriveEthereumAddressFast(key, hasher, &pubBuf, &hashBuf)
@@ -230,6 +230,6 @@ func ScanRangeParallel(ctx context.Context, job Job, targetAddresses []common.Ad
 // Helper to extract nonce bytes if needed elsewhere.
 func nonceBytesFromUint32(n uint32) [4]byte {
 	var b [4]byte
-	binary.LittleEndian.PutUint32(b[:], n)
+	binary.BigEndian.PutUint32(b[:], n)
 	return b
 }

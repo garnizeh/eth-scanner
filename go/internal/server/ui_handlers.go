@@ -24,11 +24,33 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
 	prefixProgress, _ := q.GetPrefixProgress(ctx)
 
+	// Normalize interface fields from database
+	var totalKeys int64
+	if v, ok := stats.TotalKeysScanned.(int64); ok {
+		totalKeys = v
+	} else if v, ok := stats.TotalKeysScanned.(int); ok {
+		totalKeys = int64(v)
+	} else if v, ok := stats.TotalKeysScanned.(float64); ok {
+		totalKeys = int64(v)
+	}
+
+	var globalThroughput float64
+	if v, ok := stats.GlobalKeysPerSecond.(float64); ok {
+		globalThroughput = v
+	} else if v, ok := stats.GlobalKeysPerSecond.(int64); ok {
+		globalThroughput = float64(v)
+	} else if v, ok := stats.GlobalKeysPerSecond.(int); ok {
+		globalThroughput = float64(v)
+	}
+
 	// Fetch last 10 minutes of global history for initial chart state
 	recentHistory, _ := q.GetRecentWorkerHistory(ctx, database.GetRecentWorkerHistoryParams{
 		Column1: sql.NullString{String: "600", Valid: true}, // 10 minutes
 		Limit:   1000,
 	})
+
+	// Fetch found results
+	results, _ := q.GetDetailedResults(ctx, 10)
 
 	tmpl := "index.html"
 	data := map[string]any{
@@ -36,13 +58,14 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"ActiveWorkers":       activeWorkers,
 		"PrefixProgress":      prefixProgress,
 		"RecentHistory":       recentHistory,
+		"Results":             results,
 		"TotalWorkers":        stats.TotalWorkers,
 		"ActiveWorkerCount":   stats.ActiveWorkers,
 		"ActiveWorkersList":   activeWorkers,
-		"TotalKeysScanned":    stats.TotalKeysScanned,
+		"TotalKeysScanned":    totalKeys,
 		"CompletedJobCount":   stats.CompletedBatches,
 		"ProcessingJobCount":  stats.ProcessingBatches,
-		"GlobalKeysPerSecond": stats.GlobalKeysPerSecond,
+		"GlobalKeysPerSecond": globalThroughput,
 		"NowTimestamp":        time.Now().UTC().Unix(),
 	}
 
