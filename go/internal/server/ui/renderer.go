@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -152,6 +153,16 @@ func (r *TemplateRenderer) loadTemplates() error {
 				// #nosec G203 -- calculated width percentage is safe
 				return template.HTMLAttr(fmt.Sprintf("style=\"width: %.1f%%\"", p*100))
 			},
+			"percentStyle": func(p float64) template.HTMLAttr {
+				if p < 0 {
+					p = 0
+				}
+				if p > 100 {
+					p = 100
+				}
+				// #nosec G203 -- calculated percentage is safe
+				return template.HTMLAttr(fmt.Sprintf("style=\"width: %.2f%%\"", p))
+			},
 			"workerIconClass": func(workerType any) string {
 				wt := ""
 				switch v := workerType.(type) {
@@ -170,6 +181,33 @@ func (r *TemplateRenderer) loadTemplates() error {
 			},
 			"add": func(a, b int) int {
 				return a + b
+			},
+			"subtract": func(a, b int64) int64 {
+				return a - b
+			},
+			"int": func(v any) int64 {
+				switch val := v.(type) {
+				case int64:
+					return val
+				case int:
+					return int64(val)
+				case uint32:
+					return int64(val)
+				}
+				return 0
+			},
+			"float64": func(v any) float64 {
+				switch val := v.(type) {
+				case float64:
+					return val
+				case int64:
+					return float64(val)
+				case int:
+					return float64(val)
+				case uint32:
+					return float64(val)
+				}
+				return 0
 			},
 			"rankBadgeAttr": func(index int) template.HTMLAttr {
 				base := "inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-black"
@@ -218,6 +256,52 @@ func (r *TemplateRenderer) loadTemplates() error {
 			"json": func(v any) string {
 				b, _ := json.Marshal(v)
 				return string(b)
+			},
+			"truncateHex": func(v any) string {
+				var s string
+				switch val := v.(type) {
+				case []byte:
+					s = fmt.Sprintf("%x", val)
+				case [28]byte:
+					s = fmt.Sprintf("%x", val[:])
+				case string:
+					s = strings.TrimPrefix(val, "0x")
+				default:
+					s = fmt.Sprintf("%x", val)
+				}
+				if len(s) > 12 {
+					return fmt.Sprintf("0x%s...%s", s[:4], s[len(s)-4:])
+				}
+				return "0x" + s
+			},
+			"fullHex": func(v any) string {
+				var s string
+				switch val := v.(type) {
+				case []byte:
+					s = fmt.Sprintf("%x", val)
+				case [28]byte:
+					s = fmt.Sprintf("%x", val[:])
+				case string:
+					s = strings.TrimPrefix(val, "0x")
+				default:
+					s = fmt.Sprintf("%x", val)
+				}
+				return "0x" + s
+			},
+			"prefixLinkAttr": func(v any) template.HTMLAttr {
+				var s string
+				switch val := v.(type) {
+				case []byte:
+					s = fmt.Sprintf("%x", val)
+				case [28]byte:
+					s = fmt.Sprintf("%x", val[:])
+				case string:
+					s = strings.TrimPrefix(val, "0x")
+				default:
+					s = fmt.Sprintf("%x", val)
+				}
+				// #nosec G203 -- hardcoded link path with hex value is safe
+				return template.HTMLAttr(fmt.Sprintf(`href="/dashboard/prefixes/0x%s"`, s))
 			},
 			"errorTextClass": func(errVal any) string {
 				var count float64

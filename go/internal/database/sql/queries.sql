@@ -215,6 +215,29 @@ GROUP BY prefix_28
 ORDER BY prefix_28
 LIMIT ?;
 
+-- name: GetPrefixProgress :many
+-- Get overall progress for each prefix
+SELECT 
+    prefix_28,
+    CAST(SUM(keys_scanned) AS INTEGER) as total_keys_scanned,
+    COUNT(DISTINCT worker_id) as worker_count,
+    CAST(MIN(created_at) AS TEXT) as started_at,
+    CAST(COALESCE(MAX(last_checkpoint_at), MAX(created_at)) AS TEXT) as last_activity_at,
+    -- Total keys in a 32-bit nonce range is 2^32 = 4294967296
+    CAST((CAST(SUM(keys_scanned) AS REAL) / 4294967296.0 * 100.0) AS REAL) as progress_percentage
+FROM jobs
+GROUP BY prefix_28
+ORDER BY last_activity_at DESC;
+
+-- name: GetJobsByPrefix :many
+-- Get all jobs for a specific prefix
+SELECT 
+    id, status, worker_id, worker_type, nonce_start, nonce_end, current_nonce,
+    keys_scanned, expires_at, created_at, last_checkpoint_at
+FROM jobs
+WHERE prefix_28 = ?
+ORDER BY nonce_start ASC;
+
 -- name: RecordWorkerStats :exec
 -- Insert a raw worker history record (tier 1)
 INSERT INTO worker_history (

@@ -691,6 +691,65 @@ func (q *Queries) GetJobByID(ctx context.Context, id int64) (Job, error) {
 	return i, err
 }
 
+const getJobsByPrefix = `-- name: GetJobsByPrefix :many
+SELECT 
+    id, status, worker_id, worker_type, nonce_start, nonce_end, current_nonce,
+    keys_scanned, expires_at, created_at, last_checkpoint_at
+FROM jobs
+WHERE prefix_28 = ?
+ORDER BY nonce_start ASC
+`
+
+type GetJobsByPrefixRow struct {
+	ID               int64          `json:"id"`
+	Status           string         `json:"status"`
+	WorkerID         sql.NullString `json:"worker_id"`
+	WorkerType       sql.NullString `json:"worker_type"`
+	NonceStart       int64          `json:"nonce_start"`
+	NonceEnd         int64          `json:"nonce_end"`
+	CurrentNonce     sql.NullInt64  `json:"current_nonce"`
+	KeysScanned      sql.NullInt64  `json:"keys_scanned"`
+	ExpiresAt        sql.NullTime   `json:"expires_at"`
+	CreatedAt        time.Time      `json:"created_at"`
+	LastCheckpointAt sql.NullTime   `json:"last_checkpoint_at"`
+}
+
+// Get all jobs for a specific prefix
+func (q *Queries) GetJobsByPrefix(ctx context.Context, prefix28 []byte) ([]GetJobsByPrefixRow, error) {
+	rows, err := q.db.QueryContext(ctx, getJobsByPrefix, prefix28)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetJobsByPrefixRow{}
+	for rows.Next() {
+		var i GetJobsByPrefixRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.WorkerID,
+			&i.WorkerType,
+			&i.NonceStart,
+			&i.NonceEnd,
+			&i.CurrentNonce,
+			&i.KeysScanned,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.LastCheckpointAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobsByStatus = `-- name: GetJobsByStatus :many
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE status = ?
@@ -884,6 +943,60 @@ func (q *Queries) GetNextNonceRange(ctx context.Context, prefix28 []byte) (inter
 	var last_nonce_end interface{}
 	err := row.Scan(&last_nonce_end)
 	return last_nonce_end, err
+}
+
+const getPrefixProgress = `-- name: GetPrefixProgress :many
+SELECT 
+    prefix_28,
+    CAST(SUM(keys_scanned) AS INTEGER) as total_keys_scanned,
+    COUNT(DISTINCT worker_id) as worker_count,
+    CAST(MIN(created_at) AS TEXT) as started_at,
+    CAST(COALESCE(MAX(last_checkpoint_at), MAX(created_at)) AS TEXT) as last_activity_at,
+    -- Total keys in a 32-bit nonce range is 2^32 = 4294967296
+    CAST((CAST(SUM(keys_scanned) AS REAL) / 4294967296.0 * 100.0) AS REAL) as progress_percentage
+FROM jobs
+GROUP BY prefix_28
+ORDER BY last_activity_at DESC
+`
+
+type GetPrefixProgressRow struct {
+	Prefix28           []byte  `json:"prefix_28"`
+	TotalKeysScanned   int64   `json:"total_keys_scanned"`
+	WorkerCount        int64   `json:"worker_count"`
+	StartedAt          string  `json:"started_at"`
+	LastActivityAt     string  `json:"last_activity_at"`
+	ProgressPercentage float64 `json:"progress_percentage"`
+}
+
+// Get overall progress for each prefix
+func (q *Queries) GetPrefixProgress(ctx context.Context) ([]GetPrefixProgressRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPrefixProgress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPrefixProgressRow{}
+	for rows.Next() {
+		var i GetPrefixProgressRow
+		if err := rows.Scan(
+			&i.Prefix28,
+			&i.TotalKeysScanned,
+			&i.WorkerCount,
+			&i.StartedAt,
+			&i.LastActivityAt,
+			&i.ProgressPercentage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getPrefixUsage = `-- name: GetPrefixUsage :many
