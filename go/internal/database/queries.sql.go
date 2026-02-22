@@ -379,20 +379,60 @@ func (q *Queries) GetAllResults(ctx context.Context, limit int64) ([]Result, err
 }
 
 const getAllWorkerLifetimeStats = `-- name: GetAllWorkerLifetimeStats :many
-SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at FROM worker_stats_lifetime
+SELECT 
+    worker_id,
+    CAST(MAX(worker_type) AS TEXT) as worker_type,
+    CAST(SUM(total_batches) AS INTEGER) as total_batches,
+    CAST(SUM(total_keys_scanned) AS INTEGER) as total_keys_scanned,
+    CAST(SUM(total_duration_ms) AS INTEGER) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    CAST(MAX(keys_per_second_best) AS REAL) as keys_per_second_best,
+    CAST(MIN(IFNULL(keys_per_second_worst, 999999999)) AS REAL) as keys_per_second_worst,
+    MIN(first_seen_at) as first_seen_at,
+    MAX(last_seen_at) as last_seen_at
+FROM (
+    -- Archived Tier 4
+    SELECT 
+        worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms,
+        keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at
+    FROM worker_stats_lifetime
+    
+    UNION ALL
+    
+    -- Recent Tier 1
+    SELECT 
+        worker_id, worker_type, 1 as total_batches, COALESCE(keys_scanned, 0) as total_keys_scanned, COALESCE(duration_ms, 0) as total_duration_ms,
+        keys_per_second as keys_per_second_avg, keys_per_second as keys_per_second_best, keys_per_second as keys_per_second_worst,
+        finished_at as first_seen_at, finished_at as last_seen_at
+    FROM worker_history
+) AS combined
+GROUP BY worker_id
 ORDER BY total_keys_scanned DESC
 `
 
-// Get lifetime stats for all workers, ordered by total keys scanned
-func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error) {
+type GetAllWorkerLifetimeStatsRow struct {
+	WorkerID           string          `json:"worker_id"`
+	WorkerType         string          `json:"worker_type"`
+	TotalBatches       int64           `json:"total_batches"`
+	TotalKeysScanned   int64           `json:"total_keys_scanned"`
+	TotalDurationMs    int64           `json:"total_duration_ms"`
+	KeysPerSecondAvg   sql.NullFloat64 `json:"keys_per_second_avg"`
+	KeysPerSecondBest  float64         `json:"keys_per_second_best"`
+	KeysPerSecondWorst float64         `json:"keys_per_second_worst"`
+	FirstSeenAt        interface{}     `json:"first_seen_at"`
+	LastSeenAt         interface{}     `json:"last_seen_at"`
+}
+
+// Get unified lifetime stats for all workers, combining archived tier 4 and recent tier 1
+func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]GetAllWorkerLifetimeStatsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAllWorkerLifetimeStats)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []WorkerStatsLifetime{}
+	items := []GetAllWorkerLifetimeStatsRow{}
 	for rows.Next() {
-		var i WorkerStatsLifetime
+		var i GetAllWorkerLifetimeStatsRow
 		if err := rows.Scan(
 			&i.WorkerID,
 			&i.WorkerType,
@@ -416,6 +456,56 @@ func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsL
 		return nil, err
 	}
 	return items, nil
+}
+
+const getBestDayRecord = `-- name: GetBestDayRecord :one
+SELECT stats_date, SUM(total_keys_scanned) as total_keys
+FROM (
+    SELECT stats_date, total_keys_scanned FROM worker_stats_daily
+    UNION ALL
+    SELECT date(finished_at) as stats_date, keys_scanned as total_keys_scanned FROM worker_history
+)
+GROUP BY stats_date
+ORDER BY total_keys DESC
+LIMIT 1
+`
+
+type GetBestDayRecordRow struct {
+	StatsDate string          `json:"stats_date"`
+	TotalKeys sql.NullFloat64 `json:"total_keys"`
+}
+
+// Get the day with highest volume across all workers
+func (q *Queries) GetBestDayRecord(ctx context.Context) (GetBestDayRecordRow, error) {
+	row := q.db.QueryRowContext(ctx, getBestDayRecord)
+	var i GetBestDayRecordRow
+	err := row.Scan(&i.StatsDate, &i.TotalKeys)
+	return i, err
+}
+
+const getBestMonthRecord = `-- name: GetBestMonthRecord :one
+SELECT stats_month, SUM(total_keys_scanned) as total_keys
+FROM (
+    SELECT stats_month, total_keys_scanned FROM worker_stats_monthly
+    UNION ALL
+    SELECT substr(finished_at, 1, 7) as stats_month, keys_scanned as total_keys_scanned FROM worker_history
+)
+GROUP BY stats_month
+ORDER BY total_keys DESC
+LIMIT 1
+`
+
+type GetBestMonthRecordRow struct {
+	StatsMonth string          `json:"stats_month"`
+	TotalKeys  sql.NullFloat64 `json:"total_keys"`
+}
+
+// Get the month with highest volume across all workers
+func (q *Queries) GetBestMonthRecord(ctx context.Context) (GetBestMonthRecordRow, error) {
+	row := q.db.QueryRowContext(ctx, getBestMonthRecord)
+	var i GetBestMonthRecordRow
+	err := row.Scan(&i.StatsMonth, &i.TotalKeys)
+	return i, err
 }
 
 const getGlobalDailyStats = `-- name: GetGlobalDailyStats :many
@@ -476,6 +566,83 @@ func (q *Queries) GetGlobalDailyStats(ctx context.Context, sinceDate interface{}
 		var i GetGlobalDailyStatsRow
 		if err := rows.Scan(
 			&i.StatsDate,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.TotalErrors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGlobalMonthlyStats = `-- name: GetGlobalMonthlyStats :many
+SELECT 
+    stats_month,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived monthly data
+    SELECT 
+        stats_month,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_monthly
+    WHERE stats_month >= substr(?1, 1, 7)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned)
+    SELECT 
+        substr(finished_at, 1, 7) as stats_month,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL AND error_message != '' THEN 1 ELSE 0 END as error_count
+    FROM worker_history
+    WHERE finished_at >= substr(?1, 1, 7)
+)
+GROUP BY stats_month
+ORDER BY stats_month DESC
+`
+
+type GetGlobalMonthlyStatsRow struct {
+	StatsMonth       string          `json:"stats_month"`
+	TotalBatches     sql.NullFloat64 `json:"total_batches"`
+	TotalKeysScanned sql.NullFloat64 `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullFloat64 `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	TotalErrors      sql.NullFloat64 `json:"total_errors"`
+}
+
+// Get monthly aggregates for all workers, combining archived and recent history
+func (q *Queries) GetGlobalMonthlyStats(ctx context.Context, sinceMonth interface{}) ([]GetGlobalMonthlyStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getGlobalMonthlyStats, sinceMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetGlobalMonthlyStatsRow{}
+	for rows.Next() {
+		var i GetGlobalMonthlyStatsRow
+		if err := rows.Scan(
+			&i.StatsMonth,
 			&i.TotalBatches,
 			&i.TotalKeysScanned,
 			&i.TotalDurationMs,
@@ -608,6 +775,88 @@ func (q *Queries) GetJobsByWorker(ctx context.Context, workerID sql.NullString) 
 			&i.RequestedBatchSize,
 			&i.LastCheckpointAt,
 			&i.DurationMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMonthlyStatsByWorker = `-- name: GetMonthlyStatsByWorker :many
+SELECT 
+    stats_month,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived monthly data
+    SELECT 
+        stats_month,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_monthly wsm
+    WHERE wsm.worker_id = ?1 AND wsm.stats_month >= substr(?2, 1, 7)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned)
+    SELECT 
+        substr(finished_at, 1, 7) as stats_month,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL AND error_message != '' THEN 1 ELSE 0 END as error_count
+    FROM worker_history wh
+    WHERE wh.worker_id = ?1 AND wh.finished_at >= substr(?2, 1, 7)
+) AS combined
+GROUP BY stats_month
+ORDER BY stats_month DESC
+`
+
+type GetMonthlyStatsByWorkerParams struct {
+	WorkerID   string      `json:"worker_id"`
+	SinceMonth interface{} `json:"since_month"`
+}
+
+type GetMonthlyStatsByWorkerRow struct {
+	StatsMonth       string          `json:"stats_month"`
+	TotalBatches     sql.NullFloat64 `json:"total_batches"`
+	TotalKeysScanned sql.NullFloat64 `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullFloat64 `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	TotalErrors      sql.NullFloat64 `json:"total_errors"`
+}
+
+// Get monthly aggregates for a specific worker, combining archived and recent history
+func (q *Queries) GetMonthlyStatsByWorker(ctx context.Context, arg GetMonthlyStatsByWorkerParams) ([]GetMonthlyStatsByWorkerRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMonthlyStatsByWorker, arg.WorkerID, arg.SinceMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMonthlyStatsByWorkerRow{}
+	for rows.Next() {
+		var i GetMonthlyStatsByWorkerRow
+		if err := rows.Scan(
+			&i.StatsMonth,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.TotalErrors,
 		); err != nil {
 			return nil, err
 		}
@@ -972,52 +1221,6 @@ func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (
 		&i.LastSeenAt,
 	)
 	return i, err
-}
-
-const getWorkerMonthlyStats = `-- name: GetWorkerMonthlyStats :many
-SELECT id, worker_id, stats_month, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count FROM worker_stats_monthly
-WHERE worker_id = ?1 AND stats_month >= ?2
-ORDER BY stats_month DESC
-`
-
-type GetWorkerMonthlyStatsParams struct {
-	WorkerID   string `json:"worker_id"`
-	StatsMonth string `json:"stats_month"`
-}
-
-// Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
-func (q *Queries) GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error) {
-	rows, err := q.db.QueryContext(ctx, getWorkerMonthlyStats, arg.WorkerID, arg.StatsMonth)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []WorkerStatsMonthly{}
-	for rows.Next() {
-		var i WorkerStatsMonthly
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkerID,
-			&i.StatsMonth,
-			&i.TotalBatches,
-			&i.TotalKeysScanned,
-			&i.TotalDurationMs,
-			&i.KeysPerSecondAvg,
-			&i.KeysPerSecondMin,
-			&i.KeysPerSecondMax,
-			&i.ErrorCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getWorkerStats = `-- name: GetWorkerStats :many

@@ -46,6 +46,9 @@
                     <div class="ml-10 flex items-baseline space-x-4">
                         <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "" }}>Overview</a>
                         <a href="/dashboard/daily" {{navAttr .CurrentPath "/dashboard/daily" "" }}>Daily</a>
+                        <a href="/dashboard/monthly" {{navAttr .CurrentPath "/dashboard/monthly" "" }}>Monthly</a>
+                        <a href="/dashboard/leaderboard" {{navAttr .CurrentPath "/dashboard/leaderboard" "" }}>Hall of
+                            Fame</a>
                         <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "" }}>Workers</a>
                         <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "" }}>Settings</a>
                     </div>
@@ -84,6 +87,10 @@
         <div id="mobile-menu" class="hidden md:hidden border-t border-gray-800 bg-gray-900 absolute w-full shadow-lg">
             <div class="px-4 py-3 space-y-2">
                 <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "block w-full" }}>Overview</a>
+                <a href="/dashboard/daily" {{navAttr .CurrentPath "/dashboard/daily" "block w-full" }}>Daily</a>
+                <a href="/dashboard/monthly" {{navAttr .CurrentPath "/dashboard/monthly" "block w-full" }}>Monthly</a>
+                <a href="/dashboard/leaderboard" {{navAttr .CurrentPath "/dashboard/leaderboard" "block w-full" }}>Hall
+                    of Fame</a>
                 <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "block w-full" }}>Workers</a>
                 <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "block w-full"
                     }}>Settings</a>

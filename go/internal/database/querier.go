@@ -28,16 +28,24 @@ type Querier interface {
 	GetActiveWorkers(ctx context.Context, dollar_1 sql.NullString) ([]Worker, error)
 	// Get all results (limited)
 	GetAllResults(ctx context.Context, limit int64) ([]Result, error)
-	// Get lifetime stats for all workers, ordered by total keys scanned
-	GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error)
+	// Get unified lifetime stats for all workers, combining archived tier 4 and recent tier 1
+	GetAllWorkerLifetimeStats(ctx context.Context) ([]GetAllWorkerLifetimeStatsRow, error)
+	// Get the day with highest volume across all workers
+	GetBestDayRecord(ctx context.Context) (GetBestDayRecordRow, error)
+	// Get the month with highest volume across all workers
+	GetBestMonthRecord(ctx context.Context) (GetBestMonthRecordRow, error)
 	// Get daily aggregates for all workers, combining archived and recent history
 	GetGlobalDailyStats(ctx context.Context, sinceDate interface{}) ([]GetGlobalDailyStatsRow, error)
+	// Get monthly aggregates for all workers, combining archived and recent history
+	GetGlobalMonthlyStats(ctx context.Context, sinceMonth interface{}) ([]GetGlobalMonthlyStatsRow, error)
 	// Get a specific job by ID
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	// Get jobs by status
 	GetJobsByStatus(ctx context.Context, arg GetJobsByStatusParams) ([]Job, error)
 	// Get all jobs assigned to a specific worker
 	GetJobsByWorker(ctx context.Context, workerID sql.NullString) ([]Job, error)
+	// Get monthly aggregates for a specific worker, combining archived and recent history
+	GetMonthlyStatsByWorker(ctx context.Context, arg GetMonthlyStatsByWorkerParams) ([]GetMonthlyStatsByWorkerRow, error)
 	// Get the next available nonce range for a specific prefix
 	GetNextNonceRange(ctx context.Context, prefix28 []byte) (interface{}, error)
 	// Get usage statistics per prefix
@@ -59,8 +67,6 @@ type Querier interface {
 	GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error)
 	// Get lifetime stats for a worker
 	GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error)
-	// Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
-	GetWorkerMonthlyStats(ctx context.Context, arg GetWorkerMonthlyStatsParams) ([]WorkerStatsMonthly, error)
 	// Get statistics per worker
 	GetWorkerStats(ctx context.Context, limit int64) ([]GetWorkerStatsRow, error)
 	// Get all workers of a specific type

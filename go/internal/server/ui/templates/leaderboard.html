@@ -1,0 +1,216 @@
+{{template "base" .}}
+
+{{define "title"}}Worker Leaderboard{{end}}
+
+{{define "content"}}
+<div id="leaderboard-view">
+    {{template "leaderboard-content" .}}
+</div>
+{{end}}
+
+{{define "leaderboard-content"}}
+<div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+        <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Worker Leaderboard</h2>
+        <p class="mt-1 text-sm text-gray-500">Hall of fame for the most productive workers (Lifetime stats).</p>
+    </div>
+</div>
+
+<div class="space-y-6">
+    <!-- Best Day Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+            class="bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-2xl shadow-lg border border-blue-500 flex flex-col justify-between transition hover:shadow-xl text-white">
+            <div>
+                <h3 class="text-xs font-bold text-blue-200 uppercase tracking-widest mb-2 opacity-80">Best Performance
+                    Day</h3>
+                <p class="text-4xl font-black tracking-tighter">{{if
+                    .BestDay.StatsDate}}{{.BestDay.StatsDate}}{{else}}N/A{{end}}</p>
+                <div class="mt-2 text-sm text-blue-100 font-medium opactity-90">
+                    {{if .BestDay.StatsDate}}Reached {{printf "%.0f" .BestDay.TotalKeys.Float64}} keys in 24
+                    hours.{{else}}No daily records yet{{end}}
+                </div>
+            </div>
+            <div class="mt-6 flex items-center">
+                <div class="h-10 w-10 rounded-full bg-blue-400/30 flex items-center justify-center mr-3">
+                    <svg class="h-6 w-6 text-blue-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-200 opacity-70">Fleet Record</span>
+            </div>
+        </div>
+
+        <div
+            class="bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700 flex flex-col justify-between transition hover:shadow-xl text-white">
+            <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 opacity-80">Fleet Total
+                    Workers</h3>
+                <p class="text-4xl font-black tracking-tighter">{{.TotalWorkers}}</p>
+                <div class="mt-2 text-sm text-gray-400 font-medium">
+                    Cumulative across all platforms.
+                </div>
+            </div>
+            <div class="mt-6 flex items-center text-xs font-bold uppercase tracking-widest text-gray-500">
+                <div class="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center mr-3">
+                    <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+                Lifetime Participants
+            </div>
+        </div>
+    </div>
+
+    <!-- Work Distribution Pie Chart -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition hover:shadow-md">
+        <div class="bg-gray-50 px-8 py-5 border-b border-gray-100">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Lifetime Work Distribution</h3>
+        </div>
+        <div class="p-8 flex flex-col md:flex-row items-center gap-12">
+            <div class="relative flex-shrink-0">
+                <!-- SVG Pie Chart -->
+                <svg id="distribution-pie" width="220" height="220" viewBox="0 0 42 42" class="transform -rotate-90">
+                    <!-- Placeholder or dynamic segments will be here -->
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="bg-white rounded-full w-24 h-24 shadow-inner flex flex-col items-center justify-center">
+                        <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Work Share</span>
+                        <span class="text-lg font-black text-blue-600">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-grow grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {{range .Distribution}}
+                <div class="flex items-center group cursor-default">
+                    <div class="w-3 h-3 rounded-full mr-3 shadow-sm" {{bgStyle .Color}}></div>
+                    <div class="flex flex-col">
+                        <div class="flex items-baseline space-x-2">
+                            <span class="text-sm font-bold text-gray-900 font-mono truncate max-w-[120px]"
+                                title="{{.Label}}">{{.Label}}</span>
+                            <span class="text-xs font-black text-blue-600 tracking-tighter">{{printf "%.1f"
+                                .Pct}}%</span>
+                        </div>
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest leaderboard-keys"
+                            data-value="{{.Value}}">{{.Value}} keys</span>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Table (Tier 4) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition hover:shadow-md">
+        <div class="bg-gray-50 px-8 py-5 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Lifetime Ranking (Tier 4)</h3>
+            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest opacity-60">Sorted by Keys
+                Scanned</span>
+        </div>
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50/50">
+                <tr>
+                    <th scope="col"
+                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest w-12 text-center">
+                        #</th>
+                    <th scope="col"
+                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Worker
+                        ID</th>
+                    <th scope="col"
+                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Platform</th>
+                    <th scope="col"
+                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total
+                        Volume</th>
+                    <th scope="col"
+                        class="px-8 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Efficiency (Best K/s)</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-100">
+                {{range $i, $w := .Leaderboard}}
+                <tr class="hover:bg-blue-50/20 group transition">
+                    <td class="px-8 py-5 whitespace-nowrap text-center">
+                        <span {{rankBadgeAttr $i}}>
+                            {{add $i 1}}
+                        </span>
+                    </td>
+                    <td class="px-8 py-5 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="text-sm font-bold text-gray-900 font-mono">{{.WorkerID}}</div>
+                        </div>
+                    </td>
+                    <td class="px-8 py-5 whitespace-nowrap">
+                        <span {{workerBadgeAttr .WorkerType}}>
+                            {{.WorkerType}}
+                        </span>
+                    </td>
+                    <td class="px-8 py-5 whitespace-nowrap text-sm text-gray-900 font-medium leaderboard-keys"
+                        data-value="{{.TotalKeysScanned}}">
+                        {{.TotalKeysScanned}}
+                    </td>
+                    <td class="px-8 py-5 whitespace-nowrap text-sm text-gray-500 font-bold">
+                        <div class="flex flex-col">
+                            <span class="text-blue-600">{{printf "%.1f" .KeysPerSecondBest}} k/s</span>
+                            <span class="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">Average: {{printf
+                                "%.1f" .KeysPerSecondAvg.Float64}} k/s</span>
+                        </div>
+                    </td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="5"
+                        class="px-8 py-16 text-center text-sm text-gray-400 italic font-medium uppercase tracking-widest">
+                        No workers found in hall of fame</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const fmtBigInt = (el) => {
+            if (!el) return;
+            const val = parseFloat(el.getAttribute('data-value') || el.innerText);
+            if (isNaN(val)) return;
+
+            if (val >= 1e12) el.innerText = (val / 1e12).toFixed(2) + " T";
+            else if (val >= 1e9) el.innerText = (val / 1e9).toFixed(2) + " G";
+            else if (val >= 1e6) el.innerText = (val / 1e6).toFixed(2) + " M";
+            else if (val >= 1e3) el.innerText = (val / 1e3).toFixed(1) + " K";
+            else el.innerText = (val).toLocaleString();
+        };
+
+        const els = document.querySelectorAll('.leaderboard-keys');
+        els.forEach(fmtBigInt);
+
+        // Draw Pie Chart
+        const pie = document.getElementById('distribution-pie');
+        if (pie) {
+            const data = JSON.parse('{{ json .Distribution }}');
+
+            let cumulative = 0;
+            data.forEach(slice => {
+                if (slice.pct <= 0) return;
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", "21");
+                circle.setAttribute("cy", "21");
+                circle.setAttribute("r", "15.91549430918954"); // Circumference = 100
+                circle.setAttribute("fill", "transparent");
+                circle.setAttribute("stroke", slice.color);
+                circle.setAttribute("stroke-width", "4");
+                circle.setAttribute("stroke-dasharray", `${slice.pct} ${100 - slice.pct}`);
+                circle.setAttribute("stroke-dashoffset", -cumulative);
+                circle.classList.add("transition-all", "duration-1000", "ease-out");
+                pie.appendChild(circle);
+                cumulative += slice.pct;
+            });
+        }
+    })();
+</script>
+{{end}}
