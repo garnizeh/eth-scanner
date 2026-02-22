@@ -2,6 +2,7 @@ package ui
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -166,6 +167,81 @@ func (r *TemplateRenderer) loadTemplates() error {
 					return "flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-blue-100 text-blue-600"
 				}
 				return "flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-lg bg-purple-100 text-purple-600"
+			},
+			"add": func(a, b int) int {
+				return a + b
+			},
+			"rankBadgeAttr": func(index int) template.HTMLAttr {
+				base := "inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-black"
+				classes := ""
+				switch index {
+				case 0:
+					classes = base + " bg-amber-100 text-amber-700"
+				case 1:
+					classes = base + " bg-slate-200 text-slate-700"
+				case 2:
+					classes = base + " bg-orange-100 text-orange-700"
+				default:
+					classes = base + " bg-gray-100 text-gray-500"
+				}
+				// #nosec G203 -- classes are hardcoded or controlled internal strings
+				return template.HTMLAttr(fmt.Sprintf(`class="%s"`, classes))
+			},
+			"workerBadgeAttr": func(workerType any) template.HTMLAttr {
+				wt := ""
+				switch v := workerType.(type) {
+				case string:
+					wt = v
+				case sql.NullString:
+					if v.Valid {
+						wt = v.String
+					}
+				}
+				base := "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest"
+				classes := ""
+				if wt == "pc" {
+					classes = base + " bg-blue-100 text-blue-700"
+				} else {
+					classes = base + " bg-green-100 text-green-700"
+				}
+				// #nosec G203 -- classes are hardcoded or controlled internal strings
+				return template.HTMLAttr(fmt.Sprintf(`class="%s"`, classes))
+			},
+			"bgStyle": func(color string) template.HTMLAttr {
+				// #nosec G203 -- hex colors are controlled and safe
+				return template.HTMLAttr(fmt.Sprintf("style=\"background-color: %s\"", color))
+			},
+			"strokeStyle": func(color string) template.HTMLAttr {
+				// #nosec G203
+				return template.HTMLAttr(fmt.Sprintf("style=\"stroke: %s\"", color))
+			},
+			"json": func(v any) string {
+				b, _ := json.Marshal(v)
+				return string(b)
+			},
+			"errorTextClass": func(errVal any) string {
+				var count float64
+				switch v := errVal.(type) {
+				case int:
+					count = float64(v)
+				case int64:
+					count = float64(v)
+				case float64:
+					count = v
+				case sql.NullInt64:
+					if v.Valid {
+						count = float64(v.Int64)
+					}
+				case sql.NullFloat64:
+					if v.Valid {
+						count = v.Float64
+					}
+				}
+
+				if count > 0 {
+					return "text-red-500 font-black"
+				}
+				return "text-gray-400 font-bold"
 			},
 		})
 
