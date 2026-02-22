@@ -1,8 +1,8 @@
 -- name: FindAvailableBatch :one
--- Find an available batch (pending or expired lease)
+-- Find an available batch (pending or expired lease, or already assigned to same worker)
 SELECT * FROM jobs
 WHERE status = 'pending' 
-   OR (status = 'processing' AND expires_at < datetime('now', 'utc'))
+   OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id = :worker_id))
 ORDER BY created_at ASC
 LIMIT 1;
 
@@ -10,7 +10,7 @@ LIMIT 1;
 -- Get the next available nonce range for a specific prefix
 SELECT MAX(nonce_end) as last_nonce_end
 FROM jobs
-WHERE prefix_28 = ?
+WHERE prefix_28 = :prefix_28
 AND status IN ('processing', 'completed');
 
 -- name: CreateBatch :one
@@ -26,13 +26,13 @@ INSERT INTO jobs (
     expires_at,
     requested_batch_size
 )
-VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
+VALUES (:prefix_28, :nonce_start, :nonce_end, :nonce_start, 'processing', :worker_id, :worker_type, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), :requested_batch_size)
 RETURNING *;
 
 -- name: FindIncompleteMacroJob :one
 -- Find an existing non-completed (macro) job for a given prefix
 SELECT * FROM jobs
-WHERE prefix_28 = ?
+WHERE prefix_28 = :prefix_28
     AND status != 'completed'
 ORDER BY created_at ASC
 LIMIT 1;
@@ -50,40 +50,40 @@ INSERT INTO jobs (
         expires_at,
         requested_batch_size
 )
-VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), ?)
+VALUES (:prefix_28, :nonce_start, :nonce_end, :nonce_start, 'processing', :worker_id, :worker_type, datetime('now', 'utc', '+' || :lease_seconds || ' seconds'), :requested_batch_size)
 RETURNING *;
 
 -- name: LeaseMacroJob :execrows
 -- Lease an existing macro job to a worker (if not completed and available)
 UPDATE jobs
 SET status = 'processing',
-        worker_id = ?,
-        worker_type = ?,
+        worker_id = :worker_id,
+        worker_type = :worker_type,
         expires_at = datetime('now', 'utc', '+' || :lease_seconds || ' seconds')
-WHERE id = ?
+WHERE id = :id
     AND status != 'completed'
-    AND (worker_id IS NULL OR expires_at < datetime('now', 'utc'));
+    AND (worker_id IS NULL OR worker_id = :worker_id OR expires_at < datetime('now', 'utc'));
 
 -- name: LeaseBatch :execrows
 -- Lease an existing batch to a worker
 UPDATE jobs
 SET 
     status = 'processing',
-    worker_id = ?,
-    worker_type = ?,
+    worker_id = :worker_id,
+    worker_type = :worker_type,
     expires_at = datetime('now', 'utc', '+' || :lease_seconds || ' seconds')
-WHERE id = ? 
-  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL)));
+WHERE id = :id 
+  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL OR worker_id = :worker_id)));
 
 -- name: UpdateCheckpoint :exec
 -- Update job progress checkpoint
 UPDATE jobs
 SET 
-    current_nonce = ?,
-    keys_scanned = ?,
-    duration_ms = ?,
+    current_nonce = :current_nonce,
+    keys_scanned = :keys_scanned,
+    duration_ms = :duration_ms,
     last_checkpoint_at = datetime('now', 'utc')
-WHERE id = ? AND worker_id = ? AND status = 'processing';
+WHERE id = :id AND worker_id = :worker_id AND status = 'processing';
 
 -- name: CompleteBatch :exec
 -- Mark a batch as completed
@@ -91,10 +91,10 @@ UPDATE jobs
 SET 
     status = 'completed',
     completed_at = datetime('now', 'utc'),
-    keys_scanned = ?,
-    duration_ms = ?,
+    keys_scanned = :keys_scanned,
+    duration_ms = :duration_ms,
     current_nonce = nonce_end
-WHERE id = ? AND worker_id = ?;
+WHERE id = :id AND worker_id = :worker_id;
 
 -- name: GetJobByID :one
 -- Get a specific job by ID
@@ -229,17 +229,85 @@ WHERE finished_at > datetime('now', '-' || ? || ' seconds')
 ORDER BY finished_at DESC
 LIMIT ?;
 
+-- name: GetGlobalDailyStats :many
+-- Get daily aggregates for all workers, combining archived and recent history
+SELECT 
+    stats_date,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived historical data
+    SELECT 
+        stats_date,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_daily
+    WHERE stats_date >= substr(:since_date, 1, 10)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned/archived)
+    SELECT 
+        date(finished_at) as stats_date,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END as error_count
+    FROM worker_history
+    WHERE finished_at >= substr(:since_date, 1, 10)
+)
+GROUP BY stats_date
+ORDER BY stats_date DESC;
+
 -- name: GetWorkerDailyStats :many
--- Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
--- This makes the generated sqlc method usable directly with a Go time.Time value.
-SELECT * FROM worker_stats_daily
-WHERE worker_id = ? AND stats_date >= substr(?, 1, 10)
+-- Get daily aggregates for a worker, combining archived and recent history
+-- We select and group by stats_date only, as worker_id is filtered to a single value
+SELECT 
+    stats_date,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived historical data
+    SELECT 
+        stats_date,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_daily wsd
+    WHERE wsd.worker_id = :worker_id AND wsd.stats_date >= substr(:since_date, 1, 10)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned/archived)
+    SELECT 
+        date(finished_at) as stats_date,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END as error_count
+    FROM worker_history wh
+    WHERE wh.worker_id = :worker_id AND wh.finished_at >= substr(:since_date, 1, 10)
+) AS combined
+GROUP BY stats_date
 ORDER BY stats_date DESC;
 
 -- name: GetWorkerMonthlyStats :many
 -- Accept a full timestamp/time.Time parameter but compare only the month portion (YYYY-MM)
 SELECT * FROM worker_stats_monthly
-WHERE worker_id = ? AND stats_month >= ?
+WHERE worker_id = :worker_id AND stats_month >= :stats_month
 ORDER BY stats_month DESC;
 
 -- name: GetWorkerLifetimeStats :one

@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png">
     <link rel="manifest" href="/static/img/site.webmanifest">
-    <title>{{template "title" .}} - EthScanner</title>  
+    <title>{{template "title" .}} - EthScanner</title>
     <!-- Tailwind CSS (via local static) -->
     <script src="/static/tailwind.3.4.17.min.js"></script>
     <!-- HTMX -->
@@ -45,6 +45,7 @@
                 <div class="hidden md:block">
                     <div class="ml-10 flex items-baseline space-x-4">
                         <a href="/dashboard" {{navAttr .CurrentPath "/dashboard" "" }}>Overview</a>
+                        <a href="/dashboard/daily" {{navAttr .CurrentPath "/dashboard/daily" "" }}>Daily</a>
                         <a href="/dashboard/workers" {{navAttr .CurrentPath "/dashboard/workers" "" }}>Workers</a>
                         <a href="/dashboard/settings" {{navAttr .CurrentPath "/dashboard/settings" "" }}>Settings</a>
                     </div>

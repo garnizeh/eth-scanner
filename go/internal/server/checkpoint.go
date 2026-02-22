@@ -40,15 +40,11 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	// Read and log raw body for debugging ESP32 payloads
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		// #nosec G706: logging raw body for debugging, even on decode failure
-		log.Printf("[DEBUG] checkpoint: failed to read body for job %d: %v", id, err)
 		http.Error(w, "failed to read body", http.StatusInternalServerError)
 		return
 	}
 	// Restore body after reading
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-	// #nosec G706: logging raw body for debugging, even on decode failure
-	log.Printf("[DEBUG] checkpoint payload for job %d: %q", id, string(bodyBytes))
 
 	type reqBody struct {
 		WorkerID     string    `json:"worker_id"`
@@ -59,8 +55,6 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	var req reqBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// #nosec G706: logging raw body for debugging, even on decode failure
-		log.Printf("[DEBUG] checkpoint json decode failed for job %d: %v", id, err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}

@@ -176,8 +176,8 @@ func TestJobComplete_AlreadyCompletedAndPending(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp1.Body.Close()
-	if resp1.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for already completed job, got %d", resp1.StatusCode)
+	if resp1.StatusCode != http.StatusGone {
+		t.Fatalf("expected 410 for already completed job, got %d", resp1.StatusCode)
 	}
 
 	// attempt to complete pending job
@@ -191,7 +191,7 @@ func TestJobComplete_AlreadyCompletedAndPending(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp2.Body.Close()
-	if resp2.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for pending job completion, got %d", resp2.StatusCode)
+	if resp2.StatusCode != http.StatusGone {
+		t.Fatalf("expected 410 for pending job completion, got %d", resp2.StatusCode)
 	}
 }

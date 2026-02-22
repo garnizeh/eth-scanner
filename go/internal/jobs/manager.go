@@ -72,8 +72,8 @@ func (m *Manager) LeaseExistingJob(ctx context.Context, workerID, workerType str
 
 	// Try up to 3 times to find and lease an existing job to handle concurrency
 	for range 3 {
-		// Find an available batch (pending or expired)
-		job, err := m.db.FindAvailableBatch(ctx)
+		// Find an available batch (pending or expired, or already owned by worker)
+		job, err := m.db.FindAvailableBatch(ctx, sql.NullString{String: workerID, Valid: true})
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
@@ -168,29 +168,29 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 		// remaining slots including nonceStart up to MaxUint32
 		remaining := uint64(math.MaxUint32) - nonceStart + 1
 		if remaining == 0 {
-			return 0, 0, fmt.Errorf("nonce space exhausted for this prefix")
+			return 0, 0, ErrPrefixExhausted
 		}
 		// If requested batch is larger than remaining, cap to remaining
 		var alloc = uint64(batchSize)
 		if alloc > remaining {
 			alloc = remaining
 		}
-		nonceEnd64 := nonceStart + alloc
+		nonceEnd64 := nonceStart + alloc - 1
 		// ensure values fit in uint32 before converting
-		if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
+		if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
 			return 0, 0, fmt.Errorf("nonce range overflow")
 		}
 		//nolint:gosec // G115: overflow checked above
 		return uint32(nonceStart), uint32(nonceEnd64), nil
 	}
 
-	if lastEnd > uint64(math.MaxUint32) {
+	if lastEnd >= uint64(math.MaxUint32) {
 		return 0, 0, ErrPrefixExhausted
 	}
 
-	nonceStart := lastEnd
+	nonceStart := lastEnd + 1
 	if nonceStart > uint64(math.MaxUint32) {
-		return 0, 0, fmt.Errorf("nonceStart overflow")
+		return 0, 0, ErrPrefixExhausted
 	}
 	// remaining slots including nonceStart up to MaxUint32
 	remaining := uint64(math.MaxUint32) - nonceStart + 1
@@ -202,10 +202,10 @@ func (m *Manager) GetNextNonceRange(ctx context.Context, prefix28 []byte, batchS
 	if alloc > remaining {
 		alloc = remaining
 	}
-	nonceEnd64 := nonceStart + alloc
+	nonceEnd64 := nonceStart + alloc - 1
 
 	// ensure values fit in uint32 before converting
-	if nonceStart > uint64(math.MaxUint32) || (nonceEnd64-1) > uint64(math.MaxUint32) {
+	if nonceStart > uint64(math.MaxUint32) || nonceEnd64 > uint64(math.MaxUint32) {
 		return 0, 0, fmt.Errorf("nonce range overflow")
 	}
 	//nolint:gosec // G115: overflow checked above
@@ -245,7 +245,6 @@ func (m *Manager) CreateBatch(ctx context.Context, prefix28 []byte, batchSize ui
 		Prefix28:           prefix28,
 		NonceStart:         int64(start),
 		NonceEnd:           int64(end),
-		CurrentNonce:       sql.NullInt64{Int64: int64(start), Valid: true},
 		WorkerID:           sql.NullString{Valid: false},
 		WorkerType:         sql.NullString{Valid: false},
 		LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},
@@ -285,7 +284,6 @@ func (m *Manager) FindOrCreateMacroJob(ctx context.Context, prefix28 []byte, wor
 			Prefix28:           prefix28,
 			NonceStart:         int64(0),
 			NonceEnd:           int64(math.MaxUint32),
-			CurrentNonce:       sql.NullInt64{Int64: 0, Valid: true},
 			WorkerID:           sql.NullString{String: workerID, Valid: true},
 			WorkerType:         sql.NullString{Valid: false},
 			LeaseSeconds:       sql.NullString{String: fmt.Sprintf("%d", leaseSeconds), Valid: true},

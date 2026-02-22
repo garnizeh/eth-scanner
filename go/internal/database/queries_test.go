@@ -41,7 +41,6 @@ func TestCreateAndLeaseBatch(t *testing.T) {
 		Prefix28:           prefix,
 		NonceStart:         0,
 		NonceEnd:           1000000,
-		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
 		LeaseSeconds:       sql.NullString{String: "3600", Valid: true}, // expires in 1 hour
@@ -88,7 +87,7 @@ func TestFindAvailableBatch(t *testing.T) {
 	}
 
 	// Find available batch
-	job, err := queries.FindAvailableBatch(ctx)
+	job, err := queries.FindAvailableBatch(ctx, sql.NullString{String: "test-worker-1", Valid: true})
 	if err != nil {
 		t.Fatalf("FindAvailableBatch failed: %v", err)
 	}
@@ -114,7 +113,6 @@ func TestUpdateCheckpoint(t *testing.T) {
 		Prefix28:           prefix,
 		NonceStart:         0,
 		NonceEnd:           1000000,
-		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
 		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},
@@ -168,7 +166,6 @@ func TestCompleteBatch(t *testing.T) {
 		Prefix28:           prefix,
 		NonceStart:         0,
 		NonceEnd:           1000000,
-		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
 		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},
@@ -221,7 +218,6 @@ func TestUTCTimestamps(t *testing.T) {
 		Prefix28:           prefix,
 		NonceStart:         0,
 		NonceEnd:           1000000,
-		CurrentNonce:       sql.NullInt64{Valid: false},
 		WorkerID:           sql.NullString{String: "test-worker-1", Valid: true},
 		WorkerType:         sql.NullString{String: "pc", Valid: true},
 		LeaseSeconds:       sql.NullString{String: "3600", Valid: true},

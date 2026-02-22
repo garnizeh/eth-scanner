@@ -18,8 +18,8 @@ type Querier interface {
 	CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, error)
 	// Create a long-lived macro job covering the full nonce space for a prefix
 	CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) (Job, error)
-	// Find an available batch (pending or expired lease)
-	FindAvailableBatch(ctx context.Context) (Job, error)
+	// Find an available batch (pending or expired lease, or already assigned to same worker)
+	FindAvailableBatch(ctx context.Context, workerID sql.NullString) (Job, error)
 	// Find an existing non-completed (macro) job for a given prefix
 	FindIncompleteMacroJob(ctx context.Context, prefix28 []byte) (Job, error)
 	// Get detailed info about currently active workers for dashboard
@@ -30,6 +30,8 @@ type Querier interface {
 	GetAllResults(ctx context.Context, limit int64) ([]Result, error)
 	// Get lifetime stats for all workers, ordered by total keys scanned
 	GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsLifetime, error)
+	// Get daily aggregates for all workers, combining archived and recent history
+	GetGlobalDailyStats(ctx context.Context, sinceDate interface{}) ([]GetGlobalDailyStatsRow, error)
 	// Get a specific job by ID
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	// Get jobs by status
@@ -50,9 +52,9 @@ type Querier interface {
 	GetStats(ctx context.Context) (StatsSummary, error)
 	// Get worker information by ID
 	GetWorkerByID(ctx context.Context, id string) (Worker, error)
-	// Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
-	// This makes the generated sqlc method usable directly with a Go time.Time value.
-	GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]WorkerStatsDaily, error)
+	// Get daily aggregates for a worker, combining archived and recent history
+	// We select and group by stats_date only, as worker_id is filtered to a single value
+	GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]GetWorkerDailyStatsRow, error)
 	// Tracks the last prefix assigned to a worker to enable vertical exhaustion
 	GetWorkerLastPrefix(ctx context.Context, workerID sql.NullString) (GetWorkerLastPrefixRow, error)
 	// Get lifetime stats for a worker
