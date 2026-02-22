@@ -194,6 +194,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 	}
 
 	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
+	prefixProgress, _ := q.GetPrefixProgress(ctx)
 
 	// Normalize total keys scanned to int64
 	var totalKeys int64
@@ -230,6 +231,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		TotalWorkers        int64
 		GlobalKeysPerSecond float64
 		ActiveWorkersList   []database.GetActiveWorkerDetailsRow
+		PrefixProgress      []database.GetPrefixProgressRow
 		NowTimestamp        int64
 	}{
 		ActiveWorkers:       stats.ActiveWorkers,
@@ -240,6 +242,7 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		TotalWorkers:        stats.TotalWorkers,
 		GlobalKeysPerSecond: globalThroughput,
 		ActiveWorkersList:   activeWorkers,
+		PrefixProgress:      prefixProgress,
 		NowTimestamp:        time.Now().Unix(),
 	}
 
@@ -254,6 +257,11 @@ func (s *Server) broadcastStats(ctx context.Context) {
 		"ActiveWorkers": activeWorkers,
 	}); err != nil {
 		log.Printf("failed to render active workers fragment: %v", err)
+	}
+
+	// Render prefix progress overview
+	if err := s.renderer.RenderFragment(&buf, "fragments.html", "prefix-progress", data); err != nil {
+		log.Printf("failed to render prefix progress fragment: %v", err)
 	}
 
 	s.Broadcast([]byte(buf.String()))

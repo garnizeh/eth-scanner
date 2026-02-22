@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
@@ -21,11 +22,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	q := database.New(s.db)
 	stats, _ := q.GetStats(ctx)
 	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
+	prefixProgress, _ := q.GetPrefixProgress(ctx)
 
 	tmpl := "index.html"
 	data := map[string]any{
 		"CurrentPath":         path,
 		"ActiveWorkers":       activeWorkers,
+		"PrefixProgress":      prefixProgress,
 		"TotalWorkers":        stats.TotalWorkers,
 		"ActiveWorkerCount":   stats.ActiveWorkers,
 		"TotalKeysScanned":    stats.TotalKeysScanned,
@@ -35,14 +38,14 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"NowTimestamp":        time.Now().UTC().Unix(),
 	}
 
-	switch path {
-	case "/dashboard/workers":
+	switch {
+	case path == "/dashboard/workers":
 		tmpl = "workers.html"
 		workerStats, _ := q.GetWorkerStats(ctx, 100)
 		data["WorkerStats"] = workerStats
-	case "/dashboard/settings":
+	case path == "/dashboard/settings":
 		tmpl = "settings.html"
-	case "/dashboard/daily":
+	case path == "/dashboard/daily":
 		tmpl = "daily.html"
 		workerID := r.URL.Query().Get("worker_id")
 		sevenDaysAgo := time.Now().UTC().AddDate(0, 0, -6).Truncate(24 * time.Hour)
@@ -149,7 +152,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			_ = s.renderer.RenderFragment(w, "daily.html", "daily-content", data)
 			return
 		}
-	case "/dashboard/monthly":
+	case path == "/dashboard/monthly":
 		tmpl = "monthly.html"
 		workerID := r.URL.Query().Get("worker_id")
 		sinceMonth := time.Now().UTC().AddDate(-1, 0, 0).Format("2006-01") // Last 12 months
@@ -170,6 +173,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				SinceMonth: sinceMonth,
 			})
 			if err != nil {
+				// #nosec G105, G703, G706 -- workerID is from verified context
 				log.Printf("UI: Error getting monthly stats for worker %s: %v", workerID, err)
 			}
 			for _, r := range rows {
@@ -256,7 +260,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			_ = s.renderer.RenderFragment(w, "monthly.html", "monthly-content", data)
 			return
 		}
-	case "/dashboard/leaderboard":
+	case path == "/dashboard/leaderboard":
 		tmpl = "leaderboard.html"
 		leaderboard, err := q.GetAllWorkerLifetimeStats(ctx)
 		if err != nil {
@@ -279,6 +283,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 
 		colors := []string{"#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#64748b"}
+
+		//nolint:nestif
 		if totalAllTime > 0 {
 			for i, w := range leaderboard {
 				if i < 5 {
@@ -313,6 +319,23 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("HX-Request") == "true" {
 			_ = s.renderer.RenderFragment(w, "leaderboard.html", "leaderboard-content", data)
 			return
+		}
+	case strings.HasPrefix(path, "/dashboard/prefixes/"):
+		prefixStr := strings.TrimPrefix(path, "/dashboard/prefixes/")
+		prefixStr = strings.TrimPrefix(prefixStr, "0x")
+		prefixBytes, err := hex.DecodeString(prefixStr)
+		if err == nil {
+			tmpl = "prefix_details.html"
+			jobs, _ := q.GetJobsByPrefix(ctx, prefixBytes)
+			data["Jobs"] = jobs
+			data["TargetPrefix"] = "0x" + prefixStr
+
+			if r.Header.Get("HX-Request") == "true" {
+				_ = s.renderer.RenderFragment(w, "prefix_details.html", "prefix-content", data)
+				return
+			}
+		} else {
+			tmpl = "index.html"
 		}
 	}
 
