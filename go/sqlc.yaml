@@ -12,3 +12,8 @@ sql:
         emit_interface: true
         emit_exact_table_names: false
         emit_empty_slices: true
+        overrides:
+          - db_type: "DATE"
+            go_type: "string"
+          - db_type: "date"
+            go_type: "string"

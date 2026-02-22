@@ -32,10 +32,10 @@ UPDATE jobs
 SET 
     status = 'completed',
     completed_at = datetime('now', 'utc'),
-    keys_scanned = ?,
-    duration_ms = ?,
+    keys_scanned = ?1,
+    duration_ms = ?2,
     current_nonce = nonce_end
-WHERE id = ? AND worker_id = ?
+WHERE id = ?3 AND worker_id = ?4
 `
 
 type CompleteBatchParams struct {
@@ -68,7 +68,7 @@ INSERT INTO jobs (
     expires_at,
     requested_batch_size
 )
-VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
+VALUES (?1, ?2, ?3, ?2, 'processing', ?4, ?5, datetime('now', 'utc', '+' || ?6 || ' seconds'), ?7)
 RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms
 `
 
@@ -76,7 +76,6 @@ type CreateBatchParams struct {
 	Prefix28           []byte         `json:"prefix_28"`
 	NonceStart         int64          `json:"nonce_start"`
 	NonceEnd           int64          `json:"nonce_end"`
-	CurrentNonce       sql.NullInt64  `json:"current_nonce"`
 	WorkerID           sql.NullString `json:"worker_id"`
 	WorkerType         sql.NullString `json:"worker_type"`
 	LeaseSeconds       sql.NullString `json:"lease_seconds"`
@@ -89,7 +88,6 @@ func (q *Queries) CreateBatch(ctx context.Context, arg CreateBatchParams) (Job, 
 		arg.Prefix28,
 		arg.NonceStart,
 		arg.NonceEnd,
-		arg.CurrentNonce,
 		arg.WorkerID,
 		arg.WorkerType,
 		arg.LeaseSeconds,
@@ -128,7 +126,7 @@ INSERT INTO jobs (
         expires_at,
         requested_batch_size
 )
-VALUES (?, ?, ?, ?, 'processing', ?, ?, datetime('now', 'utc', '+' || ? || ' seconds'), ?)
+VALUES (?1, ?2, ?3, ?2, 'processing', ?4, ?5, datetime('now', 'utc', '+' || ?6 || ' seconds'), ?7)
 RETURNING id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms
 `
 
@@ -136,7 +134,6 @@ type CreateMacroJobParams struct {
 	Prefix28           []byte         `json:"prefix_28"`
 	NonceStart         int64          `json:"nonce_start"`
 	NonceEnd           int64          `json:"nonce_end"`
-	CurrentNonce       sql.NullInt64  `json:"current_nonce"`
 	WorkerID           sql.NullString `json:"worker_id"`
 	WorkerType         sql.NullString `json:"worker_type"`
 	LeaseSeconds       sql.NullString `json:"lease_seconds"`
@@ -149,7 +146,6 @@ func (q *Queries) CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) 
 		arg.Prefix28,
 		arg.NonceStart,
 		arg.NonceEnd,
-		arg.CurrentNonce,
 		arg.WorkerID,
 		arg.WorkerType,
 		arg.LeaseSeconds,
@@ -179,14 +175,14 @@ func (q *Queries) CreateMacroJob(ctx context.Context, arg CreateMacroJobParams) 
 const findAvailableBatch = `-- name: FindAvailableBatch :one
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE status = 'pending' 
-   OR (status = 'processing' AND expires_at < datetime('now', 'utc'))
+   OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id = ?1))
 ORDER BY created_at ASC
 LIMIT 1
 `
 
-// Find an available batch (pending or expired lease)
-func (q *Queries) FindAvailableBatch(ctx context.Context) (Job, error) {
-	row := q.db.QueryRowContext(ctx, findAvailableBatch)
+// Find an available batch (pending or expired lease, or already assigned to same worker)
+func (q *Queries) FindAvailableBatch(ctx context.Context, workerID sql.NullString) (Job, error) {
+	row := q.db.QueryRowContext(ctx, findAvailableBatch, workerID)
 	var i Job
 	err := row.Scan(
 		&i.ID,
@@ -210,7 +206,7 @@ func (q *Queries) FindAvailableBatch(ctx context.Context) (Job, error) {
 
 const findIncompleteMacroJob = `-- name: FindIncompleteMacroJob :one
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
-WHERE prefix_28 = ?
+WHERE prefix_28 = ?1
     AND status != 'completed'
 ORDER BY created_at ASC
 LIMIT 1
@@ -422,6 +418,83 @@ func (q *Queries) GetAllWorkerLifetimeStats(ctx context.Context) ([]WorkerStatsL
 	return items, nil
 }
 
+const getGlobalDailyStats = `-- name: GetGlobalDailyStats :many
+SELECT 
+    stats_date,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived historical data
+    SELECT 
+        stats_date,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_daily
+    WHERE stats_date >= substr(?1, 1, 10)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned/archived)
+    SELECT 
+        date(finished_at) as stats_date,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END as error_count
+    FROM worker_history
+    WHERE finished_at >= substr(?1, 1, 10)
+)
+GROUP BY stats_date
+ORDER BY stats_date DESC
+`
+
+type GetGlobalDailyStatsRow struct {
+	StatsDate        string          `json:"stats_date"`
+	TotalBatches     sql.NullFloat64 `json:"total_batches"`
+	TotalKeysScanned sql.NullFloat64 `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullFloat64 `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	TotalErrors      sql.NullFloat64 `json:"total_errors"`
+}
+
+// Get daily aggregates for all workers, combining archived and recent history
+func (q *Queries) GetGlobalDailyStats(ctx context.Context, sinceDate interface{}) ([]GetGlobalDailyStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getGlobalDailyStats, sinceDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetGlobalDailyStatsRow{}
+	for rows.Next() {
+		var i GetGlobalDailyStatsRow
+		if err := rows.Scan(
+			&i.StatsDate,
+			&i.TotalBatches,
+			&i.TotalKeysScanned,
+			&i.TotalDurationMs,
+			&i.KeysPerSecondAvg,
+			&i.TotalErrors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobByID = `-- name: GetJobByID :one
 SELECT id, prefix_28, nonce_start, nonce_end, current_nonce, status, worker_id, worker_type, expires_at, created_at, completed_at, keys_scanned, requested_batch_size, last_checkpoint_at, duration_ms FROM jobs
 WHERE id = ?
@@ -552,7 +625,7 @@ func (q *Queries) GetJobsByWorker(ctx context.Context, workerID sql.NullString) 
 const getNextNonceRange = `-- name: GetNextNonceRange :one
 SELECT MAX(nonce_end) as last_nonce_end
 FROM jobs
-WHERE prefix_28 = ?
+WHERE prefix_28 = ?1
 AND status IN ('processing', 'completed')
 `
 
@@ -773,38 +846,74 @@ func (q *Queries) GetWorkerByID(ctx context.Context, id string) (Worker, error) 
 }
 
 const getWorkerDailyStats = `-- name: GetWorkerDailyStats :many
-SELECT id, worker_id, stats_date, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count FROM worker_stats_daily
-WHERE worker_id = ? AND stats_date >= substr(?, 1, 10)
+SELECT 
+    stats_date,
+    SUM(total_batches) as total_batches,
+    SUM(total_keys_scanned) as total_keys_scanned,
+    SUM(total_duration_ms) as total_duration_ms,
+    AVG(keys_per_second_avg) as keys_per_second_avg,
+    SUM(error_count) as total_errors
+FROM (
+    -- Archived historical data
+    SELECT 
+        stats_date,
+        total_batches,
+        total_keys_scanned,
+        total_duration_ms,
+        keys_per_second_avg,
+        error_count
+    FROM worker_stats_daily wsd
+    WHERE wsd.worker_id = ?1 AND wsd.stats_date >= substr(?2, 1, 10)
+
+    UNION ALL
+
+    -- Recent history data (not yet pruned/archived)
+    SELECT 
+        date(finished_at) as stats_date,
+        1 as total_batches,
+        keys_scanned as total_keys_scanned,
+        duration_ms as total_duration_ms,
+        keys_per_second as keys_per_second_avg,
+        CASE WHEN error_message IS NOT NULL THEN 1 ELSE 0 END as error_count
+    FROM worker_history wh
+    WHERE wh.worker_id = ?1 AND wh.finished_at >= substr(?2, 1, 10)
+) AS combined
+GROUP BY stats_date
 ORDER BY stats_date DESC
 `
 
 type GetWorkerDailyStatsParams struct {
-	WorkerID string      `json:"worker_id"`
-	SUBSTR   interface{} `json:"SUBSTR"`
+	WorkerID  string      `json:"worker_id"`
+	SinceDate interface{} `json:"since_date"`
 }
 
-// Accept a full timestamp/time.Time parameter but compare only the date portion (YYYY-MM-DD)
-// This makes the generated sqlc method usable directly with a Go time.Time value.
-func (q *Queries) GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]WorkerStatsDaily, error) {
-	rows, err := q.db.QueryContext(ctx, getWorkerDailyStats, arg.WorkerID, arg.SUBSTR)
+type GetWorkerDailyStatsRow struct {
+	StatsDate        string          `json:"stats_date"`
+	TotalBatches     sql.NullFloat64 `json:"total_batches"`
+	TotalKeysScanned sql.NullFloat64 `json:"total_keys_scanned"`
+	TotalDurationMs  sql.NullFloat64 `json:"total_duration_ms"`
+	KeysPerSecondAvg sql.NullFloat64 `json:"keys_per_second_avg"`
+	TotalErrors      sql.NullFloat64 `json:"total_errors"`
+}
+
+// Get daily aggregates for a worker, combining archived and recent history
+// We select and group by stats_date only, as worker_id is filtered to a single value
+func (q *Queries) GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailyStatsParams) ([]GetWorkerDailyStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkerDailyStats, arg.WorkerID, arg.SinceDate)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []WorkerStatsDaily{}
+	items := []GetWorkerDailyStatsRow{}
 	for rows.Next() {
-		var i WorkerStatsDaily
+		var i GetWorkerDailyStatsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.WorkerID,
 			&i.StatsDate,
 			&i.TotalBatches,
 			&i.TotalKeysScanned,
 			&i.TotalDurationMs,
 			&i.KeysPerSecondAvg,
-			&i.KeysPerSecondMin,
-			&i.KeysPerSecondMax,
-			&i.ErrorCount,
+			&i.TotalErrors,
 		); err != nil {
 			return nil, err
 		}
@@ -867,7 +976,7 @@ func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (
 
 const getWorkerMonthlyStats = `-- name: GetWorkerMonthlyStats :many
 SELECT id, worker_id, stats_month, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_min, keys_per_second_max, error_count FROM worker_stats_monthly
-WHERE worker_id = ? AND stats_month >= ?
+WHERE worker_id = ?1 AND stats_month >= ?2
 ORDER BY stats_month DESC
 `
 
@@ -1047,11 +1156,11 @@ const leaseBatch = `-- name: LeaseBatch :execrows
 UPDATE jobs
 SET 
     status = 'processing',
-    worker_id = ?,
-    worker_type = ?,
-    expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
-WHERE id = ? 
-  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL)))
+    worker_id = ?1,
+    worker_type = ?2,
+    expires_at = datetime('now', 'utc', '+' || ?3 || ' seconds')
+WHERE id = ?4 
+  AND (status = 'pending' OR (status = 'processing' AND (expires_at < datetime('now', 'utc') OR worker_id IS NULL OR worker_id = ?1)))
 `
 
 type LeaseBatchParams struct {
@@ -1078,12 +1187,12 @@ func (q *Queries) LeaseBatch(ctx context.Context, arg LeaseBatchParams) (int64, 
 const leaseMacroJob = `-- name: LeaseMacroJob :execrows
 UPDATE jobs
 SET status = 'processing',
-        worker_id = ?,
-        worker_type = ?,
-        expires_at = datetime('now', 'utc', '+' || ? || ' seconds')
-WHERE id = ?
+        worker_id = ?1,
+        worker_type = ?2,
+        expires_at = datetime('now', 'utc', '+' || ?3 || ' seconds')
+WHERE id = ?4
     AND status != 'completed'
-    AND (worker_id IS NULL OR expires_at < datetime('now', 'utc'))
+    AND (worker_id IS NULL OR worker_id = ?1 OR expires_at < datetime('now', 'utc'))
 `
 
 type LeaseMacroJobParams struct {
@@ -1151,11 +1260,11 @@ func (q *Queries) RecordWorkerStats(ctx context.Context, arg RecordWorkerStatsPa
 const updateCheckpoint = `-- name: UpdateCheckpoint :exec
 UPDATE jobs
 SET 
-    current_nonce = ?,
-    keys_scanned = ?,
-    duration_ms = ?,
+    current_nonce = ?1,
+    keys_scanned = ?2,
+    duration_ms = ?3,
     last_checkpoint_at = datetime('now', 'utc')
-WHERE id = ? AND worker_id = ? AND status = 'processing'
+WHERE id = ?4 AND worker_id = ?5 AND status = 'processing'
 `
 
 type UpdateCheckpointParams struct {

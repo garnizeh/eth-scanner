@@ -162,8 +162,8 @@ func TestJobCheckpoint_CompletedJob(t *testing.T) {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusGone {
+		t.Fatalf("expected 410 Gone, got %d", resp.StatusCode)
 	}
 }
 

@@ -83,7 +83,7 @@ type WorkerHistory struct {
 type WorkerStatsDaily struct {
 	ID               int64           `json:"id"`
 	WorkerID         string          `json:"worker_id"`
-	StatsDate        time.Time       `json:"stats_date"`
+	StatsDate        string          `json:"stats_date"`
 	TotalBatches     sql.NullInt64   `json:"total_batches"`
 	TotalKeysScanned sql.NullInt64   `json:"total_keys_scanned"`
 	TotalDurationMs  sql.NullInt64   `json:"total_duration_ms"`

@@ -12,9 +12,56 @@
 
 <div class="bg-white shadow overflow-hidden sm:rounded-md border border-gray-200">
     <ul role="list" class="divide-y divide-gray-200">
-        <li class="p-8 text-center text-gray-500 uppercase tracking-widest text-xs font-bold">
-            Worker List View Under Construction
+        {{if not .WorkerStats}}
+        <li class="p-8 text-center text-gray-500 uppercase tracking-widest text-xs font-bold font-mono">
+            No workers discovered yet.
         </li>
+        {{else}}
+        {{range .WorkerStats}}
+        <li>
+            <div class="px-4 py-4 flex items-center sm:px-6 hover:bg-gray-50 transition">
+                <div class="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div class="truncate">
+                        <div class="flex text-sm">
+                            <p class="font-bold text-blue-600 truncate">{{.ID}}</p>
+                            <p
+                                class="ml-1 flex-shrink-0 font-normal text-gray-500 uppercase text-[10px] bg-gray-100 px-1.5 py-0.5 rounded leading-none mt-0.5">
+                                {{.WorkerType}}
+                            </p>
+                        </div>
+                        <div class="mt-2 flex">
+                            <div class="flex items-center text-xs text-gray-400 font-bold uppercase tracking-wider">
+                                <!-- Heroicon: Calendar -->
+                                <svg class="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-300" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <p>Last Activity: {{.LastSeen.Format "2006-01-02 15:04:05"}} UTC</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex-shrink-0 sm:mt-0 sm:ml-5">
+                        <div class="flex -space-x-1 overflow-hidden">
+                            <div class="flex flex-col items-end">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Total keys
+                                    scanned</span>
+                                <span
+                                    class="text-lg font-black text-gray-900 tracking-tighter">{{.TotalKeysScanned.Int64}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ml-5 flex-shrink-0">
+                    <a href="/dashboard/daily?worker_id={{.ID}}"
+                        class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-bold rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition uppercase tracking-widest">
+                        Stats
+                    </a>
+                </div>
+            </div>
+        </li>
+        {{end}}
+        {{end}}
     </ul>
 </div>
 {{end}}
