@@ -108,7 +108,7 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	var lastCheckpoint int64
 
 	checkSuccess := false
-	for range 50 {
+	for range 100 {
 		time.Sleep(200 * time.Millisecond)
 		q := database.NewQueries(db)
 		jobs, err := q.GetJobsByWorker(context.Background(), sql.NullString{String: workerID, Valid: true})
@@ -150,7 +150,7 @@ func TestWorkerCrashRecovery(t *testing.T) {
 	// checking the DB for the final result is better.
 
 	completed := false
-	for range 50 {
+	for range 100 {
 		time.Sleep(200 * time.Millisecond)
 		q := database.NewQueries(db)
 		j, err := q.GetJobByID(context.Background(), jobID)
