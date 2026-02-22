@@ -9,13 +9,7 @@
 {{end}}
 
 {{define "daily-content"}}
-<!-- Data container to avoid JS linter issues in editor -->
-<div id="chart-data-provider" class="hidden"
-    data-points='{{ range .ChartPoints }}{ "Date": "{{.Date}}", "Keys": {{.Keys}}, "Errors": {{.Errors}} },{{ end }}'
-    data-worker-id="{{.WorkerID}}" data-total-keys="{{.TotalKeys7Days}}" data-total-batches="{{.TotalBatches7Days}}"
-    data-avg-throughput="{{printf " %.1f" .AvgThroughput7Days}}">
-</div>
-
+<!-- Summary Cards (Rendered first) -->
 <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
     <div>
         <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Daily Performance</h2>
@@ -52,9 +46,13 @@
                     Apply Filter
                 </button>
                 {{if .WorkerID}}
-                <div class="text-center">
+                <div class="text-center space-y-2">
+                    <a {{workerLinkAttr .WorkerID}}
+                        class="text-xs font-bold text-gray-400 hover:text-blue-600 uppercase tracking-wider block transition">
+                        View Worker Profile →
+                    </a>
                     <button hx-get="/dashboard/daily" hx-target="#daily-view" hx-push-url="true"
-                        class="text-xs font-bold text-blue-500 hover:text-blue-700 uppercase tracking-wider mt-2 cursor-pointer transition">
+                        class="text-xs font-bold text-blue-500 hover:text-blue-700 uppercase tracking-wider cursor-pointer transition">
                         Reset to Global View
                     </button>
                 </div>
@@ -66,7 +64,7 @@
             class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between transition hover:shadow-md">
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Total Keys (7d)</h3>
-                <p id="total-keys-7d" data-value="{{.TotalKeys7Days}}"
+                <p id="total-keys-7d" {{dataAttr "value" .TotalKeys7Days}}
                     class="text-4xl font-black text-blue-600 tracking-tighter">{{.TotalKeys7Days}}</p>
             </div>
             <div class="mt-4 pt-4 border-t border-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-400">
@@ -102,7 +100,7 @@
     <div
         class="bg-white p-8 rounded-xl shadow-sm border border-gray-100 overflow-hidden relative transition hover:shadow-md">
         <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Daily
-            Volume Trend</h3>
+            Volume Trend (UTC Time)</h3>
         <div id="daily-chart" style="height: 350px;" class="w-full"></div>
     </div>
 
@@ -144,7 +142,7 @@
                     </td>
                     <td class="px-6 py-4 text-sm font-black text-gray-800 tracking-tight">
                         {{printf "%.0f" .TotalKeysScanned}}</td>
-                    <td class="px-6 py-4 text-sm {{errorTextClass .TotalErrors}} uppercase tracking-tighter">
+                    <td {{errorStatusAttr .TotalErrors}} class="px-6 py-4 text-sm uppercase tracking-tighter">
                         {{printf "%.0f" .TotalErrors}}</td>
                 </tr>
                 {{else}}
@@ -161,16 +159,8 @@
 
 <script>
     (function () {
-        const dataProvider = document.getElementById("chart-data-provider");
-        if (!dataProvider) return;
-
-        // Parse data points from data-attribute array string
-        // The pattern used `[{...}, {...},]` has a trailing comma, JS parser usually handles this or we can trim it.
-        let rawPointsStr = dataProvider.getAttribute("data-points") || "[]";
-        rawPointsStr = rawPointsStr.trim();
-        if (rawPointsStr.endsWith(",")) rawPointsStr = rawPointsStr.slice(0, -1);
-
-        const rawPoints = JSON.parse("[" + rawPointsStr + "]");
+        // Data injected via template (Golden Rule: JSON.parse('{{ json .Data }}'))
+        const pts = JSON.parse('{{ json .ChartPoints }}');
 
         // Ensure uPlot container is empty before init
         const container = document.getElementById("daily-chart");
@@ -178,21 +168,22 @@
         container.innerHTML = "";
 
         // Format dates correctly for JS
-        const labels = rawPoints.map(p => {
+        const labels = pts.map(p => {
             const d = new Date(p.Date + "T00:00:00Z"); // Force UTC
             return Math.floor(d.getTime() / 1000);
         });
-        const values = rawPoints.map(p => p.Keys || 0);
+        const values = pts.map(p => p.Keys || 0);
 
         const data = [labels, values];
 
         const opts = {
+            id: "dailyChart1",
             width: container.offsetWidth || 800,
             height: 350,
-            title: "",
             scales: {
                 x: {
                     time: true,
+                    tzDate: ts => uPlot.tzDate(new Date(ts * 1000), 'UTC'),
                 },
                 y: {
                     auto: true,
@@ -204,6 +195,16 @@
                     grid: { show: false },
                     stroke: "#94a3b8",
                     font: "bold 11px sans-serif",
+                    values: (u, vals) => vals.map(v => {
+                        const d = new Date(v * 1000);
+                        // If it's a new day (00:00:00), show date, else show time 24h
+                        if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0) {
+                            return (d.getUTCMonth() + 1).toString().padStart(2, '0') + "/" +
+                                d.getUTCDate().toString().padStart(2, '0');
+                        }
+                        return d.getUTCHours().toString().padStart(2, '0') + ":" +
+                            d.getUTCMinutes().toString().padStart(2, '0');
+                    })
                 },
                 {
                     stroke: "#94a3b8",
@@ -230,20 +231,24 @@
             ],
         };
 
-        const chart = new uPlot(opts, data, container);
+        try {
+            const chart = new uPlot(opts, data, container);
 
-        // ResizeObserver
-        const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
-                if (entry.contentRect.width > 0) {
-                    chart.setSize({
-                        width: entry.contentRect.width,
-                        height: 350,
-                    });
+            // ResizeObserver
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.contentRect.width > 0) {
+                        chart.setSize({
+                            width: entry.contentRect.width,
+                            height: 350,
+                        });
+                    }
                 }
-            }
-        });
-        resizeObserver.observe(container);
+            });
+            resizeObserver.observe(container);
+        } catch (e) {
+            console.error("uPlot Initialization Error:", e);
+        }
 
         // Format summary cards
         const fmtBigInt = (id) => {

@@ -1,0 +1,295 @@
+{{template "base" .}}
+
+{{define "title"}}Worker Detail: {{.Worker.ID}}{{end}}
+
+{{define "content"}}
+<div id="worker-details-view">
+    {{template "worker-content" .}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+    (function () {
+        let chart;
+        const data = [[], []];
+
+        // Pre-seed with historical data to avoid "loading delay"
+        const history = JSON.parse('{{ json .History }}');
+        if (history && history.length > 0) {
+            // Sort by time ascending and filter successful ones
+            const pts = history
+                .filter(h => !h.error_message?.Valid && h.keys_per_second?.Valid)
+                .map(h => ({
+                    t: Math.floor(new Date(h.finished_at).getTime() / 1000),
+                    k: h.keys_per_second.Float64
+                }))
+                .sort((a, b) => a.t - b.t);
+
+            pts.forEach(p => {
+                data[0].push(p.t);
+                data[1].push(p.k);
+            });
+        }
+
+        const container = document.getElementById('worker-throughput-chart');
+        const watcher = document.getElementById('worker-bridge-watcher');
+        const workerID = watcher?.getAttribute('data-worker-id');
+
+        function initChart() {
+            if (!container) return;
+            container.innerHTML = "";
+
+            const opts = {
+                id: "workerLiveChart",
+                width: container.offsetWidth,
+                height: container.offsetHeight,
+                scales: {
+                    x: {
+                        time: true,
+                        tzDate: ts => uPlot.tzDate(new Date(ts * 1000), 'UTC')
+                    },
+                    y: {
+                        auto: true,
+                        range: (u, min, max) => [0, max * 1.2 + 10]
+                    }
+                },
+                axes: [
+                    {
+                        grid: { show: false },
+                        stroke: "#94a3b8",
+                        font: "bold 11px sans-serif",
+                        values: (u, vals) => vals.map(v => {
+                            const d = new Date(v * 1000);
+                            return d.getUTCHours().toString().padStart(2, '0') + ":" +
+                                d.getUTCMinutes().toString().padStart(2, '0') + ":" +
+                                d.getUTCSeconds().toString().padStart(2, '0');
+                        })
+                    },
+                    {
+                        stroke: "#94a3b8",
+                        font: "bold 11px sans-serif",
+                        values: (u, vals) => vals.map(v => v >= 1000 ? (v / 1000).toFixed(1) + "k" : v)
+                    }
+                ],
+                series: [{}, { stroke: "#3b82f6", width: 2, label: "KPS", fill: "rgba(59, 130, 246, 0.1)" }]
+            };
+            chart = new uPlot(opts, data, container);
+        }
+
+        function updateChart() {
+            if (!chart || !workerID) return;
+            const bridge = document.getElementById('worker-bridge-' + workerID);
+            if (!bridge) return;
+
+            const throughput = parseFloat(bridge.getAttribute('data-throughput')) || 0;
+            const time = parseInt(bridge.getAttribute('data-time')) || Math.floor(Date.now() / 1000);
+
+            // Avoid adding same point twice (same bridge, same timestamp)
+            if (data[0].length > 0 && data[0][data[0].length - 1] >= time) {
+                return;
+            }
+
+            data[0].push(time);
+            data[1].push(throughput);
+
+            const windowSize = 600;
+            const minTime = time - windowSize;
+            while (data[0].length > 0 && data[0][0] < minTime) { data[0].shift(); data[1].shift(); }
+            chart.setData(data);
+        }
+
+        const observer = new MutationObserver((mutations) => {
+            updateChart();
+        });
+
+        const target = document.body;
+        observer.observe(target, { childList: true, subtree: true });
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                initChart();
+                updateChart();
+            });
+        } else {
+            initChart();
+            updateChart();
+        }
+        window.addEventListener("resize", () => chart && chart.setSize({ width: container.offsetWidth, height: container.offsetHeight }));
+    })();
+</script>
+{{end}}
+
+{{define "worker-content"}}
+<!-- Hidden bridge receiver for WebSocket updates. 
+     Wrapped in a hidden container to prevent the "Active Fleet Status" card from appearing on this page when OOB swapped. -->
+<div class="hidden">
+    <div id="active-workers-table" hx-swap-oob="true">
+        {{if .ActiveWorker}}
+        <div id="worker-bridge-{{.ActiveWorker.ID}}" {{dataFloatAttr "throughput" .ActiveWorker.LastKps 1}}
+            {{dataAttr "time" .ActiveWorker.LastSeen.Unix}}>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+        <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Worker Profile</h2>
+        <p class="mt-1 text-sm text-gray-500 font-mono">Exploring {{.Worker.ID}} ({{.Worker.WorkerType}})</p>
+    </div>
+    <div class="flex items-center space-x-3">
+        <a href="/dashboard/workers"
+            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition">
+            ← Registry
+        </a>
+        <a {{workerStatsLinkAttr .Worker.ID}}
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition">
+            Deep Stats
+        </a>
+    </div>
+</div>
+
+<!-- Main Content Stack -->
+<div class="space-y-8 max-w-5xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Configuration Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-6">Configuration</h3>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-500 uppercase tracking-widest text-[10px] font-bold">ID</span>
+                    <span class="font-mono font-bold text-gray-900">{{.Worker.ID}}</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-500 uppercase tracking-widest text-[10px] font-bold">Device Type</span>
+                    <span {{workerBadgeAttr .Worker.WorkerType}}>{{.Worker.WorkerType}}</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-500 uppercase tracking-widest text-[10px] font-bold">Last Seen</span>
+                    <span class="font-bold text-gray-700">{{.Worker.LastSeen.UTC.Format "2006-01-02 15:04:05"}}
+                        UTC</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Volume Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center">
+            <div class="grid grid-cols-2 gap-4 h-full">
+                <div class="flex flex-col justify-center">
+                    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-4">
+                        Lifetime Volume
+                    </h3>
+                    <p class="text-4xl font-black text-gray-900 tracking-tighter">{{formatCount
+                        .Worker.TotalKeysScanned.Int64}}
+                    </p>
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Total Keys Scanned
+                    </p>
+                </div>
+                <div class="flex flex-col justify-center border-l border-gray-50 pl-4">
+                    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-4">
+                        Avg Throughput
+                    </h3>
+                    <p class="text-4xl font-black text-blue-600 tracking-tighter">
+                        {{printf "%.1f" (float64 .LifetimeStats.KeysPerSecondAvg)}}
+                    </p>
+                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Keys per Second
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{if .Winners}}
+    <div class="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-6">
+        <h3 class="text-xs font-black text-amber-600 uppercase tracking-widest leading-none mb-4 flex items-center">
+            <span class="mr-2 text-base">🏆</span> Results Found
+        </h3>
+        <div class="flex flex-wrap gap-3">
+            {{range .Winners}}
+            <div class="px-4 py-2 bg-white rounded-lg border border-amber-100 shadow-sm transition hover:shadow-md">
+                <p class="text-xs font-mono font-bold text-gray-900" {{titleAttr .Address}}>
+                    {{.Address}}
+                </p>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Live Throughput Chart -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-6">Real-Time
+            Throughput (UTC Time)</h3>
+        <div id="worker-throughput-chart" class="w-full h-64"></div>
+        <!-- Per-worker bridge watcher -->
+        <div id="worker-bridge-watcher" class="hidden" {{dataAttr "worker-id" .Worker.ID}}></div>
+    </div>
+
+    <!-- 7-Day Chart -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">Historical Volume (7 Days)</h3>
+        <div class="relative h-48 flex items-end justify-between space-x-1">
+            {{range .ChartPoints}}
+            <div class="flex-1 flex flex-col items-center group">
+                <div class="relative w-full flex items-end justify-center h-40">
+                    <div class="bg-blue-600 w-4/5 rounded-t-sm transition-all duration-300 group-hover:bg-blue-700"
+                        {{chartHeightStyle .Keys $.MaxKeys}} {{titleAttr (printf "%s: %v keys" .Date .Keys)}}>
+                    </div>
+                </div>
+                <span class="mt-2 text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{{.Date}}</span>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Recent Logs -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest">Recent Activity Logs</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-100">
+                <thead class="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    <tr>
+                        <th class="px-6 py-3 text-left">Time (UTC)</th>
+                        <th class="px-6 py-3 text-left">Prefix</th>
+                        <th class="px-6 py-3 text-right">Nonce Range</th>
+                        <th class="px-6 py-3 text-right">Size</th>
+                        <th class="px-6 py-3 text-right">KPS</th>
+                        <th class="px-6 py-3 text-left">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-xs text-gray-700">
+                    {{range .History}}
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-3 whitespace-nowrap">{{.FinishedAt.UTC.Format "15:04:05"}} UTC</td>
+                        <td class="px-6 py-3 whitespace-nowrap font-mono" title="range: 0x{{printf " %08x" (int
+                            .NonceStart)}} - 0x{{printf "%08x" (int .NonceEnd)}} ({{formatCount (int .BatchSize)}} keys)
+                            prefix: 0x{{printf "%x" .Prefix28}}">
+                            {{truncateHex .Prefix28}}</td>
+                        <td class="px-6 py-3 text-right whitespace-nowrap font-mono text-gray-400">
+                            0x{{printf "%08x" (int .NonceStart)}} - 0x{{printf "%08x" (int .NonceEnd)}}
+                        </td>
+                        <td class="px-6 py-3 text-right whitespace-nowrap font-bold">{{formatCount (int .BatchSize)}}
+                        </td>
+                        <td class="px-6 py-3 text-right whitespace-nowrap font-mono font-bold text-blue-600">{{printf
+                            "%.1f"
+                            (float64 .KeysPerSecond)}}</td>
+                        <td {{historyStatusAttr .ErrorMessage}}>
+                            {{if .ErrorMessage.Valid}}ERROR{{else}}SUCCESS{{end}}
+                        </td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="6"
+                            class="px-6 py-12 text-center text-gray-400 font-bold uppercase text-xs tracking-widest">
+                            No recent activity logged</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}

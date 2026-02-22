@@ -42,7 +42,8 @@
             class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between transition hover:shadow-md">
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Total Workers</h3>
-                <p id="total-workers" class="text-4xl font-black text-blue-600 tracking-tighter">0</p>
+                <p id="total-workers" class="text-4xl font-black text-blue-600 tracking-tighter">{{ formatCount
+                    .TotalWorkers }}</p>
             </div>
             <div
                 class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
@@ -55,7 +56,9 @@
             class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between transition hover:shadow-md">
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Active Jobs</h3>
-                <p id="active-jobs" class="text-4xl font-black text-green-600 tracking-tighter">0</p>
+                <p id="active-jobs" class="text-4xl font-black text-green-600 tracking-tighter">{{ .ProcessingJobCount
+                    }}
+                </p>
             </div>
             <div
                 class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
@@ -68,7 +71,8 @@
             class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between transition hover:shadow-md">
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Global Throughput</h3>
-                <p id="global-throughput" class="text-4xl font-black text-purple-600 tracking-tighter">0.0 k/s</p>
+                <p id="global-throughput" class="text-4xl font-black text-purple-600 tracking-tighter">{{ printf "%.1f"
+                    .GlobalKeysPerSecond }} k/s</p>
             </div>
             <div
                 class="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
@@ -80,18 +84,33 @@
 
     <!-- Live Stats Grid (updated via WebSocket: Live Active Workers, Keys Scanned, Completed Batches) -->
     <div id="fleet-stats" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
-            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
+        {{template "fleet-stats-content" .}}
+    </div>
+
+    <!-- Live Throughput Chart -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Live Throughput
+                </h3>
+                <p class="text-[10px] text-gray-500 font-medium">REAL-TIME KEYS PER SECOND (10m WINDOW, UTC TIME)</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="inline-block h-2 w-2 rounded-full bg-purple-500"></span>
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fleet Aggregate</span>
+            </div>
         </div>
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
-            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
+        <div id="throughput-chart" class="w-full h-48 sm:h-64"></div>
+        <!-- Hidden data bridge for HTMX/Chart -->
+        <div id="bridge-container">
+            <div id="throughput-bridge" class="hidden" hx-swap-oob="true" {{dataFloatAttr "throughput"
+                .GlobalKeysPerSecond 1}} {{dataAttr "time" .NowTimestamp}}></div>
         </div>
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
-            <div class="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-            <div class="h-8 bg-gray-100 rounded w-1/4"></div>
-        </div>
+    </div>
+
+    <!-- Active Workers Table (Active Fleet Status) - Moved up for better visibility -->
+    <div id="active-workers-container" class="transition-all duration-500">
+        {{template "active-workers" .}}
     </div>
 
     <!-- Prefix Progress (updated via WebSocket) -->
@@ -102,98 +121,33 @@
                 prefix_28</span>
         </div>
         <div id="prefix-progress-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {{range .PrefixProgress}}
-            <div
-                class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col space-y-3 transition hover:shadow-md">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-3">
-                        <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="text-sm font-bold text-gray-900 font-mono" title="{{fullHex .Prefix28}}">
-                                {{truncateHex .Prefix28}}</h4>
-                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{{.WorkerCount}}
-                                active workers</span>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-xs font-black text-blue-600 tracking-tighter">{{printf "%.2f"
-                            .ProgressPercentage}}%</span>
-                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Progress</p>
-                    </div>
-                </div>
-
-                <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                    <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" {{percentStyle
-                        .ProgressPercentage}}></div>
-                </div>
-
-                <div class="flex items-center justify-between pt-2">
-                    <div class="flex items-center space-x-4">
-                        <div class="flex flex-col">
-                            <span
-                                class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Scanned</span>
-                            <span class="text-xs font-bold text-gray-700 leaderboard-keys"
-                                data-value="{{.TotalKeysScanned}}">{{.TotalKeysScanned}}</span>
-                        </div>
-                        <div class="flex flex-col border-l border-gray-100 pl-4">
-                            <span
-                                class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Status</span>
-                            <span class="text-xs font-bold text-green-600">ACTIVE</span>
-                        </div>
-                    </div>
-                    <a {{prefixLinkAttr .Prefix28}}
-                        class="text-[10px] font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest transition">
-                        View Ranges →
-                    </a>
-                </div>
-            </div>
-            {{else}}
-            <div class="col-span-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-12 text-center">
-                <p class="text-sm text-gray-400 font-medium uppercase tracking-widest">No active prefixes yet</p>
-            </div>
-            {{end}}
+            {{template "prefix-progress-content" .}}
         </div>
-    </div>
-
-    <!-- Live Throughput Chart -->
-    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
-        <div class="flex items-center justify-between mb-6">
-            <div>
-                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Live Throughput
-                </h3>
-                <p class="text-[10px] text-gray-500 font-medium">REAL-TIME KEYS PER SECOND (10m WINDOW)</p>
-            </div>
-            <div class="flex items-center space-x-2">
-                <span class="inline-block h-2 w-2 rounded-full bg-purple-500"></span>
-                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fleet Aggregate</span>
-            </div>
-        </div>
-        <div id="throughput-chart" class="w-full h-48 sm:h-64"></div>
-        <!-- Hidden data bridge for HTMX/Chart -->
-        <div id="bridge-container">
-            <div id="throughput-bridge" class="hidden" hx-swap-oob="true" data-throughput="{{ .GlobalKeysPerSecond }}"
-                data-time="{{ .NowTimestamp }}"></div>
-        </div>
-    </div>
-
-    <!-- Active Workers Table (Active Fleet Status) -->
-    <div id="active-workers-container" class="transition-all duration-500">
-        {{template "active-workers" .}}
     </div>
 </div>
 
 <script>
     (function () {
         let chart;
-        let data = [
-            [], // x (timestamps)
-            [], // y (throughput)
-        ];
+        const data = [[], []];
+
+        // Seed initial history data to avoid empty chart on load
+        const history = JSON.parse('{{ json .RecentHistory }}');
+        if (history && history.length > 0) {
+            // Sort history by time ascended
+            const pts = history
+                .filter(h => h.keys_per_second?.Valid)
+                .map(h => ({
+                    t: Math.floor(new Date(h.finished_at).getTime() / 1000),
+                    k: h.keys_per_second.Float64
+                }))
+                .sort((a, b) => a.t - b.t);
+
+            pts.forEach(p => {
+                data[0].push(p.t);
+                data[1].push(p.k);
+            });
+        }
 
         function initChart() {
             const container = document.getElementById('throughput-chart');
@@ -203,18 +157,13 @@
                 id: "chart1",
                 width: container.offsetWidth,
                 height: container.offsetHeight,
-                cursor: {
-                    show: false
-                },
-                select: {
-                    show: false
-                },
-                legend: {
-                    show: false
-                },
+                cursor: { show: false },
+                select: { show: false },
+                legend: { show: false },
                 scales: {
                     x: {
                         time: true,
+                        tzDate: ts => uPlot.tzDate(new Date(ts * 1000), 'UTC'),
                     },
                     y: {
                         auto: true,
@@ -234,7 +183,13 @@
                     {
                         stroke: "#94a3b8",
                         grid: { stroke: "#f1f5f9", width: 1 },
-                        ticks: { stroke: "#cbd5e1", width: 1 }
+                        ticks: { stroke: "#cbd5e1", width: 1 },
+                        values: (u, vals) => vals.map(v => {
+                            const d = new Date(v * 1000);
+                            return d.getUTCHours().toString().padStart(2, '0') + ":" +
+                                d.getUTCMinutes().toString().padStart(2, '0') + ":" +
+                                d.getUTCSeconds().toString().padStart(2, '0');
+                        })
                     },
                     {
                         stroke: "#94a3b8",
@@ -262,12 +217,14 @@
             const throughput = parseFloat(bridge.getAttribute('data-throughput')) || 0;
             const time = parseInt(bridge.getAttribute('data-time')) || Math.floor(Date.now() / 1000);
 
-            // Add new point
+            // Avoid duplicate points from same bridge update
+            if (data[0].length > 0 && data[0][data[0].length - 1] >= time) {
+                return;
+            }
+
             data[0].push(time);
             data[1].push(throughput);
 
-            // Keep only last 10 minutes (assuming 1s resolution, though it might be slower)
-            // If we broadcast every checkpoint/complete, it can be frequent.
             const windowSize = 600; // 10 minutes
             const minTime = time - windowSize;
 
@@ -279,31 +236,21 @@
             chart.setData(data);
         }
 
-        // Initialize on load
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initChart);
+            document.addEventListener('DOMContentLoaded', () => {
+                initChart();
+                updateChart();
+            });
         } else {
             initChart();
+            updateChart();
         }
 
-        // Watch for throughput-bridge updates via HTMX
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' || mutation.type === 'childList') {
-                    updateChart();
-                }
-            });
-        });
-
-        // Small delay to ensure bridge is there
-        setTimeout(() => {
-            const bridgeContainer = document.getElementById('bridge-container');
-            if (bridgeContainer) {
-                observer.observe(bridgeContainer, { childList: true });
-                // Initial update
-                updateChart();
-            }
-        }, 500);
+        const observer = new MutationObserver(() => updateChart());
+        const bridgeContainer = document.getElementById('bridge-container');
+        if (bridgeContainer) {
+            observer.observe(bridgeContainer, { childList: true, subtree: true, attributes: true });
+        }
     })();
 </script>
 {{end}}

@@ -96,13 +96,21 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate deltas for worker_history before updating job state
+	// Calculate deltas and range for worker_history before final update
 	deltaKeys := req.KeysScanned - job.KeysScanned.Int64
 	deltaDuration := req.DurationMs - job.DurationMs.Int64
+
+	// Nonce range for THIS final period (since last checkpoint)
+	rangeStart := job.NonceStart
+	if job.CurrentNonce.Valid && job.KeysScanned.Int64 > 0 {
+		rangeStart = job.CurrentNonce.Int64 + 1
+	}
+	rangeEnd := req.FinalNonce
 
 	// Sanity check: if deltas are negative, fallback to full reported values
 	if deltaKeys < 0 {
 		deltaKeys = req.KeysScanned
+		rangeStart = job.NonceStart
 	}
 	if deltaDuration < 0 {
 		deltaDuration = req.DurationMs
@@ -183,8 +191,8 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 			dd, // delta duration
 			kps,
 			updated.Prefix28,
-			updated.NonceStart,
-			updated.NonceEnd,
+			rangeStart,
+			rangeEnd,
 		)
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on complete: %v", err)

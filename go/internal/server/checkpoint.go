@@ -104,13 +104,22 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate deltas for worker_history before updating job state
+	// Calculate deltas and range for worker_history before updating job state
 	deltaKeys := req.KeysScanned - job.KeysScanned.Int64
 	deltaDuration := req.DurationMs - job.DurationMs.Int64
+
+	// Nonce range for THIS delta period (since last checkpoint)
+	// Start is either original nonce_start (if first checkpoint) or last checkpoint's current_nonce + 1
+	rangeStart := job.NonceStart
+	if job.CurrentNonce.Valid && job.KeysScanned.Int64 > 0 {
+		rangeStart = job.CurrentNonce.Int64 + 1
+	}
+	rangeEnd := req.CurrentNonce
 
 	// Sanity check: if deltas are negative, fallback to full reported values
 	if deltaKeys < 0 {
 		deltaKeys = req.KeysScanned
+		rangeStart = job.NonceStart // reset range to full if we lost delta context
 	}
 	if deltaDuration < 0 {
 		deltaDuration = req.DurationMs
@@ -188,8 +197,8 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 			dd, // delta duration
 			kps,
 			updated.Prefix28,
-			updated.NonceStart,
-			req.CurrentNonce,
+			rangeStart,
+			rangeEnd,
 		)
 		if err != nil {
 			log.Printf("WARNING: failed to record worker stats on checkpoint: %v", err)

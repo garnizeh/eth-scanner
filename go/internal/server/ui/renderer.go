@@ -163,6 +163,20 @@ func (r *TemplateRenderer) loadTemplates() error {
 				// #nosec G203 -- calculated percentage is safe
 				return template.HTMLAttr(fmt.Sprintf("style=\"width: %.2f%%\"", p))
 			},
+			"chartHeightStyle": func(current int64, maxi int64) template.HTMLAttr {
+				if maxi <= 0 {
+					return template.HTMLAttr("style=\"height: 4px; min-height: 4px;\"")
+				}
+				p := (float64(current) / float64(maxi)) * 100
+				if p < 1 && current > 0 {
+					p = 1
+				}
+				if p > 100 {
+					p = 100
+				}
+				// #nosec G203 -- calculated height percentage is safe
+				return template.HTMLAttr(fmt.Sprintf("style=\"height: %.1f%%; min-height: 4px;\"", p))
+			},
 			"workerIconClass": func(workerType any) string {
 				wt := ""
 				switch v := workerType.(type) {
@@ -185,6 +199,20 @@ func (r *TemplateRenderer) loadTemplates() error {
 			"subtract": func(a, b int64) int64 {
 				return a - b
 			},
+			"formatCount": func(n int64) string {
+				if n < 0 {
+					return fmt.Sprintf("%d", n)
+				}
+				s := fmt.Sprintf("%d", n)
+				var res []byte
+				for i, j := len(s)-1, 0; i >= 0; i, j = i-1, j+1 {
+					if j > 0 && j%3 == 0 {
+						res = append([]byte{','}, res...)
+					}
+					res = append([]byte{s[i]}, res...)
+				}
+				return string(res)
+			},
 			"int": func(v any) int64 {
 				switch val := v.(type) {
 				case int64:
@@ -193,6 +221,10 @@ func (r *TemplateRenderer) loadTemplates() error {
 					return int64(val)
 				case uint32:
 					return int64(val)
+				case sql.NullInt64:
+					if val.Valid {
+						return val.Int64
+					}
 				}
 				return 0
 			},
@@ -206,6 +238,14 @@ func (r *TemplateRenderer) loadTemplates() error {
 					return float64(val)
 				case uint32:
 					return float64(val)
+				case sql.NullFloat64:
+					if val.Valid {
+						return val.Float64
+					}
+				case sql.NullInt64:
+					if val.Valid {
+						return float64(val.Int64)
+					}
 				}
 				return 0
 			},
@@ -303,7 +343,15 @@ func (r *TemplateRenderer) loadTemplates() error {
 				// #nosec G203 -- hardcoded link path with hex value is safe
 				return template.HTMLAttr(fmt.Sprintf(`href="/dashboard/prefixes/0x%s"`, s))
 			},
-			"errorTextClass": func(errVal any) string {
+			"workerLinkAttr": func(id any) template.HTMLAttr {
+				// #nosec G203 -- hardcoded link path with id
+				return template.HTMLAttr(fmt.Sprintf(`href="/dashboard/workers/%v"`, id))
+			},
+			"workerStatsLinkAttr": func(id any) template.HTMLAttr {
+				// #nosec G203 -- hardcoded link path with id
+				return template.HTMLAttr(fmt.Sprintf(`href="/dashboard/daily?worker_id=%v"`, id))
+			},
+			"errorStatusAttr": func(errVal any) template.HTMLAttr {
 				var count float64
 				switch v := errVal.(type) {
 				case int:
@@ -322,10 +370,68 @@ func (r *TemplateRenderer) loadTemplates() error {
 					}
 				}
 
+				classes := "text-gray-400 font-bold"
 				if count > 0 {
-					return "text-red-500 font-black"
+					classes = "text-red-500 font-black"
 				}
-				return "text-gray-400 font-bold"
+				// #nosec G203 -- classes are safe
+				return template.HTMLAttr(fmt.Sprintf(`class="%s"`, classes))
+			},
+			"dataAttr": func(name string, val any) template.HTMLAttr {
+				// #nosec G203 -- name is internal, val is escaped by %v
+				return template.HTMLAttr(fmt.Sprintf(`data-%s="%v"`, name, val))
+			},
+			"dataFloatAttr": func(name string, v any, precision int) template.HTMLAttr {
+				val := float64(0)
+				if v != nil {
+					switch vt := v.(type) {
+					case float64:
+						val = vt
+					case float32:
+						val = float64(vt)
+					case int64:
+						val = float64(vt)
+					case int:
+						val = float64(vt)
+					case uint32:
+						val = float64(vt)
+					case sql.NullFloat64:
+						if vt.Valid {
+							val = vt.Float64
+						}
+					case sql.NullInt64:
+						if vt.Valid {
+							val = float64(vt.Int64)
+						}
+					}
+				}
+				format := fmt.Sprintf(`data-%%s="%%.%df"`, precision)
+				// #nosec G203 -- name is internal, value is formatted float
+				return template.HTMLAttr(fmt.Sprintf(format, name, val))
+			},
+			"titleAttr": func(v any) template.HTMLAttr {
+				var s string
+				switch val := v.(type) {
+				case []byte:
+					s = fmt.Sprintf("0x%x", val)
+				case [28]byte:
+					s = fmt.Sprintf("0x%x", val[:])
+				case string:
+					s = val
+				default:
+					s = fmt.Sprintf("%v", val)
+				}
+				// #nosec G203 -- value is escaped by %s
+				return template.HTMLAttr(fmt.Sprintf(`title="%s"`, s))
+			},
+			"historyStatusAttr": func(msg sql.NullString) template.HTMLAttr {
+				base := "px-6 py-3 whitespace-nowrap uppercase text-[10px] font-black"
+				if msg.Valid && msg.String != "" {
+					// #nosec G203 -- hardcoded classes are safe
+					return template.HTMLAttr(fmt.Sprintf(`class="%s text-red-500"`, base))
+				}
+				// #nosec G203 -- hardcoded classes are safe
+				return template.HTMLAttr(fmt.Sprintf(`class="%s text-green-600"`, base))
 			},
 		})
 

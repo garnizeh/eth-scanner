@@ -223,25 +223,25 @@ func (s *Server) broadcastStats(ctx context.Context) {
 	}
 
 	data := struct {
-		ActiveWorkers       int64
+		ActiveWorkerCount   int64
 		TotalKeysScanned    int64
 		CompletedJobCount   int64
 		ProcessingJobCount  int64
 		PendingJobCount     int64
 		TotalWorkers        int64
 		GlobalKeysPerSecond float64
-		ActiveWorkersList   []database.GetActiveWorkerDetailsRow
+		ActiveWorkers       []database.GetActiveWorkerDetailsRow
 		PrefixProgress      []database.GetPrefixProgressRow
 		NowTimestamp        int64
 	}{
-		ActiveWorkers:       stats.ActiveWorkers,
+		ActiveWorkerCount:   stats.ActiveWorkers,
 		TotalKeysScanned:    totalKeys,
 		CompletedJobCount:   stats.CompletedBatches,
 		ProcessingJobCount:  stats.ProcessingBatches,
 		PendingJobCount:     stats.PendingBatches,
 		TotalWorkers:        stats.TotalWorkers,
 		GlobalKeysPerSecond: globalThroughput,
-		ActiveWorkersList:   activeWorkers,
+		ActiveWorkers:       activeWorkers,
 		PrefixProgress:      prefixProgress,
 		NowTimestamp:        time.Now().Unix(),
 	}

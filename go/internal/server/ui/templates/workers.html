@@ -23,7 +23,10 @@
                 <div class="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between">
                     <div class="truncate">
                         <div class="flex text-sm">
-                            <p class="font-bold text-blue-600 truncate">{{.ID}}</p>
+                            <a {{workerLinkAttr .ID}}
+                                class="font-bold text-blue-600 truncate hover:underline underline-offset-4 transition">
+                                {{.ID}}
+                            </a>
                             <p
                                 class="ml-1 flex-shrink-0 font-normal text-gray-500 uppercase text-[10px] bg-gray-100 px-1.5 py-0.5 rounded leading-none mt-0.5">
                                 {{.WorkerType}}
@@ -37,7 +40,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
-                                <p>Last Activity: {{.LastSeen.Format "2006-01-02 15:04:05"}} UTC</p>
+                                <p>Last Activity: {{.LastSeen.UTC.Format "2006-01-02 15:04:05"}} UTC</p>
                             </div>
                         </div>
                     </div>
@@ -53,7 +56,7 @@
                     </div>
                 </div>
                 <div class="ml-5 flex-shrink-0">
-                    <a href="/dashboard/daily?worker_id={{.ID}}"
+                    <a {{workerStatsLinkAttr .ID}}
                         class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-bold rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition uppercase tracking-widest">
                         Stats
                     </a>
