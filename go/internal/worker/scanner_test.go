@@ -49,7 +49,7 @@ func TestScanRange_FindAtNonce(t *testing.T) {
 
 	var prefix [28]byte
 	copy(prefix[:], privBytes[:28])
-	nonce := binary.LittleEndian.Uint32(privBytes[28:32])
+	nonce := binary.BigEndian.Uint32(privBytes[28:32])
 
 	job := Job{
 		ID:         2,
@@ -91,7 +91,7 @@ func TestScanRange_InclusiveEnd(t *testing.T) {
 	privBytes := crypto.FromECDSA(key)
 	var prefix [28]byte
 	copy(prefix[:], privBytes[:28])
-	nonce := binary.LittleEndian.Uint32(privBytes[28:32])
+	nonce := binary.BigEndian.Uint32(privBytes[28:32])
 
 	job := Job{
 		ID:         3,
@@ -155,14 +155,14 @@ func TestScanRange_MultipleTargets(t *testing.T) {
 	p1 := crypto.FromECDSA(k1)
 	var prefix [28]byte
 	copy(prefix[:], p1[:28])
-	n1 := binary.LittleEndian.Uint32(p1[28:32])
+	n1 := binary.BigEndian.Uint32(p1[28:32])
 	a1, _ := DeriveEthereumAddressFast([32]byte(p1), crypto.NewKeccakState(), &[64]byte{}, &[32]byte{})
 
 	// Target 2 (different nonce, same prefix)
 	n2 := n1 + 10
 	var k2Full [32]byte
 	copy(k2Full[:28], prefix[:])
-	binary.LittleEndian.PutUint32(k2Full[28:], n2)
+	binary.BigEndian.PutUint32(k2Full[28:], n2)
 	a2, _ := DeriveEthereumAddressFast(k2Full, crypto.NewKeccakState(), &[64]byte{}, &[32]byte{})
 
 	job := Job{
@@ -208,7 +208,7 @@ func TestScanRangeParallel_Match(t *testing.T) {
 
 	var prefix [28]byte
 	copy(prefix[:], privBytes[:28])
-	nonce := binary.LittleEndian.Uint32(privBytes[28:32])
+	nonce := binary.BigEndian.Uint32(privBytes[28:32])
 
 	// Narrow range that definitely includes the nonce
 	job := Job{
@@ -284,9 +284,9 @@ func TestNonceBytesFromUint32(t *testing.T) {
 		want [4]byte
 	}{
 		{name: "zero", n: 0, want: [4]byte{0, 0, 0, 0}},
-		{name: "one", n: 1, want: [4]byte{1, 0, 0, 0}},
+		{name: "one", n: 1, want: [4]byte{0, 0, 0, 1}},
 		{name: "max", n: 0xFFFFFFFF, want: [4]byte{0xFF, 0xFF, 0xFF, 0xFF}},
-		{name: "pattern", n: 0x12345678, want: [4]byte{0x78, 0x56, 0x34, 0x12}},
+		{name: "pattern", n: 0x12345678, want: [4]byte{0x12, 0x34, 0x56, 0x78}},
 	}
 
 	for _, tt := range tests {

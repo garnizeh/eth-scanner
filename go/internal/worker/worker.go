@@ -164,7 +164,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 		log.Printf("worker: leased job %s prefix=%s targets=%v nonce=[%d,%d] expires=%s", lease.JobID, prefixHex, lease.TargetAddresses, lease.NonceStart, lease.NonceEnd, lease.ExpiresAt)
 
-		duration, keys, err := w.processBatch(ctx, lease)
+		duration, keys, found, err := w.processBatch(ctx, lease)
 		if err != nil {
 			// If unauthorized bubbled up, stop worker
 			if errors.Is(err, ErrUnauthorized) {
@@ -173,6 +173,13 @@ func (w *Worker) Run(ctx context.Context) error {
 			log.Printf("worker: processing batch failed: %v", err)
 			// Continue loop; job will be re-leased or reassigned by Master after expiry
 			continue
+		}
+
+		if found {
+			log.Printf("worker: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+			log.Printf("worker: !! SCANNER STOPPED: Key found. Check the result submission above.  !!")
+			log.Printf("worker: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+			return nil
 		}
 
 		if !w.config.LogSampling {
@@ -198,7 +205,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // and completing the job when done. The actual scanning (crypto) is delegated
 // to the scanner component (not implemented here); this function contains a
 // simple placeholder to simulate work and the checkpointing logic.
-func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Duration, uint64, error) {
+func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Duration, uint64, bool, error) {
 	// Lease context tied to (expires_at - gracePeriod) so we stop scanning
 	// slightly before the master-side lease expires to allow time for a final
 	// checkpoint and graceful shutdown.
@@ -401,7 +408,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 			<-doneCh
 			elapsed := time.Since(startTime)
 			afterKeys := atomic.LoadUint64(&totalKeys)
-			return elapsed, afterKeys, fmt.Errorf("scan failed: %w", err)
+			return elapsed, afterKeys, false, fmt.Errorf("scan failed: %w", err)
 		}
 
 		// If a result was found, submit it
@@ -411,18 +418,21 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 
 			// Submit with per-call timeout
 			sctx, scancel := context.WithTimeout(ctx, w.config.CheckpointTimeout)
-			if err := w.client.SubmitResult(sctx, res.PrivateKey[:], res.Address.Hex()); err != nil {
+			if err := w.client.SubmitResult(sctx, lease.JobID, res.PrivateKey[:], res.Address.Hex(), res.Nonce); err != nil {
 				scancel()
 				if errors.Is(err, ErrUnauthorized) {
 					cancel()
 					<-doneCh
 					elapsed := time.Since(startTime)
 					afterKeys := atomic.LoadUint64(&totalKeys)
-					return elapsed, afterKeys, ErrUnauthorized
+					return elapsed, afterKeys, false, ErrUnauthorized
 				}
 				log.Printf("worker: failed to submit result: %v", err)
 			} else {
 				scancel()
+				log.Printf("worker: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				log.Printf("worker: !! SUCCESS !! MATCH FOUND: %s -> %s", res.Address.Hex(), hex.EncodeToString(res.PrivateKey[:]))
+				log.Printf("worker: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			}
 			foundResult = res
 		}
@@ -436,7 +446,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 				<-doneCh
 				elapsed := time.Since(startTime)
 				currentTk := atomic.LoadUint64(&totalKeys)
-				return elapsed, currentTk, err
+				return elapsed, currentTk, false, err
 			}
 			lastCheckpointTime = time.Now()
 		}
@@ -464,7 +474,7 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	// If the checkpoint loop encountered an unauthorized error, propagate it
 	// so the worker stops entirely.
 	if atomic.LoadInt32(&unauthorizedFlag) == 1 {
-		return elapsed, tk, ErrUnauthorized
+		return elapsed, tk, false, ErrUnauthorized
 	}
 
 	// If we exited early due to lease expiry, the caller will handle re-request.
@@ -474,16 +484,16 @@ func (w *Worker) processBatch(ctx context.Context, lease *JobLease) (time.Durati
 	defer bgCancel()
 	if err := w.client.CompleteBatch(bgCtx, lease.JobID, lease.NonceEnd, tk, startTime, elapsed.Milliseconds()); err != nil {
 		if errors.Is(err, ErrUnauthorized) {
-			return elapsed, tk, ErrUnauthorized
+			return elapsed, tk, false, ErrUnauthorized
 		}
 		var apiErr *APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == 410 {
-			return elapsed, tk, ErrLeaseExpired
+			return elapsed, tk, false, ErrLeaseExpired
 		}
-		return elapsed, tk, fmt.Errorf("failed to complete batch: %w", err)
+		return elapsed, tk, false, fmt.Errorf("failed to complete batch: %w", err)
 	}
 
-	return elapsed, tk, nil
+	return elapsed, tk, foundResult != nil, nil
 }
 
 // sendChunkCheckpoint sends a checkpoint for a chunk and handles errors.

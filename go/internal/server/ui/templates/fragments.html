@@ -1,3 +1,16 @@
+{{define "found-badge"}}
+{{if .Results}}
+<div
+    class="flex items-center space-x-2 bg-yellow-50 border border-yellow-100 rounded-lg px-3 py-1.5 shadow-sm mr-2 transition-all duration-1000 animate-in fade-in zoom-in">
+    <span class="relative flex h-3 w-3">
+        <span class="animate-pulse absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+    </span>
+    <span class="text-xs font-bold text-yellow-800 uppercase tracking-widest">Found Result!</span>
+</div>
+{{end}}
+{{end}}
+
 {{define "fleet-stats-content"}}
 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
     <div class="p-3 bg-blue-50 rounded-lg text-blue-600">
@@ -22,7 +35,7 @@
     <div>
         <p class="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Keys Scanned (Fleet)
         </p>
-        <p class="text-2xl font-black text-gray-900">{{ formatCount .TotalKeysScanned }}</p>
+        <p class="text-2xl font-black text-gray-900">{{ formatCount (int .TotalKeysScanned) }}</p>
     </div>
 </div>
 
@@ -46,11 +59,21 @@
 
 <p id="total-workers" hx-swap-oob="innerHTML">{{ .TotalWorkers }}</p>
 <p id="active-jobs" hx-swap-oob="innerHTML">{{ .ProcessingJobCount }}</p>
-<p id="global-throughput" hx-swap-oob="innerHTML">{{ printf "%.1f" .GlobalKeysPerSecond }} k/s</p>
+<p id="global-throughput" hx-swap-oob="innerHTML">{{ printf "%.1f" (float64 .GlobalKeysPerSecond) }} k/s</p>
+
+<!-- Live update for found results -->
+<div id="found-results-section" hx-swap-oob="true">
+    {{template "found-results" .}}
+</div>
+
+<!-- Live update for found badge -->
+<div id="found-badge-container" hx-swap-oob="true">
+    {{template "found-badge" .}}
+</div>
 
 <!-- Throughput bridge for the live chart -->
-<div id="throughput-bridge" hx-swap-oob="true" class="hidden" {{dataFloatAttr "throughput" .GlobalKeysPerSecond 1}}
-    {{dataAttr "time" .NowTimestamp}}></div>
+<div id="throughput-bridge" hx-swap-oob="true" class="hidden" {{dataFloatAttr "throughput" (float64
+    .GlobalKeysPerSecond) 1}} {{dataAttr "time" .NowTimestamp}}></div>
 
 <!-- Per-worker throughput bridge for detail views -->
 <div id="worker-bridge-container" hx-swap-oob="true" class="hidden">

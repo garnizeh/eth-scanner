@@ -105,11 +105,39 @@ eth-scanner/
 │   ├── database/               # SQL schema and queries
 │   └── tasks/                  # Task board (Backlog/Done)
 ├── go/                         # Master API & PC Worker (Go)
-│   ├── cmd/                    # Entry points (master, worker-pc)
-│   ├── internal/               # Core logic (database, config, server, jobs)
+│   ├── cmd/                    # Entry points (master, worker-pc, esp-mock-api)
+│   ├── internal/               # Core logic (database, config, server, worker)
 │   └── Makefile                # Development shortcuts
-└── esp32/                      # ESP32 firmware (C++/Arduino) - PLANNED
+└── esp32/                      # ESP32 firmware (C++/Arduino)
 ```
+
+## Key Derivation & Win Scenario
+
+To facilitate testing and verification, EthScanner uses a standardized key derivation strategy across all worker types (PC and ESP32).
+
+### Private Key Construction
+A 32-byte Ethereum private key is constructed by combining a **28-byte prefix** (managed by the Master) and a **4-byte nonce** (assigned to the worker).
+
+- **Offset 0-27**: `prefix_28` (28 bytes)
+- **Offset 28-31**: `nonce` (4 bytes, **Big-Endian**)
+
+**Why Big-Endian?**  
+Using Big-Endian for the nonce ensures that the 32-byte buffer, when interpreted as a large integer, increments naturally. For example, a prefix of all zeros and a nonce of `1` results in the private key `0x00...0001`.
+
+### The "Win" Scenario (Testing)
+The project includes a mock API (`esp-mock-api`) specifically designed for integration testing without a full Master/Database setup.
+
+By running the mock server with the `-win` flag, you can trigger a "guaranteed find":
+
+```bash
+# Start the mock server in 'win' mode
+go run cmd/esp-mock-api/main.go -win -port 8080
+```
+
+**Scenario Details:**
+- **Prefix**: 28 bytes of zeros (`0x00...00`)
+- **Target Address**: `0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf`
+- **Result**: This address corresponds to the private key `0x00...0001`. A worker starting at nonce `0` will find the match at the second iteration (nonce `1`).
 
 ## Database Architecture & Storage Optimization
 

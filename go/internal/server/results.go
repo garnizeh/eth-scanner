@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -72,6 +73,7 @@ func (s *Server) handleResultSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := q.InsertResult(ctx, params)
 	if err != nil {
+		log.Printf("failed to insert result from worker %s: %v", req.WorkerID, err)
 		http.Error(w, "failed to insert result", http.StatusInternalServerError)
 		return
 	}

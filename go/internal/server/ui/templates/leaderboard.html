@@ -95,7 +95,7 @@
                                 {{.Label}}
                             </a>
                             <span class="text-xs font-black text-blue-600 tracking-tighter">{{printf "%.1f"
-                                .Pct}}%</span>
+                                (float64 .Pct)}}%</span>
                         </div>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest leaderboard-keys"
                             {{dataAttr "value" .Value}}>{{.Value}} keys</span>
@@ -160,7 +160,7 @@
                     </td>
                     <td class="px-8 py-5 whitespace-nowrap text-sm text-gray-500 font-bold">
                         <div class="flex flex-col">
-                            <span class="text-blue-600">{{printf "%.1f" .KeysPerSecondBest}} k/s</span>
+                            <span class="text-blue-600">{{printf "%.1f" (float64 .KeysPerSecondBest)}} k/s</span>
                             <span class="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">Average: {{printf
                                 "%.1f" .KeysPerSecondAvg.Float64}} k/s</span>
                         </div>
