@@ -246,10 +246,14 @@ SELECT
     j.current_nonce,
     j.nonce_start,
     j.nonce_end,
-    (SELECT h.keys_per_second 
-     FROM worker_history h 
-     WHERE h.worker_id = w.id 
-     ORDER BY h.finished_at DESC LIMIT 1) as last_kps
+    COALESCE(
+        (SELECT CAST(j2.keys_scanned AS REAL) / (CAST(j2.duration_ms AS REAL) / 1000.0)
+         FROM jobs j2 WHERE j2.id = j.id AND j2.duration_ms > 0),
+        (SELECT h.keys_per_second 
+         FROM worker_history h 
+         WHERE h.worker_id = w.id 
+         ORDER BY h.finished_at DESC LIMIT 1)
+    ) as last_kps
 FROM workers w
 LEFT JOIN jobs j ON j.worker_id = w.id AND j.status = 'processing'
 WHERE w.last_seen > datetime('now', '-5 minutes')
@@ -257,15 +261,15 @@ ORDER BY w.last_seen DESC
 `
 
 type GetActiveWorkerDetailsRow struct {
-	ID               string          `json:"id"`
-	WorkerType       string          `json:"worker_type"`
-	LastSeen         time.Time       `json:"last_seen"`
-	TotalKeysScanned sql.NullInt64   `json:"total_keys_scanned"`
-	ActivePrefix     []byte          `json:"active_prefix"`
-	CurrentNonce     sql.NullInt64   `json:"current_nonce"`
-	NonceStart       sql.NullInt64   `json:"nonce_start"`
-	NonceEnd         sql.NullInt64   `json:"nonce_end"`
-	LastKps          sql.NullFloat64 `json:"last_kps"`
+	ID               string        `json:"id"`
+	WorkerType       string        `json:"worker_type"`
+	LastSeen         time.Time     `json:"last_seen"`
+	TotalKeysScanned sql.NullInt64 `json:"total_keys_scanned"`
+	ActivePrefix     []byte        `json:"active_prefix"`
+	CurrentNonce     sql.NullInt64 `json:"current_nonce"`
+	NonceStart       sql.NullInt64 `json:"nonce_start"`
+	NonceEnd         sql.NullInt64 `json:"nonce_end"`
+	LastKps          interface{}   `json:"last_kps"`
 }
 
 // Get detailed info about currently active workers for dashboard
@@ -697,7 +701,8 @@ SELECT
     keys_scanned, expires_at, created_at, last_checkpoint_at
 FROM jobs
 WHERE prefix_28 = ?
-ORDER BY nonce_start ASC
+ORDER BY created_at DESC
+LIMIT 20
 `
 
 type GetJobsByPrefixRow struct {
@@ -1159,6 +1164,44 @@ func (q *Queries) GetResultsByAddress(ctx context.Context, address string) ([]Re
 	return items, nil
 }
 
+const getResultsByWorker = `-- name: GetResultsByWorker :many
+SELECT id, private_key, address, worker_id, job_id, nonce_found, found_at FROM results
+WHERE worker_id = ?
+ORDER BY found_at DESC
+`
+
+// Find results by worker ID
+func (q *Queries) GetResultsByWorker(ctx context.Context, workerID string) ([]Result, error) {
+	rows, err := q.db.QueryContext(ctx, getResultsByWorker, workerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Result{}
+	for rows.Next() {
+		var i Result
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrivateKey,
+			&i.Address,
+			&i.WorkerID,
+			&i.JobID,
+			&i.NonceFound,
+			&i.FoundAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStats = `-- name: GetStats :one
 SELECT pending_batches, processing_batches, completed_batches, total_batches, total_keys_scanned, avg_pc_batch_size, avg_esp32_batch_size, results_found, total_workers, active_workers, pc_workers, esp32_workers, global_keys_per_second, active_prefixes FROM stats_summary
 `
@@ -1290,6 +1333,56 @@ func (q *Queries) GetWorkerDailyStats(ctx context.Context, arg GetWorkerDailySta
 	return items, nil
 }
 
+const getWorkerHistoryLogs = `-- name: GetWorkerHistoryLogs :many
+SELECT id, worker_id, worker_type, job_id, batch_size, keys_scanned, duration_ms, keys_per_second, prefix_28, nonce_start, nonce_end, finished_at, error_message FROM worker_history
+WHERE worker_id = ?
+ORDER BY finished_at DESC
+LIMIT ?
+`
+
+type GetWorkerHistoryLogsParams struct {
+	WorkerID string `json:"worker_id"`
+	Limit    int64  `json:"limit"`
+}
+
+// Get latest history logs for a specific worker
+func (q *Queries) GetWorkerHistoryLogs(ctx context.Context, arg GetWorkerHistoryLogsParams) ([]WorkerHistory, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkerHistoryLogs, arg.WorkerID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkerHistory{}
+	for rows.Next() {
+		var i WorkerHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkerID,
+			&i.WorkerType,
+			&i.JobID,
+			&i.BatchSize,
+			&i.KeysScanned,
+			&i.DurationMs,
+			&i.KeysPerSecond,
+			&i.Prefix28,
+			&i.NonceStart,
+			&i.NonceEnd,
+			&i.FinishedAt,
+			&i.ErrorMessage,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWorkerLastPrefix = `-- name: GetWorkerLastPrefix :one
 SELECT prefix_28, MAX(nonce_end) as highest_nonce
 FROM jobs
@@ -1313,25 +1406,55 @@ func (q *Queries) GetWorkerLastPrefix(ctx context.Context, workerID sql.NullStri
 }
 
 const getWorkerLifetimeStats = `-- name: GetWorkerLifetimeStats :one
-SELECT worker_id, worker_type, total_batches, total_keys_scanned, total_duration_ms, keys_per_second_avg, keys_per_second_best, keys_per_second_worst, first_seen_at, last_seen_at FROM worker_stats_lifetime
-WHERE worker_id = ? LIMIT 1
+SELECT 
+    CAST(SUM(total_batches) AS INTEGER) as total_batches,
+    CAST(SUM(total_keys_scanned) AS INTEGER) as total_keys_scanned,
+    CAST(SUM(total_duration_ms) AS INTEGER) as total_duration_ms,
+    COALESCE(AVG(keys_per_second_avg), 0.0) as keys_per_second_avg,
+    COALESCE(MAX(keys_per_second_best), 0.0) as keys_per_second_best
+FROM (
+    -- Archived data (Tier 4)
+    SELECT 
+        total_batches, 
+        total_keys_scanned, 
+        total_duration_ms, 
+        keys_per_second_avg, 
+        keys_per_second_best
+    FROM worker_stats_lifetime
+    WHERE worker_stats_lifetime.worker_id = ?1
+
+    UNION ALL
+
+    -- Recent data (Tier 1)
+    SELECT 
+        1 as total_batches, 
+        keys_scanned as total_keys_scanned, 
+        duration_ms as total_duration_ms, 
+        keys_per_second as keys_per_second_avg, 
+        keys_per_second as keys_per_second_best
+    FROM worker_history
+    WHERE worker_history.worker_id = ?1
+) AS unified
 `
 
-// Get lifetime stats for a worker
-func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (WorkerStatsLifetime, error) {
+type GetWorkerLifetimeStatsRow struct {
+	TotalBatches      int64       `json:"total_batches"`
+	TotalKeysScanned  int64       `json:"total_keys_scanned"`
+	TotalDurationMs   int64       `json:"total_duration_ms"`
+	KeysPerSecondAvg  interface{} `json:"keys_per_second_avg"`
+	KeysPerSecondBest interface{} `json:"keys_per_second_best"`
+}
+
+// Get unified lifetime stats for a single worker
+func (q *Queries) GetWorkerLifetimeStats(ctx context.Context, workerID string) (GetWorkerLifetimeStatsRow, error) {
 	row := q.db.QueryRowContext(ctx, getWorkerLifetimeStats, workerID)
-	var i WorkerStatsLifetime
+	var i GetWorkerLifetimeStatsRow
 	err := row.Scan(
-		&i.WorkerID,
-		&i.WorkerType,
 		&i.TotalBatches,
 		&i.TotalKeysScanned,
 		&i.TotalDurationMs,
 		&i.KeysPerSecondAvg,
 		&i.KeysPerSecondBest,
-		&i.KeysPerSecondWorst,
-		&i.FirstSeenAt,
-		&i.LastSeenAt,
 	)
 	return i, err
 }

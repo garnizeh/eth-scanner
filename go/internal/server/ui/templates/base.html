@@ -110,7 +110,7 @@
     <!-- Content Area -->
     <main class="flex-grow w-full overflow-x-hidden">
         <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6">
-            <div hx-ext="ws" ws-connect="/api/v1/ws">
+            <div hx-ext="ws" ws-connect="/api/v1/ws" ws-receive>
                 {{template "content" .}}
             </div>
         </div>
@@ -129,6 +129,7 @@
             </div>
         </div>
     </footer>
+    {{block "scripts" .}}{{end}}
 </body>
 
 </html>

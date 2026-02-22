@@ -1,5 +1,5 @@
 {{define "active-workers"}}
-<div id="active-workers-table" ws-receive hx-swap-oob="true">
+<div id="active-workers-table" hx-swap-oob="true">
     <div class="overflow-hidden bg-white shadow sm:rounded-lg border border-gray-100">
         <div class="px-4 py-5 sm:px-6 flex justify-between items-center bg-gray-50/50">
             <div>
@@ -56,8 +56,13 @@
                                         {{end}}
                                     </div>
                                     <div class="ml-4">
-                                        <div class="text-sm font-bold text-gray-900">{{.ID}}</div>
-                                        <div class="text-xs text-gray-500 uppercase tracking-tighter">{{.WorkerType}}
+                                        <div class="text-sm font-bold text-gray-900 leading-none mb-1">
+                                            <a {{workerLinkAttr .ID}}
+                                                class="hover:text-blue-600 hover:underline underline-offset-4 transition">
+                                                {{.ID}}
+                                            </a>
+                                        </div>
+                                        <div class="text-xs text-gray-400 uppercase tracking-tighter">{{.WorkerType}}
                                         </div>
                                     </div>
                                 </div>
@@ -86,15 +91,16 @@
                                 {{end}}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                {{if .LastKps.Valid}}
+                                {{if gt (float64 .LastKps) 0.0 }}
                                 <div class="text-sm font-mono font-bold text-blue-600">{{printf "%.1f"
-                                    .LastKps.Float64}} k/s</div>
+                                    (float64 .LastKps)}} k/s</div>
                                 {{else}}
                                 <div class="text-sm text-gray-300 font-mono">---</div>
                                 {{end}}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div class="text-xs text-gray-500 font-mono">{{.LastSeen.Format "15:04:05"}} UTC</div>
+                                <div class="text-xs text-gray-500 font-mono">{{.LastSeen.UTC.Format "15:04:05"}} UTC
+                                </div>
                             </td>
                         </tr>
                         {{else}}

@@ -131,6 +131,12 @@ SELECT * FROM results
 WHERE address = ?
 ORDER BY found_at DESC;
 
+-- name: GetResultsByWorker :many
+-- Find results by worker ID
+SELECT * FROM results
+WHERE worker_id = ?
+ORDER BY found_at DESC;
+
 -- name: GetAllResults :many
 -- Get all results (limited)
 SELECT * FROM results
@@ -183,10 +189,14 @@ SELECT
     j.current_nonce,
     j.nonce_start,
     j.nonce_end,
-    (SELECT h.keys_per_second 
-     FROM worker_history h 
-     WHERE h.worker_id = w.id 
-     ORDER BY h.finished_at DESC LIMIT 1) as last_kps
+    COALESCE(
+        (SELECT CAST(j2.keys_scanned AS REAL) / (CAST(j2.duration_ms AS REAL) / 1000.0)
+         FROM jobs j2 WHERE j2.id = j.id AND j2.duration_ms > 0),
+        (SELECT h.keys_per_second 
+         FROM worker_history h 
+         WHERE h.worker_id = w.id 
+         ORDER BY h.finished_at DESC LIMIT 1)
+    ) as last_kps
 FROM workers w
 LEFT JOIN jobs j ON j.worker_id = w.id AND j.status = 'processing'
 WHERE w.last_seen > datetime('now', '-5 minutes')
@@ -197,6 +207,13 @@ ORDER BY w.last_seen DESC;
 SELECT * FROM workers
 WHERE worker_type = ?
 ORDER BY last_seen DESC;
+
+-- name: GetWorkerHistoryLogs :many
+-- Get latest history logs for a specific worker
+SELECT * FROM worker_history
+WHERE worker_id = ?
+ORDER BY finished_at DESC
+LIMIT ?;
 
 -- name: GetStats :one
 -- Get aggregated statistics
@@ -236,7 +253,8 @@ SELECT
     keys_scanned, expires_at, created_at, last_checkpoint_at
 FROM jobs
 WHERE prefix_28 = ?
-ORDER BY nonce_start ASC;
+ORDER BY created_at DESC
+LIMIT 20;
 
 -- name: RecordWorkerStats :exec
 -- Insert a raw worker history record (tier 1)
@@ -426,9 +444,36 @@ ORDER BY total_keys DESC
 LIMIT 1;
 
 -- name: GetWorkerLifetimeStats :one
--- Get lifetime stats for a worker
-SELECT * FROM worker_stats_lifetime
-WHERE worker_id = ? LIMIT 1;
+-- Get unified lifetime stats for a single worker
+SELECT 
+    CAST(SUM(total_batches) AS INTEGER) as total_batches,
+    CAST(SUM(total_keys_scanned) AS INTEGER) as total_keys_scanned,
+    CAST(SUM(total_duration_ms) AS INTEGER) as total_duration_ms,
+    COALESCE(AVG(keys_per_second_avg), 0.0) as keys_per_second_avg,
+    COALESCE(MAX(keys_per_second_best), 0.0) as keys_per_second_best
+FROM (
+    -- Archived data (Tier 4)
+    SELECT 
+        total_batches, 
+        total_keys_scanned, 
+        total_duration_ms, 
+        keys_per_second_avg, 
+        keys_per_second_best
+    FROM worker_stats_lifetime
+    WHERE worker_stats_lifetime.worker_id = :worker_id
+
+    UNION ALL
+
+    -- Recent data (Tier 1)
+    SELECT 
+        1 as total_batches, 
+        keys_scanned as total_keys_scanned, 
+        duration_ms as total_duration_ms, 
+        keys_per_second as keys_per_second_avg, 
+        keys_per_second as keys_per_second_best
+    FROM worker_history
+    WHERE worker_history.worker_id = :worker_id
+) AS unified;
 
 -- name: GetAllWorkerLifetimeStats :many
 -- Get unified lifetime stats for all workers, combining archived tier 4 and recent tier 1

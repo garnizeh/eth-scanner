@@ -101,8 +101,8 @@ func TestRecordWorkerHistoryAndAggregation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWorkerLifetimeStats error: %v", err)
 	}
-	if !lifetime.TotalBatches.Valid || lifetime.TotalBatches.Int64 < 1 {
-		t.Fatalf("expected lifetime.total_batches >= 1, got %+v", lifetime.TotalBatches)
+	if lifetime.TotalBatches < 1 {
+		t.Fatalf("expected lifetime.total_batches >= 1, got %d", lifetime.TotalBatches)
 	}
 
 	_ = db // silence unused in some contexts

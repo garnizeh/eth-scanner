@@ -24,13 +24,21 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	activeWorkers, _ := q.GetActiveWorkerDetails(ctx)
 	prefixProgress, _ := q.GetPrefixProgress(ctx)
 
+	// Fetch last 10 minutes of global history for initial chart state
+	recentHistory, _ := q.GetRecentWorkerHistory(ctx, database.GetRecentWorkerHistoryParams{
+		Column1: sql.NullString{String: "600", Valid: true}, // 10 minutes
+		Limit:   1000,
+	})
+
 	tmpl := "index.html"
 	data := map[string]any{
 		"CurrentPath":         path,
 		"ActiveWorkers":       activeWorkers,
 		"PrefixProgress":      prefixProgress,
+		"RecentHistory":       recentHistory,
 		"TotalWorkers":        stats.TotalWorkers,
 		"ActiveWorkerCount":   stats.ActiveWorkers,
+		"ActiveWorkersList":   activeWorkers,
 		"TotalKeysScanned":    stats.TotalKeysScanned,
 		"CompletedJobCount":   stats.CompletedBatches,
 		"ProcessingJobCount":  stats.ProcessingBatches,
@@ -319,6 +327,77 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("HX-Request") == "true" {
 			_ = s.renderer.RenderFragment(w, "leaderboard.html", "leaderboard-content", data)
 			return
+		}
+	case strings.HasPrefix(path, "/dashboard/workers/"):
+		workerID := strings.TrimPrefix(path, "/dashboard/workers/")
+		worker, err := q.GetWorkerByID(ctx, workerID)
+		if err == nil {
+			tmpl = "worker_details.html"
+			winners, _ := q.GetResultsByWorker(ctx, workerID)
+			historyLogs, _ := q.GetWorkerHistoryLogs(ctx, database.GetWorkerHistoryLogsParams{
+				WorkerID: workerID,
+				Limit:    20,
+			})
+
+			// Unified lifetime stats
+			lifetime, _ := q.GetWorkerLifetimeStats(ctx, workerID)
+			data["LifetimeStats"] = lifetime
+
+			// Find if active
+			activeDetails, _ := q.GetActiveWorkerDetails(ctx)
+			for _, ad := range activeDetails {
+				if ad.ID == workerID {
+					data["ActiveWorker"] = ad
+					break
+				}
+			}
+
+			// Fill chart points (last 7 days - simplified for MVP)
+			type chartPoint struct {
+				Date string
+				Keys int64
+			}
+			var chartPoints []chartPoint
+			// Daily stats for THIS worker from the table
+			sinceDate7 := time.Now().UTC().AddDate(0, 0, -6).Format("2006-01-02")
+			daily, _ := q.GetWorkerDailyStats(ctx, database.GetWorkerDailyStatsParams{
+				WorkerID:  workerID,
+				SinceDate: sinceDate7,
+			})
+
+			// Map for easy access
+			statsMap := make(map[string]int64)
+			for _, s := range daily {
+				statsMap[s.StatsDate] = int64(s.TotalKeysScanned.Float64)
+			}
+
+			var maxKeys int64
+			for i := 6; i >= 0; i-- {
+				d := time.Now().UTC().AddDate(0, 0, -i)
+				dStr := d.Format("2006-01-02")
+				keys := statsMap[dStr]
+				if keys > maxKeys {
+					maxKeys = keys
+				}
+				chartPoints = append(chartPoints, chartPoint{
+					Date: d.Format("01-02"),
+					Keys: keys,
+				})
+			}
+
+			data["Worker"] = worker
+			data["Winners"] = winners
+			data["History"] = historyLogs
+			data["ChartPoints"] = chartPoints
+			data["MaxKeys"] = maxKeys
+			data["CurrentPath"] = r.URL.Path
+
+			if r.Header.Get("HX-Request") == "true" {
+				_ = s.renderer.RenderFragment(w, "worker_details.html", "worker-content", data)
+				return
+			}
+		} else {
+			tmpl = "index.html"
 		}
 	case strings.HasPrefix(path, "/dashboard/prefixes/"):
 		prefixStr := strings.TrimPrefix(path, "/dashboard/prefixes/")

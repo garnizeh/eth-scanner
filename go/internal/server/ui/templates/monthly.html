@@ -9,12 +9,7 @@
 {{end}}
 
 {{define "monthly-content"}}
-<!-- Data container to avoid JS linter issues in editor -->
-<div id="chart-data-provider" class="hidden"
-    data-points='{{ range .ChartPoints }}{ "Month": "{{.Month}}", "Keys": {{.Keys}}, "Errors": {{.Errors}} },{{ end }}'
-    data-worker-id="{{.WorkerID}}">
-</div>
-
+<!-- Summary Cards (Rendered first) -->
 <div class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
     <div>
         <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Monthly Performance</h2>
@@ -51,9 +46,13 @@
                     Apply Filter
                 </button>
                 {{if .WorkerID}}
-                <div class="text-center">
+                <div class="text-center space-y-2">
+                    <a {{workerLinkAttr .WorkerID}}
+                        class="text-xs font-bold text-gray-400 hover:text-blue-600 uppercase tracking-wider block transition">
+                        View Worker Profile →
+                    </a>
                     <button hx-get="/dashboard/monthly" hx-target="#monthly-view" hx-push-url="true"
-                        class="text-xs font-bold text-blue-500 hover:text-blue-700 uppercase tracking-wider mt-2 cursor-pointer transition focus:outline-none">
+                        class="text-xs font-bold text-blue-500 hover:text-blue-700 uppercase tracking-wider cursor-pointer transition focus:outline-none">
                         Reset to Global View
                     </button>
                 </div>
@@ -78,7 +77,7 @@
             class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between transition hover:shadow-md">
             <div>
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Total Volume</h3>
-                <p id="total-keys-lifetime" data-value="{{.TotalKeysScanned}}"
+                <p id="total-keys-lifetime" {{dataAttr "value" .TotalKeysScanned}}
                     class="text-3xl font-black text-purple-600 tracking-tighter">{{.TotalKeysScanned}}</p>
             </div>
             <div class="mt-4 pt-4 border-t border-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-400">
@@ -140,7 +139,7 @@
                         .TotalKeysScanned.Float64}}</td>
                     <td class="px-6 py-4 text-sm text-blue-600 font-bold">{{printf "%.1f" .KeysPerSecondAvg.Float64}}
                         k/s</td>
-                    <td class="px-6 py-4 text-sm {{errorTextClass .TotalErrors.Float64}} uppercase tracking-tighter">
+                    <td {{errorStatusAttr .TotalErrors.Float64}} class="px-6 py-4 text-sm uppercase tracking-tighter">
                         {{printf "%.0f" .TotalErrors.Float64}}
                     </td>
                 </tr>
@@ -158,16 +157,11 @@
 
 <script>
     (function () {
-        const dataProvider = document.getElementById("chart-data-provider");
-        if (!dataProvider) return;
+        // Data injected via template (Golden Rule: JSON.parse('{{ json .Data }}'))
+        const rawPoints = JSON.parse('{{ json .ChartPoints }}');
 
-        let rawPointsStr = dataProvider.getAttribute("data-points") || "[]";
-        rawPointsStr = rawPointsStr.trim();
-        if (rawPointsStr.endsWith(",")) rawPointsStr = rawPointsStr.slice(0, -1);
-
-        const rawPoints = JSON.parse("[" + rawPointsStr + "]");
         const container = document.getElementById("monthly-chart");
-        if (!container || rawPoints.length === 0) {
+        if (!container || !rawPoints || rawPoints.length === 0) {
             if (container) container.innerHTML = "<div class='h-full flex items-center justify-center text-gray-300 italic uppercase tracking-widest text-xs'>Insufficient data for chart</div>";
             return;
         }
@@ -184,12 +178,13 @@
         const data = [labels, values];
 
         const opts = {
+            id: "monthlyChart1",
             width: container.offsetWidth || 800,
             height: 350,
-            title: "",
             scales: {
                 x: {
                     time: true,
+                    tzDate: ts => uPlot.tzDate(new Date(ts * 1000), 'UTC'),
                 },
                 y: {
                     auto: true,
@@ -201,6 +196,11 @@
                     grid: { show: false },
                     stroke: "#94a3b8",
                     font: "bold 11px sans-serif",
+                    values: (u, vals) => vals.map(v => {
+                        const d = new Date(v * 1000);
+                        // Show month name/year for monthly chart
+                        return d.getUTCFullYear() + "-" + (d.getUTCMonth() + 1).toString().padStart(2, '0');
+                    })
                 },
                 {
                     stroke: "#94a3b8",
@@ -227,18 +227,22 @@
             ],
         };
 
-        const chart = new uPlot(opts, data, container);
-        const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
-                if (entry.contentRect.width > 0) {
-                    chart.setSize({
-                        width: entry.contentRect.width,
-                        height: 350,
-                    });
+        try {
+            const chart = new uPlot(opts, data, container);
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.contentRect.width > 0) {
+                        chart.setSize({
+                            width: entry.contentRect.width,
+                            height: 350,
+                        });
+                    }
                 }
-            }
-        });
-        resizeObserver.observe(container);
+            });
+            resizeObserver.observe(container);
+        } catch (e) {
+            console.error("uPlot Initialization Error:", e);
+        }
 
         const fmtBigInt = (id) => {
             const el = document.getElementById(id);

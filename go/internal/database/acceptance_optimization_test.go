@@ -139,8 +139,8 @@ func TestAutomaticAggregationFromHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWorkerLifetimeStats error: %v", err)
 	}
-	if !lifetime.TotalBatches.Valid || lifetime.TotalBatches.Int64 < 100 {
-		t.Fatalf("expected lifetime.total_batches >= 100, got %+v", lifetime.TotalBatches)
+	if lifetime.TotalBatches < 100 {
+		t.Fatalf("expected lifetime.total_batches >= 100, got %d", lifetime.TotalBatches)
 	}
 }
 
