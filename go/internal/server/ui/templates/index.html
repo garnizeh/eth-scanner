@@ -135,6 +135,32 @@
             {{template "prefix-progress-content" .}}
         </div>
     </div>
+
+    <!-- Recent System Events / Errors -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8 transition-all duration-300">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div class="flex items-center space-x-2">
+                <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+                <h3 class="text-sm font-bold text-gray-900 uppercase tracking-widest">Recent Events & Errors</h3>
+            </div>
+            <button type="button"
+                onclick="document.getElementById('error-log').innerHTML = '<div class=\'flex flex-col items-center justify-center p-8 text-gray-400\'><p class=\'text-[11px] font-bold uppercase tracking-tighter\'>No events logged yet</p><p class=\'text-[10px] lowercase tracking-wide mt-1\'>Real-time alerts will appear here</p></div>'"
+                class="text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-700 transition">
+                Clear Log
+            </button>
+        </div>
+        <div id="error-log" class="max-h-80 overflow-y-auto min-h-[100px] bg-white">
+            <!-- Errors will be prepended here via WebSocket OOB swap -->
+            <div class="flex flex-col items-center justify-center p-8 text-gray-400">
+                <p class="text-[11px] font-bold uppercase tracking-tighter">No events logged yet</p>
+                <p class="text-[10px] lowercase tracking-wide mt-1">Real-time alerts will appear here</p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>

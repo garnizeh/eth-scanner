@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -93,6 +94,7 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	if job.Status != "processing" {
 		// #nosec G706: logging raw body for debugging, even on decode failure
 		log.Printf("checkpoint failed: job %d status is %s, expected processing. Worker: %q", id, job.Status, req.WorkerID)
+		s.BroadcastEvent(req.WorkerID, "Invalid Status", fmt.Sprintf("Checkpoint rejected for Job %d: status is %s", id, job.Status), "error")
 		// Return 410 Gone to signal the worker to stop this job
 		http.Error(w, "job no longer active", http.StatusGone)
 		return
@@ -100,6 +102,7 @@ func (s *Server) handleJobCheckpoint(w http.ResponseWriter, r *http.Request) {
 	if !job.WorkerID.Valid || job.WorkerID.String != req.WorkerID {
 		// #nosec G706: logging raw body for debugging, even on decode failure
 		log.Printf("checkpoint failed: job %d owned by %v, but checkpoint from %q", id, job.WorkerID.String, req.WorkerID)
+		s.BroadcastEvent(req.WorkerID, "Forbidden Job", fmt.Sprintf("Worker mismatch for Job %d", id), "error")
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

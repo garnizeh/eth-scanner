@@ -81,7 +81,7 @@ func (r *TemplateRenderer) loadTemplates() error {
 		}
 		if entry.Name() == "base.html" {
 			layoutFiles = append(layoutFiles, filepath.Join("templates", entry.Name()))
-		} else if entry.Name() == "fragments.html" || entry.Name() == "active_workers.html" || entry.Name() == "found_results.html" {
+		} else if entry.Name() == "fragments.html" || entry.Name() == "active_workers.html" || entry.Name() == "found_results.html" || entry.Name() == "notifications.html" {
 			partialFiles = append(partialFiles, filepath.Join("templates", entry.Name()))
 		}
 	}

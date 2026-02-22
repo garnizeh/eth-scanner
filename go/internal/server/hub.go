@@ -183,6 +183,39 @@ func (s *Server) Broadcast(message []byte) {
 	s.hub.broadcast <- message
 }
 
+// BroadcastEvent renders a toast notification and adds it to the system log.
+func (s *Server) BroadcastEvent(workerID string, title string, message string, eventType string) {
+	data := struct {
+		ID        int64
+		Timestamp string
+		WorkerID  string
+		Title     string
+		Message   string
+		Type      string // "info", "warning", "error", "success"
+	}{
+		ID:        time.Now().UnixNano(),
+		Timestamp: time.Now().UTC().Format("15:04:05"),
+		WorkerID:  workerID,
+		Title:     title,
+		Message:   message,
+		Type:      eventType,
+	}
+
+	var buf strings.Builder
+	// Render the toast notification (OOB swap into #notifications)
+	if err := s.renderer.RenderFragment(&buf, "notifications.html", "toast", data); err != nil {
+		log.Printf("hub: failed to render toast fragment: %v", err)
+	}
+	// Render the log entry (OOB swap into #error-log)
+	if err := s.renderer.RenderFragment(&buf, "notifications.html", "error-log-entry", data); err != nil {
+		log.Printf("hub: failed to render error log fragment: %v", err)
+	}
+
+	if buf.Len() > 0 {
+		s.Broadcast([]byte(buf.String()))
+	}
+}
+
 // broadcastStats is called periodically or when an update happens to broadcast
 // refreshed stats to all connected dashboard clients.
 func (s *Server) broadcastStats(ctx context.Context) {

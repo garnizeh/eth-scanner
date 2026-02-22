@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -74,10 +75,12 @@ func (s *Server) handleResultSubmit(w http.ResponseWriter, r *http.Request) {
 	res, err := q.InsertResult(ctx, params)
 	if err != nil {
 		log.Printf("failed to insert result from worker %s: %v", req.WorkerID, err)
+		s.BroadcastEvent(req.WorkerID, "Result Rejected", fmt.Sprintf("Failed to save found address %s", req.Address), "error")
 		http.Error(w, "failed to insert result", http.StatusInternalServerError)
 		return
 	}
 
+	s.BroadcastEvent(req.WorkerID, "MATCH FOUND!", fmt.Sprintf("Key found for address %s", req.Address), "success")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(res)

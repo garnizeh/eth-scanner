@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -129,9 +130,12 @@ func (s *Server) handleJobComplete(w http.ResponseWriter, r *http.Request) {
 		WorkerID:    sql.NullString{String: req.WorkerID, Valid: true},
 	}
 	if err := q.CompleteBatch(ctx, params); err != nil {
+		s.BroadcastEvent(req.WorkerID, "Completion Failure", fmt.Sprintf("Failed to complete job %d: %v", id, err), "error")
 		http.Error(w, "failed to complete job", http.StatusInternalServerError)
 		return
 	}
+
+	s.BroadcastEvent(req.WorkerID, "Job Done", fmt.Sprintf("Batch %d completed: scanned %d keys", id, req.KeysScanned), "success")
 
 	updated, err := q.GetJobByID(ctx, id)
 	if err != nil {

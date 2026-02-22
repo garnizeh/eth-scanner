@@ -115,6 +115,9 @@ func (s *Server) handleJobLease(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt       *string  `json:"expires_at,omitempty"`
 	}
 
+	p64 := base64.StdEncoding.EncodeToString(job.Prefix28)
+	s.BroadcastEvent(req.WorkerID, "Lease Request", fmt.Sprintf("Leased job %d (prefix: %s...)", job.ID, p64[:8]), "info")
+
 	targets := s.cfg.TargetAddresses
 	if s.cfg.WinScenario {
 		// Ensure the winner address is in the targets list for this job
