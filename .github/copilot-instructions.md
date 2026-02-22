@@ -89,6 +89,10 @@ This aims to prevent regressions where lines (for example lines 18, 23, 37, 40 i
 - **Error Handling:** Never ignore or discard errors returned by functions; the linter will complain. Always add context to errors using `fmt.Errorf` with `%w` for wrapping, e.g., `return fmt.Errorf("failed to set goose dialect: %w", err)`.
 - **Use `any` for empty interface:** Prefer the `any` alias instead of `interface{}` in Go code for clarity and to follow modern Go idioms (Go 1.18+). Example: `var v any` instead of `var v interface{}`.
 - **Use `for range n` with n being a integer for loops:** When iterating a fixed number of times, use `for range n` syntax instead of traditional `for i := 0; i < n; i++` to improve readability. Example: `for range 5 { ... }` instead of `for i := 0; i < 5; i++ { ... }`; if you need to use the index inside the loop, use `for i := range n`.
+- **Template Safety:** For all Go HTML templates:
+    - Avoid context-breaking string interpolations inside `class`, `style`, or `<script>` tags.
+    - Refactor attribute helpers (like badging, color coding, or progress bars) into Go functions that return `template.HTMLAttr`.
+    - Always use `JSON.parse('{{ json .Data }}')` (using a `json` template helper that calls `json.Marshal`) for injecting complex Go objects into JavaScript blocks, rather than manual loops or string concatenation.
 
 ## 3. Worker Specifications
 
