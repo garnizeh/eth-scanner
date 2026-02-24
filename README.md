@@ -33,6 +33,7 @@ Master (server) environment variables
 | `MASTER_API_KEY` | Secret key for API authentication (optional) | (disabled if empty) |
 | `MASTER_LOG_LEVEL`| Logging verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `MASTER_SHUTDOWN_TIMEOUT` | Graceful shutdown timeout (duration string) | `30s` |
+| `DASHBOARD_PASSWORD` | Optional password for dashboard access | (unprotected if empty) |
 | `MASTER_STALE_JOB_THRESHOLD` | Stale threshold (seconds) after which a processing job is considered abandoned by the background cleanup | `604800` (7 days) |
 | `MASTER_CLEANUP_INTERVAL` | How often (seconds) the master runs the stale-job cleanup background task | `21600` (6 hours) |
 
@@ -95,6 +96,16 @@ Endpoints (except `/health`) require an `X-API-KEY` header if `MASTER_API_KEY` i
 
 **Dashboard Security:**  
 The web-based dashboard (Phase 10) will be protected by a simple password authentication mechanism controlled via an environment variable (`DASHBOARD_PASSWORD`), without requiring a database for session management.
+
+### Dashboards & Monitoring
+The project includes a built-in dashboard for real-time fleet monitoring and historical analytics.
+
+- **Access:** Visit `http://localhost:8080/dashboard` in your browser.
+- **Security:** Set the `DASHBOARD_PASSWORD` environment variable to protect access. Session management uses signed cookies.
+- **Real-time Updates:** Powered by WebSockets (HTMX + `github.com/coder/websocket`) for live throughput and worker status updates.
+- **Tiers:** Aggregates statistics into daily, monthly, and lifetime snapshots for long-term tracking.
+
+See [Dashboard Development Guide](docs/api/ui-development.md) for more technical details.
 
 ## Repository Layout
 ```
